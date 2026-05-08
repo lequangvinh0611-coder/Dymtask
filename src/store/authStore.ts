@@ -26,67 +26,73 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ session: null, profile: null });
   },
   fetchProfile: async (uid: string) => {
-    // Luôn luôn chạy try-catch-finally để đảm bảo không bao giờ kẹt Loading
-    try {
-      console.log('[AuthStore] Fetching profile for:', uid);
-      
-      // Sửa lại thành bảng 'profiles' thay vì 'users'
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', uid)
-        .single();
+   try {
+     console.log('[AuthStore] Fetching profile for:', uid);
 
-      if (error) {
-        console.warn('[AuthStore] Profile fetch error:', error);
-        
-        // Nếu không tìm thấy profile (PGRST116), tạo profile mặc định
-        if (error.code === 'PGRST116') {
-          console.log('[AuthStore] No profile found, creating fallback profile...');
-          const { data: { user } } = await supabase.auth.getUser();
-          
-          if (user) {
-            const fallbackProfile: UserProfile = { 
-                id: user.id, 
-                email: user.email!, 
-                name: user.email?.split('@')[0] || 'User', 
-                role: 'USER', // Mặc định là USER
-                teams: [],
-                status: 'ACTIVE',
-                created_at: new Date().toISOString()
-            } as any; // Ép kiểu tạm thời để tránh lỗi type
+     // ✅ Bọc query trong timeout 8 giây để tránh treo vĩnh viễn
+     const queryPromise = supabase
+       .from('users')
+       .select('*')
+       .eq('id', uid)
+       .single();
 
-            set({ profile: fallbackProfile });
-            return;
-          }
-        }
-        throw error;
-      }
-      
-      console.log('[AuthStore] Profile fetched successfully:', data);
-      set({ profile: data });
+     const timeoutPromise = new Promise<never>((_, reject) =>
+       setTimeout(() => reject(new Error('QUERY_TIMEOUT')), 8000)
+     );
 
-    } catch (error: any) {
-      console.error('[AuthStore] Final fetchProfile error:', error);
-      
-      // Fallback cuối cùng nếu mọi thứ thất bại: Tự set làm USER để vớt vát giao diện
-      const sessionUser = get().session?.user;
-      if (sessionUser) {
-        set({ 
-          profile: { 
-            id: sessionUser.id, 
-            email: sessionUser.email!, 
-            name: sessionUser.email?.split('@')[0] || 'User', 
-            role: 'USER' 
-          } as any 
-        });
-      } else {
-        set({ profile: null });
-      }
-    } finally {
-      // ĐÂY LÀ CHỐT CHẶN QUAN TRỌNG NHẤT: Bắt buộc tắt Loading
-      set({ loading: false });
-      console.log('[AuthStore] Loading finished and set to FALSE');
-    }
-  },
+     const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
+
+     if (error) {
+       console.warn('[AuthStore] Profile fetch error:', error.code, error.message);
+
+       if (error.code === 'PGRST116') {
+         // Không tìm thấy profile trong DB → dùng fallback
+         console.log('[AuthStore] No profile in DB, using fallback...');
+         const { data: { user } } = await supabase.auth.getUser();
+         if (user) {
+           set({
+             profile: {
+               id: user.id,
+               email: user.email!,
+               name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+               role: 'user',
+               teams: [],
+               status: 'ACTIVE',
+               created_at: new Date().toISOString(),
+             } as any,
+           });
+         }
+         return;
+       }
+       throw error;
+     }
+
+     console.log('[AuthStore] Profile fetched successfully:', data);
+     set({ profile: data });
+
+   } catch (error: any) {
+     console.error('[AuthStore] fetchProfile failed:', error.message);
+
+     // Fallback cuối: dùng thông tin từ session
+     const sessionUser = get().session?.user;
+     if (sessionUser) {
+       set({
+         profile: {
+           id: sessionUser.id,
+           email: sessionUser.email!,
+           name: sessionUser.user_metadata?.full_name 
+                 || sessionUser.email?.split('@')[0] 
+                 || 'User',
+           role: 'user',
+         } as any,
+       });
+     } else {
+       set({ profile: null });
+     }
+   } finally {
+     // Luôn luôn tắt loading dù có chuyện gì xảy ra
+     set({ loading: false });
+     console.log('[AuthStore] Loading finished → FALSE');
+   }
+ },
 }));
