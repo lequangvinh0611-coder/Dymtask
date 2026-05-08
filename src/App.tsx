@@ -26,7 +26,10 @@ export default function App() {
 
       if (session) {
         setSession(session);
-        await fetchProfile(session.user.id);
+        // ✅ FIX: Bỏ qua TOKEN_REFRESHED để tránh ghi đè role từ DB bằng fallback
+        if (event !== 'TOKEN_REFRESHED') {
+          await fetchProfile(session.user.id);
+        }
       } else {
         setSession(null);
         setProfile(null);
@@ -38,10 +41,9 @@ export default function App() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []); // Xóa fetchProfile, setSession, setLoading khỏi dependency array để tránh lặp vô hạn
+  }, []);
 
   const renderContent = () => {
-    // Chuyển về chữ IN HOA để đồng bộ với Database ('MASTER', 'ADMIN', 'USER')
     const role = profile?.role?.toUpperCase() || 'USER';
     const isUser = role === 'USER';
 
