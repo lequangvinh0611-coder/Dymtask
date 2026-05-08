@@ -35,6 +35,7 @@ export const useTasks = (page = 1, pageSize = 15, filters: any = {}) => {
       query = query.range(from, to).order('created_at', { ascending: false });
 
       const { data, error, count } = await query;
+      console.log(`[Supabase] Fetched ${data?.length || 0} tasks from table "tasks".`);
 
       if (error) throw error;
       setTasks(data || []);

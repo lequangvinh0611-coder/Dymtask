@@ -1,146 +1,289 @@
-import React from 'react';
-import { Search, UserPlus, MoreHorizontal, ChevronRight } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { useAuthStore } from '../store/authStore';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { Plus, Edit2, Trash2, Loader2 } from 'lucide-react';
+import MasterDataModal from './MasterDataModal';
+import UserEditModal from './UserEditModal';
 
-const Settings = () => {
-  const { profile } = useAuthStore();
-  const currentRole = profile?.role || 'user';
-  const users = [
-    { name: 'VINH LE QUANG', email: 'le-v@dymvietnam.jp', team: '内部', role: 'MASTER', status: 'ACTIVE' },
-    { name: 'VU THANH HIEN', email: 'hien-v@dymvietnam.net', team: 'GS', role: 'ADMIN', status: 'ACTIVE' },
-    { name: 'LAM THANH TRUC', email: 'truc-l@dymvietnam.net', team: 'ラボ型', role: 'ADMIN', status: 'ACTIVE' },
-    { name: 'PHAM BAO THIEN VUONG', email: 'vuong-p@dymvietnam.net', team: 'ラボ型', role: 'ADMIN', status: 'ACTIVE' },
-    { name: 'TRUONG THI HA', email: 'ha-t@dymvietnam.net', team: '内部', role: 'ADMIN', status: 'ACTIVE' },
-    { name: 'NGUYEN VY THANH TRUC', email: 'truc-n@dymvietnam.net', team: '内部・1課', role: 'ADMIN', status: 'ACTIVE' },
-    { name: 'NGUYEN TRA VY', email: 'vy-n@dymvietnam.net', team: '内部・2課A', role: 'ADMIN', status: 'ACTIVE' },
-    { name: 'NGUYEN DOAN THUY THUC QUYEN', email: 'quyen-n@dymvietnam.net', team: 'GS', role: 'USER', status: 'ACTIVE' },
-    { name: 'TRAN HANH DINH DINH', email: 'dinh-tran@dymvietnam.net', team: 'GS', role: 'USER', status: 'ACTIVE' },
-  ];
+type TabType = 'USERS' | 'PROJECTS' | 'TEAMS' | 'TAGS';
 
-  const getRoleColor = (role: string) => {
-    switch(role.toUpperCase()) {
-      case 'MASTER': return 'bg-rose-50 text-rose-500 border-rose-100';
-      case 'ADMIN': return 'bg-sky-50 text-sky-500 border-sky-100';
-      default: return 'bg-amber-50 text-amber-500 border-amber-100';
+export default function Settings() {
+  const [activeTab, setActiveTab] = useState<TabType>('USERS');
+  const [loading, setLoading] = useState(true);
+  
+  // States chứa dữ liệu thật
+  const [users, setUsers] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [tags, setTags] = useState<any[]>([]);
+
+  // States cho Modal
+  const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+
+  // Hàm Fetch toàn bộ dữ liệu từ Supabase
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [
+        { data: usersData },
+        { data: projectsData },
+        { data: teamsData },
+        { data: tagsData }
+      ] = await Promise.all([
+        supabase.from('users').select('*').order('created_at', { ascending: false }),
+        supabase.from('projects').select('*').order('created_at', { ascending: false }),
+        supabase.from('teams').select('*').order('created_at', { ascending: false }),
+        supabase.from('tags').select('*').order('created_at', { ascending: false })
+      ]);
+
+      setUsers(usersData || []);
+      setProjects(projectsData || []);
+      setTeams(teamsData || []);
+      setTags(tagsData || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
     }
-  }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Mở Modal Thêm mới
+  const handleAdd = () => {
+    if (activeTab === 'USERS') {
+      alert('Để thêm User, người dùng cần tự đăng nhập qua Google Auth.');
+      return;
+    }
+    setEditingItem(null);
+    setIsMasterModalOpen(true);
+  };
+
+  // Mở Modal Chỉnh sửa
+  const handleEdit = (item: any) => {
+    setEditingItem(item);
+    if (activeTab === 'USERS') {
+      setIsUserModalOpen(true);
+    } else {
+      setIsMasterModalOpen(true);
+    }
+  };
+
+  // Lưu Master Data (Projects, Teams, Tags)
+  const handleSaveMasterData = async (name: string) => {
+    const tableName = activeTab.toLowerCase();
+    
+    if (editingItem) {
+      // Cập nhật
+      const { error } = await supabase
+        .from(tableName)
+        .update({ name })
+        .eq('id', editingItem.id);
+      
+      if (error) {
+        alert(`Lỗi khi cập nhật: ${error.message}`);
+        throw error;
+      }
+    } else {
+      // Thêm mới
+      const { error } = await supabase
+        .from(tableName)
+        .insert([{ name }]);
+      
+      if (error) {
+        alert(`Lỗi khi thêm mới: ${error.message}`);
+        throw error;
+      }
+    }
+    
+    fetchData();
+  };
+
+  // Lưu User Data
+  const handleSaveUser = async (userId: string, data: { role: string; status: string; teams: string[] }) => {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        role: data.role,
+        status: data.status,
+        teams: data.teams
+      })
+      .eq('id', userId);
+
+    if (error) {
+      alert(`Lỗi khi cập nhật User: ${error.message}`);
+      throw error;
+    }
+
+    fetchData();
+  };
+
+  // Hàm Xóa (Chỉ áp dụng cho Master Data)
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa mục này?')) return;
+    
+    const tableName = activeTab.toLowerCase();
+    const { error } = await supabase.from(tableName).delete().eq('id', id);
+    
+    if (error) {
+      alert(`Lỗi khi xóa: ${error.message}`);
+    } else {
+      fetchData();
+    }
+  };
 
   return (
-    <div className="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-            {['USERS', 'PROJECTS', 'TEAMS', 'TAGS'].map((tab) => (
-               <button 
-                key={tab}
-                className={cn(
-                    "px-6 py-2 rounded-lg text-[10px] font-bold tracking-widest transition-all",
-                    tab === 'USERS' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                )}
-               >
-                 {tab}
-               </button> 
-            ))}
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden">
+      {/* Header & Tabs */}
+      <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50/50 shrink-0">
+        <div className="flex bg-slate-100 p-1 rounded-lg">
+          {(['USERS', 'PROJECTS', 'TEAMS', 'TAGS'] as TabType[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-2 text-xs font-bold rounded-md transition-all ${
+                activeTab === tab
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-3">
-             <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                type="text" 
-                placeholder="Search..." 
-                className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
-                />
-            </div>
-            <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none text-slate-600">
-                <option>All Teams</option>
-            </select>
-            <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm shadow-indigo-200">
-                <PlusIcon className="w-4 h-4" />
-                <span>User</span>
-             </button>
-        </div>
+
+        <button 
+          onClick={handleAdd}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-colors"
+        >
+          <Plus size={16} />
+          Add {activeTab !== 'USERS' ? activeTab.slice(0, -1) : 'User'}
+        </button>
       </div>
 
-      <div className="flex-1 overflow-auto">
-         <table className="w-full text-left border-collapse">
-          <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
-            <tr>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">NAME / EMAIL</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">TEAMS</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">ROLE</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">STATUS</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right">ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {users.map((user, i) => {
-              const isMasterAccount = user.role.toUpperCase() === 'MASTER';
-              const canEdit = currentRole === 'master' || (currentRole === 'admin' && !isMasterAccount);
-
-              return (
-                <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
+      {/* Content Area */}
+      <div className="flex-1 overflow-auto p-0">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-full text-slate-400">
+            <Loader2 className="animate-spin mb-2" size={32} />
+            <p className="text-sm font-medium">Loading Real Data...</p>
+          </div>
+        ) : (
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-slate-50 sticky top-0 z-10">
+              <tr>
+                <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">
+                  {activeTab === 'USERS' ? 'Name / Email' : 'Name'}
+                </th>
+                {activeTab === 'USERS' && (
+                  <>
+                    <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">Teams</th>
+                    <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">Role</th>
+                    <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">Status</th>
+                  </>
+                )}
+                {activeTab !== 'USERS' && (
+                  <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">Created At</th>
+                )}
+                <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {/* RENDER DỮ LIỆU BẢNG USERS */}
+              {activeTab === 'USERS' && users.length === 0 && (
+                <tr><td colSpan={5} className="p-8 text-center text-slate-500">No users found.</td></tr>
+              )}
+              {activeTab === 'USERS' && users.map((user) => (
+                <tr key={user.id} className="hover:bg-slate-50 group">
                   <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold text-slate-700">{user.name}</span>
-                      <span className="text-xs text-slate-400">{user.email}</span>
+                    <div className="font-bold text-slate-900 text-sm">{user.name}</div>
+                    <div className="text-xs text-slate-500">{user.email}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex gap-1 flex-wrap">
+                      {user.teams?.length > 0 ? user.teams.map((t: string) => (
+                        <span key={t} className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">{t}</span>
+                      )) : <span className="text-slate-400 text-xs italic">No team</span>}
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="px-2 py-1 bg-slate-100 text-slate-400 rounded text-[10px] font-bold uppercase">{user.team}</span>
+                    <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${
+                      user.role === 'MASTER' ? 'bg-rose-50 text-rose-600' :
+                      user.role === 'ADMIN' ? 'bg-sky-50 text-sky-600' : 'bg-amber-50 text-amber-600'
+                    }`}>
+                      {user.role || 'USER'}
+                    </span>
                   </td>
-                  <td className="px-6 py-4 text-center">
-                      <span className={cn(
-                          "px-2 py-0.5 rounded text-[10px] font-bold border uppercase",
-                          getRoleColor(user.role)
-                      )}>
-                          {user.role}
-                      </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                      <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold border border-emerald-100 uppercase">
-                          {user.status}
-                      </span>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                      user.status === 'INACTIVE' ? 'bg-slate-100 text-slate-400' : 'bg-emerald-50 text-emerald-600'
+                    }`}>
+                      {user.status || 'ACTIVE'}
+                    </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                      {canEdit ? (
-                        <button className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
-                            <MoreHorizontal className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <span className="inline-block p-2 text-slate-200 cursor-not-allowed" title="Permission Denied">
-                            <MoreHorizontal className="w-4 h-4" />
-                        </span>
-                      )}
+                    <button 
+                      onClick={() => handleEdit(user)}
+                      className="p-2 text-slate-400 hover:text-indigo-600 transition-colors bg-white hover:bg-indigo-50 rounded-lg shadow-sm border border-slate-100"
+                    >
+                      <Edit2 size={16} />
+                    </button>
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+
+              {/* RENDER DỮ LIỆU CÁC BẢNG MASTER DATA CÒN LẠI */}
+              {activeTab !== 'USERS' && (() => {
+                const list = activeTab === 'PROJECTS' ? projects : activeTab === 'TEAMS' ? teams : tags;
+                if (list.length === 0) return <tr><td colSpan={3} className="p-8 text-center text-slate-500">No data found in {activeTab}. Click "Add {activeTab.slice(0, -1)}" to create one.</td></tr>;
+                
+                return list.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50 group">
+                    <td className="px-6 py-4 font-bold text-slate-700 text-sm">{item.name}</td>
+                    <td className="px-6 py-4 text-xs text-slate-500">
+                      {new Date(item.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => handleEdit(item)}
+                        className="p-2 text-slate-400 hover:text-indigo-600 transition-colors bg-white hover:bg-indigo-50 rounded-lg shadow-sm border border-slate-100"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(item.id)} 
+                        className="p-2 text-slate-400 hover:text-rose-600 transition-colors bg-white hover:bg-rose-50 rounded-lg shadow-sm border border-slate-100"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ));
+              })()}
+            </tbody>
+          </table>
+        )}
       </div>
 
-       <div className="p-4 border-t border-slate-100 bg-white shrink-0 flex items-center justify-center gap-1">
-         {[1, 2, 3, 4, 5].map((p, i) => (
-            <button 
-                key={i} 
-                className={cn(
-                "w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold",
-                p === 1 ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-100"
-                )}
-            >
-                {p}
-            </button>
-        ))}
-        <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-100 transition-colors">
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
+      {/* Modals */}
+      <MasterDataModal
+        isOpen={isMasterModalOpen}
+        onClose={() => setIsMasterModalOpen(false)}
+        onSave={handleSaveMasterData}
+        initialData={editingItem}
+        title={activeTab !== 'USERS' ? activeTab.slice(0, -1) : ''}
+      />
+
+      <UserEditModal
+        isOpen={isUserModalOpen}
+        onClose={() => setIsUserModalOpen(false)}
+        onSave={handleSaveUser}
+        user={editingItem}
+        availableTeams={teams}
+      />
     </div>
   );
-};
-
-const PlusIcon = ({ className }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-)
-
-export default Settings;
+}

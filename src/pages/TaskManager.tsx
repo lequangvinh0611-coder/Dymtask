@@ -13,9 +13,12 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+import CreateTaskModal from '../components/CreateTaskModal';
+
 const TaskManager = () => {
   const [page, setPage] = useState(1);
-  const { tasks, totalCount, loading } = useTasks(page);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { tasks, totalCount, loading, refetch } = useTasks(page);
   const { profile } = useAuthStore();
   const currentRole = profile?.role || 'user';
   const isUser = currentRole === 'user';
@@ -43,7 +46,10 @@ const TaskManager = () => {
               className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
             />
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-all active:scale-95">
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-all active:scale-95"
+          >
             <Plus className="w-4 h-4" />
             <span>Create Task</span>
           </button>
@@ -155,6 +161,12 @@ const TaskManager = () => {
           </tbody>
         </table>
       </div>
+
+      <CreateTaskModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={() => refetch()}
+      />
 
       {/* Pagination Footer */}
       <div className="p-4 border-t border-slate-100 bg-white shrink-0 flex items-center justify-between">
