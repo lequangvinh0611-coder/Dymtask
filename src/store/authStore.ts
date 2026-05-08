@@ -26,10 +26,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ session: null, profile: null });
   },
   fetchProfile: async (uid: string) => {
-    // Nếu đang loading và profile đã có rồi thì không fetch lại trừ khi cần thiết
-    const currentProfile = get().profile;
-    if (get().loading && currentProfile) return;
-
     try {
       set({ loading: true });
       console.log('[AuthStore] Fetching profile for:', uid);
@@ -43,7 +39,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error) {
         console.warn('[AuthStore] Profile fetch error:', error);
         
-        // PGRST116: No rows found
         if (error.code === 'PGRST116') {
           console.log('[AuthStore] No profile found, creating new one...');
           const { data: { user } } = await supabase.auth.getUser();
@@ -56,6 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 email: user.email!,
                 name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
                 role: 'user',
+                teams: [],
                 status: 'ACTIVE'
               })
               .select()
@@ -63,7 +59,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
             if (insertError) {
               console.error('[AuthStore] Profile creation failed:', insertError);
-              throw insertError;
+              // Fallback profile if insert fails
+              set({ 
+                profile: { 
+                  id: user.id, 
+                  email: user.email!, 
+                  name: user.email?.split('@')[0] || 'User', 
+                  role: 'user', 
+                  teams: [],
+                  status: 'ACTIVE',
+                  created_at: new Date().toISOString()
+                } 
+              });
+              return;
             }
             
             console.log('[AuthStore] New profile created successfully');
@@ -77,12 +85,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ profile: data });
     } catch (error: any) {
       console.error('[AuthStore] Final fetchProfile error:', error);
-      // Fallback for UI if everything fails
-      if (!get().profile) {
+      
+      // Fallback: If we can't get a profile, set a default one based on session user if possible
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        set({ 
+          profile: { 
+            id: session.user.id, 
+            email: session.user.email!, 
+            name: session.user.email?.split('@')[0] || 'User', 
+            role: 'user', 
+            teams: [],
+            status: 'ACTIVE',
+            created_at: new Date().toISOString()
+          } 
+        });
+      } else {
         set({ profile: null });
       }
     } finally {
+      // MANDATORY: Always stop the loading state
       set({ loading: false });
+      console.log('[AuthStore] Loading finished');
     }
   },
 }));

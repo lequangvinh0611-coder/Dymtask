@@ -20,6 +20,27 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
+    const initAuth = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        
+        if (currentSession) {
+          setSession(currentSession);
+          await fetchProfile(currentSession.user.id);
+        } else {
+          setSession(null);
+          setProfile(null);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('[App] Auth Init Error:', err);
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initAuth();
+
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`[App] Auth Event: ${event}`);
