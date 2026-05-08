@@ -26,12 +26,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ session: null, profile: null });
   },
   fetchProfile: async (uid: string) => {
+    // Luôn luôn chạy try-catch-finally để đảm bảo không bao giờ kẹt Loading
     try {
-      set({ loading: true });
       console.log('[AuthStore] Fetching profile for:', uid);
       
+      // Sửa lại thành bảng 'profiles' thay vì 'users'
       const { data, error } = await supabase
-        .from('users')
+        .from('profiles')
         .select('*')
         .eq('id', uid)
         .single();
@@ -39,74 +40,53 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error) {
         console.warn('[AuthStore] Profile fetch error:', error);
         
+        // Nếu không tìm thấy profile (PGRST116), tạo profile mặc định
         if (error.code === 'PGRST116') {
-          console.log('[AuthStore] No profile found, creating new one...');
+          console.log('[AuthStore] No profile found, creating fallback profile...');
           const { data: { user } } = await supabase.auth.getUser();
           
           if (user) {
-            const { data: newProfile, error: insertError } = await supabase
-              .from('users')
-              .insert({
-                id: user.id,
-                email: user.email!,
-                name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-                role: 'user',
+            const fallbackProfile: UserProfile = { 
+                id: user.id, 
+                email: user.email!, 
+                name: user.email?.split('@')[0] || 'User', 
+                role: 'USER', // Mặc định là USER
                 teams: [],
-                status: 'ACTIVE'
-              })
-              .select()
-              .single();
+                status: 'ACTIVE',
+                created_at: new Date().toISOString()
+            } as any; // Ép kiểu tạm thời để tránh lỗi type
 
-            if (insertError) {
-              console.error('[AuthStore] Profile creation failed:', insertError);
-              // Fallback profile if insert fails
-              set({ 
-                profile: { 
-                  id: user.id, 
-                  email: user.email!, 
-                  name: user.email?.split('@')[0] || 'User', 
-                  role: 'user', 
-                  teams: [],
-                  status: 'ACTIVE',
-                  created_at: new Date().toISOString()
-                } 
-              });
-              return;
-            }
-            
-            console.log('[AuthStore] New profile created successfully');
-            set({ profile: newProfile });
+            set({ profile: fallbackProfile });
             return;
           }
         }
         throw error;
       }
       
+      console.log('[AuthStore] Profile fetched successfully:', data);
       set({ profile: data });
+
     } catch (error: any) {
       console.error('[AuthStore] Final fetchProfile error:', error);
       
-      // Fallback: If we can't get a profile, set a default one based on session user if possible
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      // Fallback cuối cùng nếu mọi thứ thất bại: Tự set làm USER để vớt vát giao diện
+      const sessionUser = get().session?.user;
+      if (sessionUser) {
         set({ 
           profile: { 
-            id: session.user.id, 
-            email: session.user.email!, 
-            name: session.user.email?.split('@')[0] || 'User', 
-            role: 'user', 
-            teams: [],
-            status: 'ACTIVE',
-            created_at: new Date().toISOString()
-          } 
+            id: sessionUser.id, 
+            email: sessionUser.email!, 
+            name: sessionUser.email?.split('@')[0] || 'User', 
+            role: 'USER' 
+          } as any 
         });
       } else {
         set({ profile: null });
       }
     } finally {
-      // MANDATORY: Always stop the loading state
+      // ĐÂY LÀ CHỐT CHẶN QUAN TRỌNG NHẤT: Bắt buộc tắt Loading
       set({ loading: false });
-      console.log('[AuthStore] Loading finished');
+      console.log('[AuthStore] Loading finished and set to FALSE');
     }
   },
 }));
