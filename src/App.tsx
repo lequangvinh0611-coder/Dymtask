@@ -15,33 +15,29 @@ import { cn } from './lib/utils';
 
 export default function App() {
   const { activeTab } = useAppStore();
-  const { session, profile, loading, setSession, fetchProfile, setLoading } = useAuthStore();
+  const { session, profile, loading, setSession, setProfile, fetchProfile, setLoading } = useAuthStore();
 
   useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    }).catch(err => {
-      console.error('Session check error:', err);
-      setLoading(false);
-    });
+    let mounted = true;
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[App] Auth Event: ${event}`);
+      
+      if (!mounted) return;
+
       if (session) {
-        fetchProfile(session.user.id);
+        setSession(session);
+        await fetchProfile(session.user.id);
       } else {
+        setSession(null);
+        setProfile(null);
         setLoading(false);
       }
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);

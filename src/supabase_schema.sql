@@ -96,14 +96,20 @@ USING (
   (auth.jwt() ->> 'email') = ANY(assignees)
 );
 
--- 10. Default Policies for other tables (Example: Admin/Master can manage everything)
-CREATE POLICY "Master/Admin manage users" ON public.users
+-- 10. Policies for users table
+CREATE POLICY "Master/Admin manage all users" ON public.users
 FOR ALL USING (
   (SELECT public.get_current_user_role()) IN ('master', 'admin')
 );
 
-CREATE POLICY "Users can see other users" ON public.users
+CREATE POLICY "Users can see all other users" ON public.users
 FOR SELECT USING (true);
+
+CREATE POLICY "Users can insert their own profile" ON public.users
+FOR INSERT WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Users can edit their own profile" ON public.users
+FOR UPDATE USING (auth.uid() = id);
 
 -- Functions & Triggers for updated_at
 CREATE OR REPLACE FUNCTION update_modified_column()

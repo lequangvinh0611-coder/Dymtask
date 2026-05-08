@@ -26,8 +26,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ session: null, profile: null });
   },
   fetchProfile: async (uid: string) => {
+    // Nếu đang loading và profile đã có rồi thì không fetch lại trừ khi cần thiết
+    const currentProfile = get().profile;
+    if (get().loading && currentProfile) return;
+
     try {
       set({ loading: true });
+      console.log('[AuthStore] Fetching profile for:', uid);
+      
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -35,9 +41,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .single();
 
       if (error) {
-        // Nếu không tìm thấy profile (người dùng mới), hệ thống sẽ tự tạo profile mặc định
+        console.warn('[AuthStore] Profile fetch error:', error);
+        
+        // PGRST116: No rows found
         if (error.code === 'PGRST116') {
+          console.log('[AuthStore] No profile found, creating new one...');
           const { data: { user } } = await supabase.auth.getUser();
+          
           if (user) {
             const { data: newProfile, error: insertError } = await supabase
               .from('users')
@@ -51,17 +61,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               .select()
               .single();
 
-            if (insertError) throw insertError;
+            if (insertError) {
+              console.error('[AuthStore] Profile creation failed:', insertError);
+              throw insertError;
+            }
+            
+            console.log('[AuthStore] New profile created successfully');
             set({ profile: newProfile });
             return;
           }
         }
         throw error;
       }
+      
       set({ profile: data });
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      set({ profile: null });
+    } catch (error: any) {
+      console.error('[AuthStore] Final fetchProfile error:', error);
+      // Fallback for UI if everything fails
+      if (!get().profile) {
+        set({ profile: null });
+      }
     } finally {
       set({ loading: false });
     }
