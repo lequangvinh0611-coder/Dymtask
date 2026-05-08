@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAppStore } from '../types';
+import { useAppStore, AppState } from '../types';
 import { useAuthStore } from '../store/authStore';
 import { cn } from '../lib/utils';
 import { 
@@ -16,13 +16,17 @@ const Sidebar = () => {
   const { activeTab, setActiveTab } = useAppStore();
   const { profile, signOut } = useAuthStore();
 
-  const menuItems = [
-    { id: 'TO-DO LIST', icon: ClipboardList },
-    { id: 'TASK MANAGER', icon: ClipboardList },
-    { id: 'DASHBOARD', icon: LayoutDashboard },
-    { id: 'AUDIT LOG', icon: History },
-    { id: 'SETTINGS', icon: SettingsIcon },
-  ] as const;
+  const menuItems: { id: AppState['activeTab']; icon: any; roles: string[] }[] = [
+    { id: 'TO-DO LIST', icon: ClipboardList, roles: ['master', 'admin', 'user'] },
+    { id: 'TASK MANAGER', icon: ClipboardList, roles: ['master', 'admin', 'user'] },
+    { id: 'DASHBOARD', icon: LayoutDashboard, roles: ['master', 'admin', 'user'] },
+    { id: 'AUDIT LOG', icon: History, roles: ['master', 'admin'] },
+    { id: 'SETTINGS', icon: SettingsIcon, roles: ['master', 'admin'] },
+  ];
+
+  const filteredMenuItems = menuItems.filter(item => 
+    item.roles.includes(profile?.role || 'user')
+  );
 
   return (
     <aside className="w-64 bg-[#0F172A] text-slate-300 flex flex-col h-full shrink-0 relative z-20 shadow-2xl shadow-indigo-900/20">
@@ -34,7 +38,7 @@ const Sidebar = () => {
       </div>
 
       <nav className="flex-1 px-4 mt-4 space-y-1">
-        {menuItems.map((item) => (
+        {filteredMenuItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}

@@ -58,7 +58,7 @@ export interface AuditLog {
   type: 'CREATE_TASK' | 'UPDATE_TASK' | 'DELETE_TASK' | 'CREATE_TEAM' | 'UPDATE_TEAM' | 'CREATE_PROJECT' | 'UPDATE_TAG' | 'RESET_TASK' | 'UPDATE_USER';
 }
 
-interface AppState {
+export interface AppState {
   activeTab: 'TO-DO LIST' | 'TASK MANAGER' | 'DASHBOARD' | 'AUDIT LOG' | 'SETTINGS';
   setActiveTab: (tab: AppState['activeTab']) => void;
   currentUser: User | null;

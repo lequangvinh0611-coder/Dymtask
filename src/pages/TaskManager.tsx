@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTasks } from '../hooks/useTasks';
+import { useAuthStore } from '../store/authStore';
 import { 
   Search, 
   Plus, 
@@ -7,13 +8,18 @@ import {
   Download, 
   RotateCw,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const TaskManager = () => {
   const [page, setPage] = useState(1);
   const { tasks, totalCount, loading } = useTasks(page);
+  const { profile } = useAuthStore();
+  const currentRole = profile?.role || 'user';
+  const isUser = currentRole === 'user';
+  
   const totalPages = Math.ceil(totalCount / 15) || 1;
 
   return (
@@ -122,9 +128,20 @@ const TaskManager = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button className="p-2 text-slate-300 hover:text-slate-600 transition-colors">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button className="p-2 text-slate-300 hover:text-indigo-600 transition-colors">
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+                      {!isUser ? (
+                        <button className="p-2 text-slate-300 hover:text-rose-500 transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="p-2 text-slate-100 cursor-not-allowed opacity-50">
+                          <Trash2 className="w-4 h-4" />
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))

@@ -47,6 +47,9 @@ export default function App() {
   }, []);
 
   const renderContent = () => {
+    const role = profile?.role || 'user';
+    const isUser = role === 'user';
+
     switch (activeTab) {
       case 'TO-DO LIST':
         return <TaskList key="todo" title="To-do List" />;
@@ -55,8 +58,10 @@ export default function App() {
       case 'DASHBOARD':
         return <Dashboard key="dashboard" />;
       case 'AUDIT LOG':
+        if (isUser) return <TaskList key="todo" title="To-do List" />;
         return <AuditLog key="audit" />;
       case 'SETTINGS':
+        if (isUser) return <TaskList key="todo" title="To-do List" />;
         return <Settings key="settings" />;
       default:
         return <div>Select a tab</div>;
@@ -97,8 +102,10 @@ export default function App() {
             <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm">
                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Role:</span>
                <span className={cn(
-                 "text-[10px] font-black uppercase px-1.5 py-0.5 rounded",
-                 profile?.role === 'master' ? "text-rose-600 bg-rose-50" : "text-sky-600 bg-sky-50"
+                 "text-[10px] font-black uppercase px-2 py-0.5 rounded border",
+                 profile?.role === 'master' ? "text-rose-600 bg-rose-50 border-rose-100" : 
+                 profile?.role === 'admin' ? "text-sky-600 bg-sky-50 border-sky-100" :
+                 "text-amber-600 bg-amber-50 border-amber-100"
                )}>
                  {profile?.role || 'Guest'}
                </span>

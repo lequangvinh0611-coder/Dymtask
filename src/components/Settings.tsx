@@ -1,8 +1,11 @@
 import React from 'react';
 import { Search, UserPlus, MoreHorizontal, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useAuthStore } from '../store/authStore';
 
 const Settings = () => {
+  const { profile } = useAuthStore();
+  const currentRole = profile?.role || 'user';
   const users = [
     { name: 'VINH LE QUANG', email: 'le-v@dymvietnam.jp', team: '内部', role: 'MASTER', status: 'ACTIVE' },
     { name: 'VU THANH HIEN', email: 'hien-v@dymvietnam.net', team: 'GS', role: 'ADMIN', status: 'ACTIVE' },
@@ -16,7 +19,7 @@ const Settings = () => {
   ];
 
   const getRoleColor = (role: string) => {
-    switch(role) {
+    switch(role.toUpperCase()) {
       case 'MASTER': return 'bg-rose-50 text-rose-500 border-rose-100';
       case 'ADMIN': return 'bg-sky-50 text-sky-500 border-sky-100';
       default: return 'bg-amber-50 text-amber-500 border-amber-100';
@@ -70,37 +73,48 @@ const Settings = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {users.map((user, i) => (
-              <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="px-6 py-4">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-700">{user.name}</span>
-                    <span className="text-xs text-slate-400">{user.email}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="px-2 py-1 bg-slate-100 text-slate-400 rounded text-[10px] font-bold uppercase">{user.team}</span>
-                </td>
-                <td className="px-6 py-4 text-center">
-                    <span className={cn(
-                        "px-2 py-0.5 rounded text-[10px] font-bold border",
-                        getRoleColor(user.role)
-                    )}>
-                        {user.role}
-                    </span>
-                </td>
-                <td className="px-6 py-4 text-center">
-                    <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold border border-emerald-100">
-                        {user.status}
-                    </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                    <button className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
-                        <MoreHorizontal className="w-4 h-4" />
-                    </button>
-                </td>
-              </tr>
-            ))}
+            {users.map((user, i) => {
+              const isMasterAccount = user.role.toUpperCase() === 'MASTER';
+              const canEdit = currentRole === 'master' || (currentRole === 'admin' && !isMasterAccount);
+
+              return (
+                <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-slate-700">{user.name}</span>
+                      <span className="text-xs text-slate-400">{user.email}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="px-2 py-1 bg-slate-100 text-slate-400 rounded text-[10px] font-bold uppercase">{user.team}</span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                      <span className={cn(
+                          "px-2 py-0.5 rounded text-[10px] font-bold border uppercase",
+                          getRoleColor(user.role)
+                      )}>
+                          {user.role}
+                      </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                      <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold border border-emerald-100 uppercase">
+                          {user.status}
+                      </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                      {canEdit ? (
+                        <button className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
+                            <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="inline-block p-2 text-slate-200 cursor-not-allowed" title="Permission Denied">
+                            <MoreHorizontal className="w-4 h-4" />
+                        </span>
+                      )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
