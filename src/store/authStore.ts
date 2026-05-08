@@ -32,7 +32,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       
       // Sửa lại thành bảng 'profiles' thay vì 'users'
       const { data, error } = await supabase
-        .from('profiles')
+        .from('users')
         .select('*')
         .eq('id', uid)
         .single();

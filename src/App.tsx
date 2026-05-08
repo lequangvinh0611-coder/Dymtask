@@ -20,28 +20,6 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
-    const initAuth = async () => {
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (!mounted) return;
-        
-        if (currentSession) {
-          setSession(currentSession);
-          // Để authStore tự quản lý loading trong hàm fetchProfile
-          await fetchProfile(currentSession.user.id); 
-        } else {
-          setSession(null);
-          setProfile(null);
-          setLoading(false); // Bắt buộc tắt loading nếu chưa đăng nhập
-        }
-      } catch (err) {
-        console.error('[App] Auth Init Error:', err);
-        if (mounted) setLoading(false);
-      }
-    };
-
-    initAuth();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`[App] Auth Event: ${event}`);
       if (!mounted) return;
