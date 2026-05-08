@@ -27,11 +27,12 @@ export default function App() {
         
         if (currentSession) {
           setSession(currentSession);
-          await fetchProfile(currentSession.user.id);
+          // Để authStore tự quản lý loading trong hàm fetchProfile
+          await fetchProfile(currentSession.user.id); 
         } else {
           setSession(null);
           setProfile(null);
-          setLoading(false);
+          setLoading(false); // Bắt buộc tắt loading nếu chưa đăng nhập
         }
       } catch (err) {
         console.error('[App] Auth Init Error:', err);
@@ -41,10 +42,8 @@ export default function App() {
 
     initAuth();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`[App] Auth Event: ${event}`);
-      
       if (!mounted) return;
 
       if (session) {
@@ -61,11 +60,12 @@ export default function App() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Xóa fetchProfile, setSession, setLoading khỏi dependency array để tránh lặp vô hạn
 
   const renderContent = () => {
-    const role = profile?.role || 'user';
-    const isUser = role === 'user';
+    // Chuyển về chữ IN HOA để đồng bộ với Database ('MASTER', 'ADMIN', 'USER')
+    const role = profile?.role?.toUpperCase() || 'USER';
+    const isUser = role === 'USER';
 
     switch (activeTab) {
       case 'TO-DO LIST':
@@ -100,6 +100,8 @@ export default function App() {
     return <Login />;
   }
 
+  const userRole = profile?.role?.toUpperCase() || 'GUEST';
+
   return (
     <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans">
       <Sidebar />
@@ -120,11 +122,11 @@ export default function App() {
                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Role:</span>
                <span className={cn(
                  "text-[10px] font-black uppercase px-2 py-0.5 rounded border",
-                 profile?.role === 'master' ? "text-rose-600 bg-rose-50 border-rose-100" : 
-                 profile?.role === 'admin' ? "text-sky-600 bg-sky-50 border-sky-100" :
+                 userRole === 'MASTER' ? "text-rose-600 bg-rose-50 border-rose-100" : 
+                 userRole === 'ADMIN' ? "text-sky-600 bg-sky-50 border-sky-100" :
                  "text-amber-600 bg-amber-50 border-amber-100"
                )}>
-                 {profile?.role || 'Guest'}
+                 {userRole}
                </span>
             </div>
             <div className="h-8 w-px bg-slate-200 mx-2"></div>
