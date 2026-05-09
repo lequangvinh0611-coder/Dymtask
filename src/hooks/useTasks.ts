@@ -3,12 +3,21 @@ import { supabase } from '../lib/supabase';
 import { Task } from '../types/database.types';
 
 export interface TaskWithDetails extends Task {
-  tags?: { name: string; color: string };
-  projects?: { name: string };
-  teams?: { name: string };
+  tags?: { name: string; color?: string } | null;
+  projects?: { name: string } | null;
+  teams?: { name: string } | null;
 }
 
-export const useTasks = (page = 1, pageSize = 15, filters: any = {}) => {
+export interface TaskFilters {
+  search?: string;
+  status?: string;
+  project_id?: string;
+  team_id?: string;
+  tag_id?: string;
+  assignee_email?: string;
+}
+
+export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => {
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -18,27 +27,24 @@ export const useTasks = (page = 1, pageSize = 15, filters: any = {}) => {
     try {
       let query = supabase
         .from('tasks')
-        .select(`
-          *,
-          tags (name, color),
-          projects (name),
-          teams (name)
-        `, { count: 'exact' });
+        .select(`*, tags(name, color), projects(name), teams(name)`, { count: 'exact' });
 
-      // Apply filters
-      if (filters && filters.status) query = query.eq('status', filters.status);
-      if (filters && filters.project_id) query = query.eq('project_id', filters.project_id);
-      
-      // Pagination
+      if (filters.search) query = query.ilike('task_name', `%${filters.search}%`);
+      if (filters.status) query = query.eq('status', filters.status);
+      if (filters.project_id) query = query.eq('project_id', filters.project_id);
+      if (filters.team_id) query = query.eq('team_id', filters.team_id);
+      if (filters.tag_id) query = query.eq('tag_id', filters.tag_id);
+      if (filters.assignee_email) query = query.contains('assignees', [filters.assignee_email]);
+
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
-      query = query.range(from, to).order('created_at', { ascending: false });
-
-      const { data, error, count } = await query;
-      console.log(`[Supabase] Fetched ${data?.length || 0} tasks from table "tasks".`);
+      
+      const { data, error, count } = await query
+        .range(from, to)
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTasks(data || []);
+      setTasks((data as TaskWithDetails[]) || []);
       setTotalCount(count || 0);
     } catch (error) {
       console.error('Error fetching tasks:', error);
@@ -49,24 +55,17 @@ export const useTasks = (page = 1, pageSize = 15, filters: any = {}) => {
 
   useEffect(() => {
     fetchTasks();
-
-    // ⚡ Realtime subscription
-    const channel = supabase
-      .channel('public:tasks')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        (payload) => {
-          console.log('Realtime update received:', payload);
-          // For simplicity, we re-fetch to ensure relations (tags, projects) are included
-          fetchTasks();
+    const channel = supabase.channel('tasks_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          fetchTasks(); // Fetch lại để lấy dữ liệu JOIN
+        } else if (payload.eventType === 'UPDATE') {
+          setTasks(prev => prev.map(t => t.id === payload.new.id ? { ...t, ...payload.new } : t));
+        } else if (payload.eventType === 'DELETE') {
+          setTasks(prev => prev.filter(t => t.id !== payload.old.id));
         }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      }).subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [fetchTasks]);
 
   return { tasks, totalCount, loading, refetch: fetchTasks };
