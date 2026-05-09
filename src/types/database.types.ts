@@ -60,6 +60,7 @@ export interface Task {
   assignees: string[]; // List of user emails
   created_at: string;
   updated_at: string;
+  is_active: boolean;
 
   // --- QUAN HỆ (RELATIONS) ---
   // Khai báo thêm để hứng data khi dùng Supabase JOIN
