@@ -7,8 +7,9 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  teams: string[];
   status: 'ACTIVE' | 'INACTIVE';
+  // Đã xóa string[] teams cũ, thay bằng quan hệ từ bảng user_teams
+  user_teams?: { team_id: string }[];
 }
 
 export interface Project {
@@ -40,41 +41,43 @@ export interface Task {
   project_id: string;
   team_id: string;
   type: 'DAILY' | 'WEEKLY' | 'ONCE';
-  deadline: string;
-  estimated_time: string;
-  actual_time: string;
+  
+  // Các field thời gian mới theo Phase 2 (Migration 1)
+  deadline_time?: string | null;     // VD: "08:30" hoặc "17:00:00"
+  deadline_days?: string[] | null;   // VD: ["Mon", "Tue"]
+  estimated_minutes: number;         // Chuyển sang lưu số phút
+  actual_minutes: number;            // Chuyển sang lưu số phút
+
   status: 'NEW' | 'IN_PROGRESS' | 'DONE' | 'SUBMITTED';
   subtasks: Subtask[];
-  assignees: string[]; // List of user emails
+  assignees: string[]; // Mảng email
   created_at: string;
+  updated_at?: string;
+
+  // Thuộc tính quan hệ (sinh ra khi gọi Supabase select đi kèm bảng khác)
+  projects?: { name: string };
+  teams?: { name: string };
+  tags?: { name: string; color?: string };
 }
 
 export interface AuditLog {
   id: string;
   action: string;
   description: string;
+  user_id?: string;
   user_name: string;
-  time: string;
-  type: 'CREATE_TASK' | 'UPDATE_TASK' | 'DELETE_TASK' | 'CREATE_TEAM' | 'UPDATE_TEAM' | 'CREATE_PROJECT' | 'UPDATE_TAG' | 'RESET_TASK' | 'UPDATE_USER';
+  metadata?: any;       // Lưu log dạng JSONB
+  created_at: string;   // Thay thế cho field 'time' cũ
 }
 
 export interface AppState {
   activeTab: 'TO-DO LIST' | 'TASK MANAGER' | 'DASHBOARD' | 'AUDIT LOG' | 'SETTINGS';
   setActiveTab: (tab: AppState['activeTab']) => void;
-  currentUser: User | null;
-  setCurrentUser: (user: User | null) => void;
+  // Đã xóa bỏ hoàn toàn currentUser và setCurrentUser (Phase 3.1)
 }
 
+// Store chỉ còn quản lý trạng thái UI (activeTab)
 export const useAppStore = create<AppState>((set) => ({
   activeTab: 'TO-DO LIST',
   setActiveTab: (tab) => set({ activeTab: tab }),
-  currentUser: {
-    id: '1',
-    name: 'LE QUANG VINH',
-    email: 'le-v@dymvietnam.jp',
-    role: 'master',
-    teams: ['内部'],
-    status: 'ACTIVE'
-  },
-  setCurrentUser: (user) => set({ currentUser: user }),
 }));

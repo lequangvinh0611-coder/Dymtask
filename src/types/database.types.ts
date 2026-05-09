@@ -7,9 +7,12 @@ export interface UserProfile {
   email: string;
   name: string;
   role: UserRole;
-  teams: string[];
   status: 'ACTIVE' | 'INACTIVE';
   created_at: string;
+  
+  // Thay thế cho 'teams: string[]' cũ
+  // Dùng khi bạn query kèm bảng user_teams
+  user_teams?: { team_id: string }[];
 }
 
 export interface Project {
@@ -45,14 +48,24 @@ export interface Task {
   project_id: string | null;
   team_id: string | null;
   type: TaskType;
-  deadline: string | null;
-  estimated_time: string | null;
-  actual_time: string | null;
+  
+  // --- MIGRATION 1: CẬP NHẬT KIỂU THỜI GIAN ---
+  deadline_time: string | null;     // Ánh xạ cột TIME (VD: "08:30:00")
+  deadline_days: string[] | null;   // Ánh xạ cột TEXT[] (VD: ["Mon", "Tue"])
+  estimated_minutes: number;        // Ánh xạ cột INTEGER
+  actual_minutes: number;           // Ánh xạ cột INTEGER
+
   status: TaskStatus;
-  subtasks: Subtask[];
+  subtasks: Subtask[]; // Ánh xạ JSONB
   assignees: string[]; // List of user emails
   created_at: string;
   updated_at: string;
+
+  // --- QUAN HỆ (RELATIONS) ---
+  // Khai báo thêm để hứng data khi dùng Supabase JOIN
+  projects?: Project;
+  teams?: Team;
+  tags?: Tag;
 }
 
 export interface AuditLog {
@@ -61,6 +74,6 @@ export interface AuditLog {
   description?: string;
   user_id: string | null;
   user_name: string | null;
-  metadata: any;
+  metadata: any; // Ánh xạ JSONB
   created_at: string;
 }

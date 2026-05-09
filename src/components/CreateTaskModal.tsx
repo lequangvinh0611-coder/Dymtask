@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2, Plus, Trash2, UserPlus } from 'lucide-react';
+import { X, Save, Loader2, Plus, Trash2, UserPlus, CalendarDays } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 
@@ -16,6 +16,8 @@ interface CreateTaskModalProps {
   onSuccess: () => void;
 }
 
+const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { profile } = useAuthStore();
   const [loading, setLoading] = useState(false);
@@ -26,15 +28,16 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
   const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
   const [users, setUsers] = useState<{ id: string; name: string; email: string }[]>([]);
 
-  // Task Form States
+  // Task Form States - Updated according to Phase 2 Migration
   const [formData, setFormData] = useState({
     task_name: '',
     project_id: '',
     team_id: '',
     tag_id: '',
     type: 'ONCE',
-    deadline: '09:00',
-    estimated_time: 30,
+    deadline_time: '09:00',
+    deadline_days: [] as string[],
+    estimated_minutes: 30,
   });
 
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
@@ -92,20 +95,32 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     );
   };
 
+  const toggleDay = (day: string) => {
+    setFormData(prev => ({
+      ...prev,
+      deadline_days: prev.deadline_days.includes(day)
+        ? prev.deadline_days.filter(d => d !== day)
+        : [...prev.deadline_days, day]
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.id || !profile?.email) return;
 
     setLoading(true);
     try {
+      // Updated payload to match new Supabase Schema
       const { error } = await supabase.from('tasks').insert({
         task_name: formData.task_name,
         project_id: formData.project_id || null,
         team_id: formData.team_id || null,
         tag_id: formData.tag_id || null,
         type: formData.type,
-        deadline: formData.deadline || null,
-        estimated_time: `${formData.estimated_time}m`,
+        deadline_time: formData.deadline_time || null,
+        deadline_days: formData.deadline_days.length > 0 ? formData.deadline_days : null,
+        estimated_minutes: formData.estimated_minutes,
+        actual_minutes: 0, // Mặc định 0 khi mới tạo
         status: 'NEW',
         assignees: selectedAssignees,
         subtasks: subtasks.map(({ content, assignee, estimated_minutes }) => ({
@@ -127,8 +142,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         team_id: '',
         tag_id: '',
         type: 'ONCE',
-        deadline: '09:00',
-        estimated_time: 30,
+        deadline_time: '09:00',
+        deadline_days: [],
+        estimated_minutes: 30,
       });
       setSelectedAssignees([profile.email]);
       setSubtasks([]);
@@ -216,25 +232,51 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Deadline</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Time Deadline</label>
                 <input 
                   type="time"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                  value={formData.deadline}
-                  onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                  value={formData.deadline_time}
+                  onChange={(e) => setFormData({ ...formData, deadline_time: e.target.value })}
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Est. Time (Min)</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Est. Minutes</label>
                 <input 
                   type="number"
                   min="1"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                  value={formData.estimated_time}
-                  onChange={(e) => setFormData({ ...formData, estimated_time: parseInt(e.target.value) || 0 })}
+                  value={formData.estimated_minutes}
+                  onChange={(e) => setFormData({ ...formData, estimated_minutes: parseInt(e.target.value) || 0 })}
                 />
               </div>
             </div>
+
+            {/* Render Day Picker conditionally if type is WEEKLY */}
+            {formData.type === 'WEEKLY' && (
+              <div className="pt-2 animate-in fade-in slide-in-from-top-2">
+                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-2">
+                  <CalendarDays size={12} />
+                  Repeat Days
+                </label>
+                <div className="flex gap-2">
+                  {DAYS_OF_WEEK.map(day => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleDay(day)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                        formData.deadline_days.includes(day)
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-200'
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:bg-indigo-50'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Assignees Selection */}
@@ -251,8 +293,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                   onClick={() => toggleAssignee(u.email)}
                   className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all border ${
                     selectedAssignees.includes(u.email)
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400'
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-200'
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400 hover:bg-indigo-50'
                   }`}
                 >
                   {u.name || u.email}
@@ -268,7 +310,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
               <button 
                 type="button"
                 onClick={handleAddSubtask}
-                className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg hover:bg-black transition-all"
+                className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg hover:bg-black transition-all shadow-sm"
               >
                 <Plus size={12} />
                 Add Subtask
@@ -277,7 +319,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             
             <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
               {subtasks.length === 0 ? (
-                <div className="py-4 text-center border-2 border-dashed border-slate-100 rounded-xl">
+                <div className="py-4 text-center border-2 border-dashed border-slate-100 rounded-xl bg-slate-50/50">
                   <p className="text-[10px] text-slate-400 font-bold italic uppercase tracking-widest">No subtasks yet</p>
                 </div>
               ) : (
@@ -285,13 +327,13 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                   <div key={st.id} className="flex gap-2 items-start bg-slate-50 p-2 rounded-xl border border-slate-100 group">
                     <input 
                       required
-                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-500 font-medium"
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 font-medium transition-all"
                       placeholder="Subtask content..."
                       value={st.content}
                       onChange={(e) => updateSubtask(st.id, { content: e.target.value })}
                     />
                     <select 
-                      className="w-32 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:outline-none"
+                      className="w-32 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:outline-none focus:border-indigo-500 transition-all"
                       value={st.assignee}
                       onChange={(e) => updateSubtask(st.id, { assignee: e.target.value })}
                     >
@@ -301,7 +343,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                       <input 
                         type="number"
                         min="1"
-                        className="w-16 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center"
+                        className="w-16 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center focus:outline-none focus:border-indigo-500 transition-all"
                         value={st.estimated_minutes}
                         onChange={(e) => updateSubtask(st.id, { estimated_minutes: parseInt(e.target.value) || 0 })}
                       />
@@ -310,7 +352,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                     <button 
                       type="button"
                       onClick={() => removeSubtask(st.id)}
-                      className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
+                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <Trash2 size={14} />
                     </button>
