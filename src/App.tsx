@@ -44,10 +44,12 @@ export default function App() {
   }, []);
 
   const renderContent = () => {
-    const role = profile?.role?.toUpperCase() || 'USER';
+    const role = (profile?.role || 'USER').toString().toUpperCase().trim();
     const isUser = role === 'USER';
 
-    switch (activeTab) {
+    const normalizedActiveTab = activeTab.toString().toUpperCase().trim();
+
+    switch (normalizedActiveTab) {
       case 'TO-DO LIST':
         return <TaskList key="todo" title="To-do List" />;
       case 'TASK MANAGER':
@@ -80,7 +82,7 @@ export default function App() {
     return <Login />;
   }
 
-  const userRole = profile?.role?.toUpperCase() || 'GUEST';
+  const userRole = (profile?.role || 'GUEST').toString().toUpperCase().trim();
 
   return (
     <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans">

@@ -51,7 +51,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile?.id) return;
+    if (!profile?.id || !profile?.email) return;
 
     setLoading(true);
     try {
@@ -64,7 +64,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         deadline: formData.deadline || null,
         estimated_time: formData.estimated_time || '0m',
         status: 'NEW',
-        user_id: profile.id,
+        assignees: [profile.email],
       });
 
       if (error) throw error;
