@@ -1,244 +1,210 @@
-import React, { useState } from 'react';
-import { Search, RotateCw, Plus, ChevronLeft, ChevronRight, Edit2, Trash2, Power } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { useTasks, TaskFilters } from '../hooks/useTasks';
-import { useAuthStore } from '../store/authStore';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Loader2, Plus, Trash2, CalendarDays, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import CreateTaskModal from '../components/CreateTaskModal';
+import { useAuthStore } from '../store/authStore';
+import { Task } from '../types/database.types';
 
-const TaskManager: React.FC = () => {
+interface Subtask {
+  id: string;
+  content: string;
+  assignee: string;
+  estimated_minutes: number;
+}
+
+interface TaskModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  taskToEdit?: Task | null; // Nếu có task này thì là chế độ Edit
+}
+
+const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSuccess, taskToEdit }) => {
   const { profile } = useAuthStore();
-  const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState<TaskFilters>({});
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const { tasks, totalCount, loading, refetch } = useTasks(page, 15, filters);
+  const [loading, setLoading] = useState(false);
+  const isEditMode = !!taskToEdit;
+  
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
+  const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
+  const [users, setUsers] = useState<{ id: string; name: string; email: string }[]>([]);
 
-  const totalPages = Math.ceil(totalCount / 15) || 1;
+  const [formData, setFormData] = useState({
+    task_name: '',
+    project_id: '',
+    team_id: '',
+    tag_id: '',
+    type: 'ONCE' as 'ONCE' | 'DAILY' | 'WEEKLY',
+    deadline_time: '09:00',
+    deadline_days: [] as string[],
+  });
 
-  // Hàm bật/tắt Task (On/Off)
-  const toggleTaskActive = async (id: string, currentStatus: boolean) => {
-    if (profile?.role === 'user') return; // User không có quyền Off task
-    const { error } = await supabase
-      .from('tasks')
-      .update({ is_active: !currentStatus })
-      .eq('id', id);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+
+  // Đổ dữ liệu cũ vào form nếu là chế độ Edit
+  useEffect(() => {
+    if (isOpen) {
+      fetchMetadata();
+      if (taskToEdit) {
+        setFormData({
+          task_name: taskToEdit.task_name,
+          project_id: taskToEdit.project_id || '',
+          team_id: taskToEdit.team_id || '',
+          tag_id: taskToEdit.tag_id || '',
+          type: taskToEdit.type,
+          deadline_time: taskToEdit.deadline_time || '09:00',
+          deadline_days: taskToEdit.deadline_days || [],
+        });
+        setSubtasks(taskToEdit.subtasks as Subtask[] || []);
+      } else {
+        // Reset form cho mode Create
+        setFormData({ task_name: '', project_id: '', team_id: '', tag_id: '', type: 'ONCE', deadline_time: '09:00', deadline_days: [] });
+        setSubtasks([]);
+      }
+    }
+  }, [isOpen, taskToEdit]);
+
+  const fetchMetadata = async () => {
+    const [projRes, teamRes, tagRes, userRes] = await Promise.all([
+      supabase.from('projects').select('id, name').order('name'),
+      supabase.from('teams').select('id, name').order('name'),
+      supabase.from('tags').select('id, name').order('name'),
+      supabase.from('users').select('id, name, email').order('name'),
+    ]);
+    if (projRes.data) setProjects(projRes.data);
+    if (teamRes.data) setTeams(teamRes.data);
+    if (tagRes.data) setTags(tagRes.data);
+    if (userRes.data) setUsers(userRes.data);
+  };
+
+  const totalEstimatedMinutes = subtasks.reduce((sum, st) => sum + (Number(st.estimated_minutes) || 0), 0);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (subtasks.length === 0 || totalEstimatedMinutes <= 0) {
+      alert('Vui lòng thêm ít nhất 1 subtask với thời gian > 0');
+      return;
+    }
+
+    setLoading(true);
+    const uniqueAssignees = Array.from(new Set(subtasks.map(st => st.assignee).filter(Boolean)));
     
-    if (error) alert(error.message);
+    const payload = {
+      task_name: formData.task_name,
+      project_id: formData.project_id || null,
+      team_id: formData.team_id || null,
+      tag_id: formData.tag_id || null,
+      type: formData.type,
+      deadline_time: formData.deadline_time,
+      deadline_days: formData.deadline_days.length > 0 ? formData.deadline_days : null,
+      estimated_minutes: totalEstimatedMinutes,
+      assignees: uniqueAssignees,
+      subtasks: subtasks
+    };
+
+    try {
+      let result;
+      if (isEditMode && taskToEdit) {
+        result = await supabase.from('tasks').update(payload).eq('id', taskToEdit.id);
+      } else {
+        result = await supabase.from('tasks').insert({ ...payload, status: 'NEW', is_active: true });
+      }
+
+      if (result.error) throw result.error;
+      onSuccess();
+      onClose();
+    } catch (error: any) {
+      alert('Lỗi: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = async (id: string) => {
-    if (profile?.role === 'user') return;
-    if (!confirm('Hành động này sẽ xóa vĩnh viễn task. Bạn chắc chắn chứ?')) return;
-    const { error } = await supabase.from('tasks').delete().eq('id', id);
-    if (error) alert(error.message);
-  };
+  if (!isOpen) return null;
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden m-6">
-      {/* HEADER & TOOLBAR (Giống To-do list nhưng bỏ lọc ngày) */}
-      <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl font-bold text-slate-800">Task Manager</h2>
-          <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold border border-indigo-100 rounded">MANAGEMENT MODE</span>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-white w-full max-w-2xl my-8 rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b flex items-center justify-between bg-slate-50">
+          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+            {isEditMode ? 'Edit Task' : 'Create New Task'}
+          </h3>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button 
-            onClick={() => refetch()}
-            className={cn("p-2 text-slate-400 hover:text-slate-600 transition-colors", loading && "animate-spin text-indigo-600")}
-            title="Refresh"
-          >
-            <RotateCw className="w-4 h-4" />
-          </button>
-          
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Form Fields Tương tự CreateTaskModal cũ... */}
+          <div className="space-y-4">
             <input 
-              type="text" 
-              placeholder="Search tasks..." 
-              className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 lg:w-64"
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
+              placeholder="Task name..." value={formData.task_name}
+              onChange={(e) => setFormData({ ...formData, task_name: e.target.value })}
             />
-          </div>
+            
+            <div className="grid grid-cols-3 gap-4">
+               <select className="px-3 py-2 bg-slate-50 border rounded-xl text-xs" value={formData.project_id} onChange={(e) => setFormData({...formData, project_id: e.target.value})}>
+                  <option value="">Project</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+               </select>
+               <select className="px-3 py-2 bg-slate-50 border rounded-xl text-xs" value={formData.team_id} onChange={(e) => setFormData({...formData, team_id: e.target.value})}>
+                  <option value="">Team</option>
+                  {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+               </select>
+               <select className="px-3 py-2 bg-slate-50 border rounded-xl text-xs" value={formData.tag_id} onChange={(e) => setFormData({...formData, tag_id: e.target.value})}>
+                  <option value="">Tag</option>
+                  {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+               </select>
+            </div>
 
-          <select 
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none text-slate-600"
-            onChange={(e) => {
-              // Custom logic để filter is_active (cần update trong useTasks nếu muốn lọc chính xác trên DB)
-              // Tạm thời filter ở mặt UI nếu đang load
-              setFilters({ ...filters, status: e.target.value || undefined });
-            }}
-          >
-            <option value="">Tất cả trạng thái</option>
-            <option value="ACTIVE">Đang bật (ON)</option>
-            <option value="INACTIVE">Đang tắt (OFF)</option>
-          </select>
-
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm shadow-indigo-200"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden md:inline">Create Task</span>
-          </button>
-        </div>
-      </div>
-
-      <CreateTaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={() => refetch()} />
-
-      {/* TABLE DATA (Đã bung ra giống y hệt To-do List) */}
-      <div className="flex-1 overflow-auto relative">
-        {loading && (
-          <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-20 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-              <RotateCw className="w-6 h-6 text-indigo-600 animate-spin" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading Tasks...</span>
+            <div className="grid grid-cols-2 gap-4">
+               <select className="px-3 py-2 bg-slate-50 border rounded-xl text-xs" value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value as any})}>
+                  <option value="ONCE">ONCE</option>
+                  <option value="DAILY">DAILY</option>
+                  <option value="WEEKLY">WEEKLY</option>
+               </select>
+               <input type="time" className="px-3 py-2 bg-slate-50 border rounded-xl text-xs" value={formData.deadline_time} onChange={(e) => setFormData({...formData, deadline_time: e.target.value})} />
             </div>
           </div>
-        )}
 
-        <table className="w-full text-left border-collapse min-w-[1000px]">
-          <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
-            <tr>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 w-12">
-                <input type="checkbox" className="rounded" />
-              </th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {tasks.length > 0 ? (
-              tasks.map((task) => (
-                <tr key={task.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <input type="checkbox" className="rounded" />
-                  </td>
-                  <td className="px-6 py-4 font-mono text-[11px] text-slate-400">
-                    {task.id.slice(0, 6)}
-                  </td>
-                  <td className="px-6 py-4 font-semibold text-slate-700">
-                    {task.task_name}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={cn(
-                      "px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider",
-                      task.tags?.color ? `bg-${task.tags.color}-50 text-${task.tags.color}-600` : "bg-slate-100 text-slate-500"
-                    )}>
-                      {task.tags?.name || 'No Tag'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">
-                    {task.projects?.name || 'General'}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">
-                    {task.teams?.name || 'Internal'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={cn(
-                      "px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider",
-                      task.type === 'WEEKLY' ? "bg-emerald-50 text-emerald-600" : 
-                      task.type === 'DAILY' ? "bg-indigo-50 text-indigo-600" : 
-                      "bg-amber-50 text-amber-600"
-                    )}>
-                      {task.type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold text-slate-700">{task.deadline_time || '--:--'}</span>
-                      <span className="text-[10px] text-slate-400 font-medium tracking-tight">
-                        {task.deadline_days?.join(', ') || '-'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col text-[10px] font-bold">
-                      <span className="text-indigo-600">E: {task.estimated_minutes}m</span>
-                      <span className="text-emerald-500">A: {task.actual_minutes}m</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {/* CỘT STATUS THAY BẰNG NÚT ON/OFF */}
-                    <button 
-                      onClick={() => toggleTaskActive(task.id, task.is_active)}
-                      disabled={profile?.role === 'user'}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all border",
-                        task.is_active 
-                          ? "bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100" 
-                          : "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200"
-                      )}
-                    >
-                      <Power size={10} />
-                      {task.is_active ? 'ON' : 'OFF'}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
-                        <Edit2 size={14} />
-                      </button>
-                      {profile?.role !== 'user' && (
-                        <button 
-                          onClick={() => handleDelete(task.id)}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            ) : !loading && (
-              <tr>
-                <td colSpan={11} className="px-6 py-20 text-center">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center">
-                      <RotateCw className="w-6 h-6 text-slate-200" />
-                    </div>
-                    <p className="text-slate-400 text-sm font-medium italic">No tasks found.</p>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      
-      {/* PHÂN TRANG */}
-      <div className="p-4 border-t border-slate-100 bg-white shrink-0 flex items-center justify-between">
-         <div className="text-xs text-slate-500 font-medium whitespace-nowrap">
-            Showing <span className="font-bold text-slate-700">{tasks.length > 0 ? (page-1)*15 + 1 : 0}</span> to <span className="font-bold text-slate-700">{Math.min(page*15, totalCount)}</span> of <span className="font-bold text-slate-700">{totalCount}</span> tasks
-         </div>
-         <div className="flex items-center gap-1 overflow-x-auto pb-1">
-            <button 
-              disabled={page === 1}
-              onClick={() => setPage(p => p - 1)}
-              className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-50 disabled:opacity-30 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
+          <div className="space-y-3">
+             <div className="flex justify-between items-center">
+                <label className="text-[10px] font-black text-slate-400 uppercase">Subtasks (Total: {totalEstimatedMinutes}m)</label>
+                <button type="button" onClick={() => setSubtasks([...subtasks, { id: crypto.randomUUID(), content: '', assignee: profile?.email || '', estimated_minutes: 10 }])}
+                   className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg">
+                   <Plus size={12} /> Add
+                </button>
+             </div>
+             <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                {subtasks.map((st, idx) => (
+                   <div key={st.id} className="flex gap-2 bg-slate-50 p-2 rounded-xl border">
+                      <input className="flex-1 px-3 py-1.5 bg-white border rounded-lg text-xs" placeholder="Content..." value={st.content} onChange={(e) => {
+                         const news = [...subtasks]; news[idx].content = e.target.value; setSubtasks(news);
+                      }} />
+                      <select className="w-32 px-2 py-1.5 bg-white border rounded-lg text-[10px]" value={st.assignee} onChange={(e) => {
+                         const news = [...subtasks]; news[idx].assignee = e.target.value; setSubtasks(news);
+                      }}>
+                         {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
+                      </select>
+                      <input type="number" className="w-16 px-2 py-1.5 bg-white border rounded-lg text-xs text-center" value={st.estimated_minutes} onChange={(e) => {
+                         const news = [...subtasks]; news[idx].estimated_minutes = parseInt(e.target.value) || 0; setSubtasks(news);
+                      }} />
+                      <button type="button" onClick={() => setSubtasks(subtasks.filter(s => s.id !== st.id))} className="p-1.5 text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>
+                   </div>
+                ))}
+             </div>
+          </div>
+
+          <div className="pt-4 flex gap-4">
+            <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-black bg-slate-100 rounded-xl uppercase">Cancel</button>
+            <button type="submit" disabled={loading} className="flex-[2] py-3 text-xs font-black text-white bg-indigo-600 rounded-xl uppercase shadow-lg">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditMode ? 'Update Task' : 'Create Task'}
             </button>
-            <span className="text-xs font-bold text-slate-600 px-2">Page {page} / {totalPages}</span>
-            <button 
-              disabled={page === totalPages || totalPages === 0}
-              onClick={() => setPage(p => p + 1)}
-              className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-50 disabled:opacity-30 transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-         </div>
+          </div>
+        </form>
       </div>
     </div>
   );
 };
 
-export default TaskManager;
+export default TaskModal;
