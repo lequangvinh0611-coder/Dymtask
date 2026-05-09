@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2, Plus, Trash2, UserPlus, CalendarDays } from 'lucide-react';
+import { X, Save, Loader2, Plus, Trash2, CalendarDays, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 
@@ -28,7 +28,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
   const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
   const [users, setUsers] = useState<{ id: string; name: string; email: string }[]>([]);
 
-  // Task Form States - Updated according to Phase 2 Migration
+  // Task Form States (Đã xóa estimated_minutes)
   const [formData, setFormData] = useState({
     task_name: '',
     project_id: '',
@@ -37,18 +37,24 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     type: 'ONCE',
     deadline_time: '09:00',
     deadline_days: [] as string[],
-    estimated_minutes: 30,
   });
 
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+
+  // Tính toán động Total Estimated Minutes từ subtasks
+  const totalEstimatedMinutes = subtasks.reduce((sum, st) => sum + (st.estimated_minutes || 0), 0);
 
   useEffect(() => {
     if (isOpen) {
       fetchMetadata();
-      // Reset to current user email as default assignee if profile exists
-      if (profile?.email) {
-        setSelectedAssignees([profile.email]);
+      // Khởi tạo 1 subtask mặc định khi mở modal để user nhập nhanh
+      if (profile?.email && subtasks.length === 0) {
+        setSubtasks([{
+          id: crypto.randomUUID(),
+          content: '',
+          assignee: profile.email,
+          estimated_minutes: 30 // Gợi ý mặc định > 0
+        }]);
       }
     }
   }, [isOpen, profile]);
@@ -75,7 +81,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     const newSubtask: Subtask = {
       id: crypto.randomUUID(),
       content: '',
-      assignee: profile?.email || '',
+      assignee: profile?.email || (users[0]?.email ?? ''),
       estimated_minutes: 10,
     };
     setSubtasks([...subtasks, newSubtask]);
@@ -87,12 +93,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
 
   const updateSubtask = (id: string, updates: Partial<Subtask>) => {
     setSubtasks(subtasks.map(s => s.id === id ? { ...s, ...updates } : s));
-  };
-
-  const toggleAssignee = (email: string) => {
-    setSelectedAssignees(prev => 
-      prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email]
-    );
   };
 
   const toggleDay = (day: string) => {
@@ -108,9 +108,17 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     e.preventDefault();
     if (!profile?.id || !profile?.email) return;
 
+    // Validation: Phải có ít nhất 1 subtask và tổng thời gian > 0
+    if (subtasks.length === 0 || totalEstimatedMinutes <= 0) {
+      alert('Please add at least one subtask with estimated minutes > 0.');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Updated payload to match new Supabase Schema
+      // Trích xuất Unique Assignees từ Subtasks
+      const uniqueAssignees = Array.from(new Set(subtasks.map(st => st.assignee).filter(Boolean)));
+
       const { error } = await supabase.from('tasks').insert({
         task_name: formData.task_name,
         project_id: formData.project_id || null,
@@ -119,10 +127,10 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         type: formData.type,
         deadline_time: formData.deadline_time || null,
         deadline_days: formData.deadline_days.length > 0 ? formData.deadline_days : null,
-        estimated_minutes: formData.estimated_minutes,
-        actual_minutes: 0, // Mặc định 0 khi mới tạo
+        estimated_minutes: totalEstimatedMinutes,
+        actual_minutes: 0,
         status: 'NEW',
-        assignees: selectedAssignees,
+        assignees: uniqueAssignees, // Tự động mapping
         subtasks: subtasks.map(({ content, assignee, estimated_minutes }) => ({
           content,
           assignee,
@@ -144,9 +152,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         type: 'ONCE',
         deadline_time: '09:00',
         deadline_days: [],
-        estimated_minutes: 30,
       });
-      setSelectedAssignees([profile.email]);
       setSubtasks([]);
     } catch (error) {
       console.error('Error creating task:', error);
@@ -218,7 +224,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Type</label>
                 <select 
@@ -238,16 +244,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
                   value={formData.deadline_time}
                   onChange={(e) => setFormData({ ...formData, deadline_time: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Est. Minutes</label>
-                <input 
-                  type="number"
-                  min="1"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                  value={formData.estimated_minutes}
-                  onChange={(e) => setFormData({ ...formData, estimated_minutes: parseInt(e.target.value) || 0 })}
                 />
               </div>
             </div>
@@ -279,34 +275,19 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             )}
           </div>
 
-          {/* Assignees Selection */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-              <UserPlus size={12} />
-              Assignees (Multi-select)
-            </label>
-            <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 min-h-[50px]">
-              {users.map(u => (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => toggleAssignee(u.email)}
-                  className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all border ${
-                    selectedAssignees.includes(u.email)
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-200'
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400 hover:bg-indigo-50'
-                  }`}
-                >
-                  {u.name || u.email}
-                </button>
-              ))}
-            </div>
-          </div>
+          <hr className="border-slate-100" />
 
           {/* Subtasks Section */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter">Subtasks</label>
+              <div className="flex items-center gap-4">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter">Subtasks</label>
+                {/* Hiển thị Tổng Est Minutes một cách trực quan */}
+                <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">
+                  <Clock size={12} />
+                  Total Est: {totalEstimatedMinutes}m
+                </span>
+              </div>
               <button 
                 type="button"
                 onClick={handleAddSubtask}
@@ -317,10 +298,10 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
               </button>
             </div>
             
-            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+            <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
               {subtasks.length === 0 ? (
-                <div className="py-4 text-center border-2 border-dashed border-slate-100 rounded-xl bg-slate-50/50">
-                  <p className="text-[10px] text-slate-400 font-bold italic uppercase tracking-widest">No subtasks yet</p>
+                <div className="py-6 text-center border-2 border-dashed border-red-200 rounded-xl bg-red-50/50">
+                  <p className="text-xs text-red-500 font-bold tracking-tight">At least 1 subtask is required!</p>
                 </div>
               ) : (
                 subtasks.map((st) => (
@@ -333,18 +314,22 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                       onChange={(e) => updateSubtask(st.id, { content: e.target.value })}
                     />
                     <select 
+                      required
                       className="w-32 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:outline-none focus:border-indigo-500 transition-all"
                       value={st.assignee}
                       onChange={(e) => updateSubtask(st.id, { assignee: e.target.value })}
                     >
+                      {/* Bắt buộc phải chọn User, nếu chưa chọn sẽ là placeholder */}
+                      <option value="" disabled>Select User</option>
                       {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
                     </select>
                     <div className="flex items-center gap-1">
                       <input 
                         type="number"
                         min="1"
+                        required
                         className="w-16 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center focus:outline-none focus:border-indigo-500 transition-all"
-                        value={st.estimated_minutes}
+                        value={st.estimated_minutes || ''}
                         onChange={(e) => updateSubtask(st.id, { estimated_minutes: parseInt(e.target.value) || 0 })}
                       />
                       <span className="text-[10px] font-bold text-slate-400">m</span>
@@ -372,8 +357,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             </button>
             <button 
               type="submit"
-              disabled={loading || selectedAssignees.length === 0}
-              className="flex-[2] py-3.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center gap-2 uppercase tracking-widest"
+              disabled={loading || subtasks.length === 0 || totalEstimatedMinutes <= 0}
+              className="flex-[2] py-3.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center gap-2 uppercase tracking-widest"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Create Task
