@@ -1,6 +1,6 @@
 export type UserRole = 'master' | 'admin' | 'user';
 export type TaskStatus = 'NEW' | 'IN_PROGRESS' | 'DONE' | 'SUBMITTED';
-export type TaskType = 'DAILY' | 'WEEKLY' | 'ONCE';
+export type TaskType = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'ONETIME';
 
 export interface UserProfile {
   id: string; // UUID from auth.users
@@ -48,6 +48,8 @@ export interface Task {
   project_id: string | null;
   team_id: string | null;
   type: TaskType;
+  deadline_date: string | null;
+  deadline_day_num: number | null;
   
   // --- MIGRATION 1: CẬP NHẬT KIỂU THỜI GIAN ---
   deadline_time: string | null;     // Ánh xạ cột TIME (VD: "08:30:00")

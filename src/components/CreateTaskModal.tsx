@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2, Plus, Trash2, CalendarDays, Clock } from 'lucide-react';
+import { X, Save, Loader2, Plus, Trash2, CalendarDays, Clock, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { Task } from '../types/database.types';
@@ -15,7 +15,7 @@ interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  taskToEdit?: Task | null; // Truyền task vào đây để bật chế độ Edit
+  taskToEdit?: Task | null;
 }
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -25,48 +25,48 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
   const [loading, setLoading] = useState(false);
   const isEditMode = !!taskToEdit;
   
-  // Metadata States
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
   const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
   const [users, setUsers] = useState<{ id: string; name: string; email: string }[]>([]);
 
-  // Task Form States
   const [formData, setFormData] = useState({
     task_name: '',
     project_id: '',
     team_id: '',
     tag_id: '',
-    type: 'ONCE' as 'ONCE' | 'DAILY' | 'WEEKLY',
+    type: 'ONETIME' as 'ONETIME' | 'DAILY' | 'WEEKLY' | 'MONTHLY',
     deadline_time: '09:00',
     deadline_days: [] as string[],
+    deadline_date: new Date().toISOString().split('T')[0],
+    deadline_day_num: 1,
   });
 
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
 
-  // Tính toán động Total Estimated Minutes từ subtasks
   const totalEstimatedMinutes = subtasks.reduce((sum, st) => sum + (Number(st.estimated_minutes) || 0), 0);
 
   useEffect(() => {
     if (isOpen) {
       fetchMetadata();
       if (taskToEdit) {
-        // Chế độ Edit: Điền dữ liệu cũ
         setFormData({
           task_name: taskToEdit.task_name,
           project_id: taskToEdit.project_id || '',
           team_id: taskToEdit.team_id || '',
           tag_id: taskToEdit.tag_id || '',
-          type: taskToEdit.type as any,
+          type: (taskToEdit.type === 'ONCE' ? 'ONETIME' : taskToEdit.type) as any, // fallback for old data
           deadline_time: taskToEdit.deadline_time || '09:00',
           deadline_days: taskToEdit.deadline_days || [],
+          deadline_date: taskToEdit.deadline_date || new Date().toISOString().split('T')[0],
+          deadline_day_num: taskToEdit.deadline_day_num || 1,
         });
         setSubtasks((taskToEdit.subtasks as any as Subtask[]) || []);
       } else {
-        // Chế độ Create: Reset form
         setFormData({
           task_name: '', project_id: '', team_id: '', tag_id: '',
-          type: 'ONCE', deadline_time: '09:00', deadline_days: [],
+          type: 'ONETIME', deadline_time: '09:00', deadline_days: [],
+          deadline_date: new Date().toISOString().split('T')[0], deadline_day_num: 1
         });
         if (profile?.email) {
           setSubtasks([{ id: crypto.randomUUID(), content: '', assignee: profile.email, estimated_minutes: 30 }]);
@@ -78,39 +78,16 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
   }, [isOpen, taskToEdit, profile]);
 
   const fetchMetadata = async () => {
-    try {
-      const [projRes, teamRes, tagRes, userRes] = await Promise.all([
-        supabase.from('projects').select('id, name').order('name'),
-        supabase.from('teams').select('id, name').order('name'),
-        supabase.from('tags').select('id, name').order('name'),
-        supabase.from('users').select('id, name, email').order('name'),
-      ]);
-
-      if (projRes.data) setProjects(projRes.data);
-      if (teamRes.data) setTeams(teamRes.data);
-      if (tagRes.data) setTags(tagRes.data);
-      if (userRes.data) setUsers(userRes.data);
-    } catch (error) {
-      console.error('Error fetching metadata:', error);
-    }
-  };
-
-  const handleAddSubtask = () => {
-    const newSubtask: Subtask = {
-      id: crypto.randomUUID(),
-      content: '',
-      assignee: profile?.email || (users[0]?.email ?? ''),
-      estimated_minutes: 10,
-    };
-    setSubtasks([...subtasks, newSubtask]);
-  };
-
-  const removeSubtask = (id: string) => {
-    setSubtasks(subtasks.filter(s => s.id !== id));
-  };
-
-  const updateSubtask = (id: string, updates: Partial<Subtask>) => {
-    setSubtasks(subtasks.map(s => s.id === id ? { ...s, ...updates } : s));
+    const [projRes, teamRes, tagRes, userRes] = await Promise.all([
+      supabase.from('projects').select('id, name').order('name'),
+      supabase.from('teams').select('id, name').order('name'),
+      supabase.from('tags').select('id, name').order('name'),
+      supabase.from('users').select('id, name, email').order('name'),
+    ]);
+    if (projRes.data) setProjects(projRes.data);
+    if (teamRes.data) setTeams(teamRes.data);
+    if (tagRes.data) setTags(tagRes.data);
+    if (userRes.data) setUsers(userRes.data);
   };
 
   const toggleDay = (day: string) => {
@@ -124,8 +101,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile?.id || !profile?.email) return;
-
     if (subtasks.length === 0 || totalEstimatedMinutes <= 0) {
       alert('Vui lòng thêm ít nhất 1 subtask với thời gian ước tính > 0.');
       return;
@@ -142,37 +117,30 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         tag_id: formData.tag_id || null,
         type: formData.type,
         deadline_time: formData.deadline_time || null,
-        deadline_days: formData.deadline_days.length > 0 ? formData.deadline_days : null,
+        // Chỉ lưu dữ liệu phụ thuộc vào type được chọn
+        deadline_days: formData.type === 'WEEKLY' ? formData.deadline_days : null,
+        deadline_date: formData.type === 'ONETIME' ? formData.deadline_date : null,
+        deadline_day_num: formData.type === 'MONTHLY' ? formData.deadline_day_num : null,
         estimated_minutes: totalEstimatedMinutes,
         assignees: uniqueAssignees,
         subtasks: subtasks.map(({ content, assignee, estimated_minutes }) => ({
-          content,
-          assignee,
-          estimated_minutes,
-          completed: false
+          content, assignee, estimated_minutes, completed: false
         })),
       };
 
       let result;
       if (isEditMode && taskToEdit) {
-        // Cập nhật Task
         result = await supabase.from('tasks').update(payload).eq('id', taskToEdit.id);
       } else {
-        // Tạo Task mới
         result = await supabase.from('tasks').insert({
-          ...payload,
-          status: 'NEW',
-          is_active: true,
-          actual_minutes: 0
+          ...payload, status: 'NEW', is_active: true, actual_minutes: 0
         });
       }
 
       if (result.error) throw result.error;
-      
       onSuccess();
       onClose();
     } catch (error: any) {
-      console.error('Error creating/updating task:', error);
       alert(`Lỗi: ${error.message}`);
     } finally {
       setLoading(false);
@@ -193,104 +161,103 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Main Task Info */}
-          <div className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Task Name</label>
+            <input required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+              placeholder="What needs to be done?" value={formData.task_name} onChange={(e) => setFormData({ ...formData, task_name: e.target.value })} />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Task Name</label>
-              <input 
-                required
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                placeholder="What needs to be done?"
-                value={formData.task_name}
-                onChange={(e) => setFormData({ ...formData, task_name: e.target.value })}
-              />
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Project</label>
+              <select className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
+                value={formData.project_id} onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}>
+                <option value="">Select Project</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
             </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Project</label>
-                <select 
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                  value={formData.project_id}
-                  onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                >
-                  <option value="">Select Project</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Team</label>
-                <select 
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                  value={formData.team_id}
-                  onChange={(e) => setFormData({ ...formData, team_id: e.target.value })}
-                >
-                  <option value="">Select Team</option>
-                  {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Tag</label>
-                <select 
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                  value={formData.tag_id}
-                  onChange={(e) => setFormData({ ...formData, tag_id: e.target.value })}
-                >
-                  <option value="">Select Tag</option>
-                  {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </div>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Team</label>
+              <select className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
+                value={formData.team_id} onChange={(e) => setFormData({ ...formData, team_id: e.target.value })}>
+                <option value="">Select Team</option>
+                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Type</label>
-                <select 
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                >
-                  <option value="DAILY">DAILY</option>
-                  <option value="WEEKLY">WEEKLY</option>
-                  <option value="ONCE">ONCE</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Time Deadline</label>
-                <input 
-                  type="time"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                  value={formData.deadline_time}
-                  onChange={(e) => setFormData({ ...formData, deadline_time: e.target.value })}
-                />
-              </div>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Tag</label>
+              <select className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
+                value={formData.tag_id} onChange={(e) => setFormData({ ...formData, tag_id: e.target.value })}>
+                <option value="">Select Tag</option>
+                {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
             </div>
+          </div>
 
-            {/* KHÔI PHỤC: Render Day Picker conditionally if type is WEEKLY */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Type</label>
+              <select className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
+                value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}>
+                <option value="ONETIME">ONETIME</option>
+                <option value="DAILY">DAILY</option>
+                <option value="WEEKLY">WEEKLY</option>
+                <option value="MONTHLY">MONTHLY</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Time Deadline</label>
+              <input type="time" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
+                value={formData.deadline_time} onChange={(e) => setFormData({ ...formData, deadline_time: e.target.value })} />
+            </div>
+          </div>
+
+          {/* KHU VỰC CỐ ĐỊNH CHIỀU CAO (Fixed Height) ĐỂ KHÔNG NHẢY GIAO DIỆN */}
+          <div className="h-[72px] border-t border-slate-100 pt-3 mt-2">
             {formData.type === 'WEEKLY' && (
-              <div className="pt-2 animate-in fade-in slide-in-from-top-2">
-                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-2">
-                  <CalendarDays size={12} />
-                  Repeat Days
+              <div className="animate-in fade-in slide-in-from-top-2">
+                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">
+                  <CalendarDays size={12} /> Repeat Days
                 </label>
                 <div className="flex gap-2">
                   {DAYS_OF_WEEK.map(day => (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => toggleDay(day)}
+                    <button key={day} type="button" onClick={() => toggleDay(day)}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                        formData.deadline_days.includes(day)
-                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-200'
-                          : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:bg-indigo-50'
-                      }`}
-                    >
+                        formData.deadline_days.includes(day) ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:bg-indigo-50'
+                      }`}>
                       {day}
                     </button>
                   ))}
                 </div>
               </div>
+            )}
+
+            {formData.type === 'MONTHLY' && (
+              <div className="animate-in fade-in slide-in-from-top-2">
+                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">
+                  <Calendar size={12} /> Day of Month (1-31)
+                </label>
+                <input type="number" min="1" max="31" className="w-1/3 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  value={formData.deadline_day_num} onChange={(e) => setFormData({ ...formData, deadline_day_num: parseInt(e.target.value) || 1 })} />
+              </div>
+            )}
+
+            {formData.type === 'ONETIME' && (
+              <div className="animate-in fade-in slide-in-from-top-2">
+                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">
+                  <Calendar size={12} /> Specific Date
+                </label>
+                <input type="date" className="w-1/2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  value={formData.deadline_date} onChange={(e) => setFormData({ ...formData, deadline_date: e.target.value })} />
+              </div>
+            )}
+            
+            {formData.type === 'DAILY' && (
+               <div className="h-full flex items-center justify-center animate-in fade-in">
+                  <span className="text-xs font-bold text-slate-300 italic">Repeats every day</span>
+               </div>
             )}
           </div>
 
@@ -306,17 +273,12 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                   Total Est: {totalEstimatedMinutes}m
                 </span>
               </div>
-              <button 
-                type="button"
-                onClick={handleAddSubtask}
-                className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg hover:bg-black transition-all shadow-sm"
-              >
-                <Plus size={12} />
-                Add Subtask
+              <button type="button" onClick={handleAddSubtask} className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg hover:bg-black transition-all shadow-sm">
+                <Plus size={12} /> Add Subtask
               </button>
             </div>
             
-            <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+            <div className="space-y-2 max-h-[180px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
               {subtasks.length === 0 ? (
                 <div className="py-6 text-center border-2 border-dashed border-red-200 rounded-xl bg-red-50/50">
                   <p className="text-xs text-red-500 font-bold tracking-tight">At least 1 subtask is required!</p>
@@ -324,38 +286,19 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
               ) : (
                 subtasks.map((st) => (
                   <div key={st.id} className="flex gap-2 items-start bg-slate-50 p-2 rounded-xl border border-slate-100 group">
-                    <input 
-                      required
-                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 font-medium transition-all"
-                      placeholder="Subtask content..."
-                      value={st.content}
-                      onChange={(e) => updateSubtask(st.id, { content: e.target.value })}
-                    />
-                    <select 
-                      required
-                      className="w-32 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:outline-none focus:border-indigo-500 transition-all"
-                      value={st.assignee}
-                      onChange={(e) => updateSubtask(st.id, { assignee: e.target.value })}
-                    >
+                    <input required className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-500 font-medium"
+                      placeholder="Subtask content..." value={st.content} onChange={(e) => updateSubtask(st.id, { content: e.target.value })} />
+                    <select required className="w-32 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:outline-none focus:border-indigo-500"
+                      value={st.assignee} onChange={(e) => updateSubtask(st.id, { assignee: e.target.value })}>
                       <option value="" disabled>Select User</option>
                       {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
                     </select>
                     <div className="flex items-center gap-1">
-                      <input 
-                        type="number"
-                        min="1"
-                        required
-                        className="w-16 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center focus:outline-none focus:border-indigo-500 transition-all"
-                        value={st.estimated_minutes || ''}
-                        onChange={(e) => updateSubtask(st.id, { estimated_minutes: parseInt(e.target.value) || 0 })}
-                      />
+                      <input type="number" min="1" required className="w-16 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center focus:outline-none focus:border-indigo-500"
+                        value={st.estimated_minutes || ''} onChange={(e) => updateSubtask(st.id, { estimated_minutes: parseInt(e.target.value) || 0 })} />
                       <span className="text-[10px] font-bold text-slate-400">m</span>
                     </div>
-                    <button 
-                      type="button"
-                      onClick={() => removeSubtask(st.id)}
-                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    >
+                    <button type="button" onClick={() => removeSubtask(st.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -364,19 +307,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             </div>
           </div>
 
-          <div className="pt-4 flex gap-4">
-            <button 
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3.5 text-xs font-black text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all uppercase tracking-widest"
-            >
+          <div className="pt-2 flex gap-4">
+            <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-black text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all uppercase tracking-widest">
               Cancel
             </button>
-            <button 
-              type="submit"
-              disabled={loading || subtasks.length === 0 || totalEstimatedMinutes <= 0}
-              className="flex-[2] py-3.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center gap-2 uppercase tracking-widest"
-            >
+            <button type="submit" disabled={loading || subtasks.length === 0 || totalEstimatedMinutes <= 0} className="flex-[2] py-3 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center gap-2 uppercase tracking-widest">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {isEditMode ? 'Update Task' : 'Create Task'}
             </button>
