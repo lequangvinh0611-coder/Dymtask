@@ -109,7 +109,7 @@ const TaskManager: React.FC = () => {
         isOpen={isModalOpen} 
         onClose={() => { setIsModalOpen(false); setSelectedTask(null); }} 
         onSuccess={refetch} 
-        taskToEdit={selectedTask} 
+        taskToEdit={selectedTask || undefined} 
       />
 
       <div className="flex-1 overflow-auto">

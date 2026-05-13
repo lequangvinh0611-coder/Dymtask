@@ -99,6 +99,28 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     }));
   };
 
+  // --- CÁC HÀM XỬ LÝ SUBTASK ---
+  const handleAddSubtask = () => {
+    setSubtasks([
+      ...subtasks,
+      { 
+        id: crypto.randomUUID(), 
+        content: '', 
+        assignee: profile?.email || '', 
+        estimated_minutes: 30 
+      }
+    ]);
+  };
+
+  const updateSubtask = (id: string, updates: Partial<Subtask>) => {
+    setSubtasks(prev => prev.map(st => st.id === id ? { ...st, ...updates } : st));
+  };
+
+  const removeSubtask = (id: string) => {
+    setSubtasks(prev => prev.filter(st => st.id !== id));
+  };
+  // -----------------------------
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (subtasks.length === 0 || totalEstimatedMinutes <= 0) {
@@ -117,7 +139,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         tag_id: formData.tag_id || null,
         type: formData.type,
         deadline_time: formData.deadline_time || null,
-        // Chỉ lưu dữ liệu phụ thuộc vào type được chọn
         deadline_days: formData.type === 'WEEKLY' ? formData.deadline_days : null,
         deadline_date: formData.type === 'ONETIME' ? formData.deadline_date : null,
         deadline_day_num: formData.type === 'MONTHLY' ? formData.deadline_day_num : null,
@@ -214,7 +235,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             </div>
           </div>
 
-          {/* KHU VỰC CỐ ĐỊNH CHIỀU CAO (Fixed Height) ĐỂ KHÔNG NHẢY GIAO DIỆN */}
           <div className="h-[72px] border-t border-slate-100 pt-3 mt-2">
             {formData.type === 'WEEKLY' && (
               <div className="animate-in fade-in slide-in-from-top-2">
