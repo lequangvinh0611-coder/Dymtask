@@ -177,7 +177,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
       onSuccess();
       onClose();
     } catch (error: any) {
-      alert(`Lỗi: ${error.message}`);
+      console.error("LỖI LƯU TASK:", error);
     } finally {
       setLoading(false);
     }
