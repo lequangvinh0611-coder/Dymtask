@@ -33,6 +33,8 @@ export interface Subtask {
   name: string;
   assignee: string;
   estimated_minutes: number;
+  actual_minutes?: number; // Thêm actual_minutes
+  status?: 'NEW' | 'IN_PROGRESS' | 'DONE'; // Thêm status thay vì chỉ is_completed
   is_completed: boolean;
 }
 
@@ -42,7 +44,7 @@ export interface Task {
   tag_id: string;
   project_id: string;
   team_id: string;
-  type: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'ONETIME';
+  type: 'DAILY' | 'WEEKLY' | 'ONCE';
   
   // Các field thời gian mới theo Phase 2 (Migration 1)
   deadline_time?: string | null;     // VD: "08:30" hoặc "17:00:00"

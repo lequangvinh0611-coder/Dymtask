@@ -46,22 +46,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.warn('[AuthStore] Profile fetch error:', error.code, error.message);
 
         if (error.code === 'PGRST116') {
-          // Không tìm thấy profile trong DB → dùng fallback
-          console.log('[AuthStore] No profile in DB, using fallback...');
+          // Không tìm thấy profile trong DB → Tự động tạo record
+          console.log('[AuthStore] No profile in DB, creating one...');
           const { data: { user } } = await supabase.auth.getUser();
+          
           if (user) {
             const isMaster = user.email === 'lequangvinh0611@gmail.com';
-            set({
-              profile: {
-                id: user.id,
-                email: user.email!,
-                name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-                role: isMaster ? 'master' : 'user',
-                teams: [],
-                status: 'ACTIVE',
-                created_at: new Date().toISOString(),
-              } as any,
-            });
+            const newProfile = {
+              id: user.id,
+              email: user.email!,
+              name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+              role: isMaster ? 'master' : 'user',
+              teams: [],
+              status: 'ACTIVE',
+              created_at: new Date().toISOString(),
+            };
+
+            // Thực hiện INSERT vào DB
+            const { error: insertError } = await supabase.from('users').insert([newProfile]);
+            
+            if (insertError) {
+              console.error('[AuthStore] Failed to auto-create profile:', insertError);
+              // Vẫn set profile vào store để UI không chết, nhưng DB operations khác sẽ lỗi FK
+              set({ profile: newProfile as any });
+            } else {
+              console.log('[AuthStore] Profile created successfully in DB');
+              set({ profile: newProfile as any });
+            }
           }
           return;
         }

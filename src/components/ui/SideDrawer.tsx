@@ -6,7 +6,7 @@ import { cn } from '../../lib/utils';
 interface SideDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title: React.ReactNode;
   children: React.ReactNode;
   width?: string;
 }
@@ -58,10 +58,12 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
             className="fixed top-0 right-0 h-full bg-white shadow-2xl z-[101] flex flex-col border-l border-slate-200"
           >
             <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
-              <h2 className="text-xl font-bold text-slate-800">{title}</h2>
+              <div className="flex-1">
+                {title}
+              </div>
               <button 
                 onClick={onClose}
-                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-all"
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-all ml-4"
               >
                 <X size={20} />
               </button>

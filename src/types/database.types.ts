@@ -1,5 +1,5 @@
 export type UserRole = 'master' | 'admin' | 'user';
-export type TaskStatus = 'NEW' | 'IN_PROGRESS' | 'DONE' | 'SUBMITTED';
+export type TaskStatus = 'NEW' | 'IN_PROGRESS' | 'DONE' | 'SUBMITTED' | 'SKIPPED';
 export type TaskType = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'ONETIME';
 
 export interface UserProfile {
@@ -40,6 +40,8 @@ export interface Subtask {
   name: string;                      // ✅ Changed from 'title' to match DB
   assignee?: string;                 // User email
   estimated_minutes?: number;
+  actual_minutes?: number;
+  status?: string;
   is_completed?: boolean;
   created_at?: string;
 }

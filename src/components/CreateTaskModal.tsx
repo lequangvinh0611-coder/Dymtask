@@ -155,7 +155,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         tag_id: formData.tag_id || null,
         type: formData.type,
         deadline_time: formData.deadline_time || null,
-        deadline_days: formData.type === 'WEEKLY' ? formData.deadline_days : null,
+        deadline_days: formData.type === 'WEEKLY' ? formData.deadline_days : [],
         deadline_date: formData.type === 'ONETIME' ? formData.deadline_date : null,
         deadline_day_num: formData.type === 'MONTHLY' ? formData.deadline_day_num : null,
         estimated_minutes: totalEstimatedMinutes,
@@ -207,7 +207,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
       <div className="bg-white w-full max-w-2xl my-8 rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
-            {isEditMode ? 'Edit Task v1.0.2' : 'Create New Task v1.0.2'}
+            {isEditMode ? 'Edit Task v1.0.1' : 'Create New Task v1.0.1'}
           </h3>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
             <X className="w-5 h-5" />

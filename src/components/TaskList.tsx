@@ -69,11 +69,44 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
   const handleBatchSkip = async (taskIds: string[]) => {
     try {
-      await supabase.from('tasks').update({ status: 'DONE', actual_minutes: 0 }).in('id', taskIds);
+      await supabase.from('tasks').update({ status: 'SKIPPED', actual_minutes: 0 }).in('id', taskIds);
       await logger.log('BATCH_SKIP_TASKS', `Skipped ${taskIds.length} tasks`, { taskIds });
       refetch();
+      if (selectedTask && taskIds.includes(selectedTask.id)) {
+        setSelectedTask(prev => prev ? { ...prev, status: 'SKIPPED', actual_minutes: 0 } : null);
+      }
     } catch (error) {
       console.error('Error skipping tasks:', error);
+    }
+  };
+
+  const handleResetTask = async (task: Task) => {
+    try {
+      const resetSubtasks = task.subtasks?.map((sub: any) => ({
+        ...sub,
+        status: 'NEW',
+        is_completed: false,
+        actual_minutes: 0
+      })) || [];
+      
+      await supabase.from('tasks').update({ 
+        status: 'NEW', 
+        actual_minutes: 0,
+        subtasks: resetSubtasks 
+      }).eq('id', task.id);
+      
+      await logger.log('RESET_TASK', `Reset task and subtasks to NEW`, { taskId: task.id });
+      refetch();
+      if (selectedTask?.id === task.id) {
+        setSelectedTask(prev => prev ? { 
+          ...prev, 
+          status: 'NEW', 
+          actual_minutes: 0,
+          subtasks: resetSubtasks
+        } : null);
+      }
+    } catch (error) {
+      console.error('Error resetting task:', error);
     }
   };
 
@@ -89,19 +122,31 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
     }
   };
 
-  const handleToggleSubtask = async (task: Task, subtaskId: string) => {
+  const handleUpdateSubtask = async (task: Task, subtaskId: string, updates: Partial<any>) => {
     try {
       const currentSubtasks = task.subtasks || [];
       const newSubtasks = currentSubtasks.map((sub: any) => 
-        sub.id === subtaskId ? { ...sub, is_completed: !sub.is_completed } : sub
+        sub.id === subtaskId ? { ...sub, ...updates } : sub
       );
+      
+      // Tự động cập nhật is_completed dựa trên status
+      if (updates.status) {
+        const target = newSubtasks.find((s: any) => s.id === subtaskId);
+        if (target) target.is_completed = updates.status === 'DONE';
+      }
+
       await supabase.from('tasks').update({ subtasks: newSubtasks }).eq('id', task.id);
+      
+      // Tính toán lại tổng actual_minutes của task chính từ các subtasks
+      const totalActual = newSubtasks.reduce((sum: number, s: any) => sum + (parseInt(s.actual_minutes) || 0), 0);
+      await supabase.from('tasks').update({ actual_minutes: totalActual }).eq('id', task.id);
+
       refetch();
       if (selectedTask?.id === task.id) {
-        setSelectedTask(prev => prev ? { ...prev, subtasks: newSubtasks } : null);
+        setSelectedTask(prev => prev ? { ...prev, subtasks: newSubtasks, actual_minutes: totalActual } : null);
       }
     } catch (error) {
-      console.error('Error toggling subtask:', error);
+      console.error('Error updating subtask:', error);
     }
   };
 
@@ -117,10 +162,11 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, string> = {
-      'NEW': 'bg-slate-50 text-slate-600 border-slate-200',
-      'IN_PROGRESS': 'bg-blue-50 text-blue-600 border-blue-200',
-      'DONE': 'bg-emerald-50 text-emerald-600 border-emerald-200',
-      'SUBMITTED': 'bg-purple-50 text-purple-600 border-purple-200'
+      'NEW': 'bg-[#EBF1FF] text-[#4A7CE1] border-[#D6E4FF]',
+      'IN_PROGRESS': 'bg-[#FFF9EB] text-[#D97706] border-[#FEF3C7]',
+      'DONE': 'bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]',
+      'SUBMITTED': 'bg-[#F5F3FF] text-[#7C3AED] border-[#EDE9FE]',
+      'SKIPPED': 'bg-rose-50 text-rose-600 border-rose-100'
     };
     return statusMap[status] || 'bg-slate-50 text-slate-600 border-slate-200';
   };
@@ -183,91 +229,121 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
       <SideDrawer 
         isOpen={isDrawerOpen} 
         onClose={() => setIsDrawerOpen(false)} 
-        title="Task Detail"
+        title={selectedTask ? (
+          <div className="flex flex-col gap-1">
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight">{selectedTask.task_name}</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                ID: {selectedTask.id.substring(0, 8).toUpperCase()}
+              </span>
+              <span className={cn(
+                "px-2 py-0.5 rounded text-[9px] font-black uppercase border tracking-wider",
+                getStatusBadge(selectedTask.status)
+              )}>
+                {selectedTask.status}
+              </span>
+            </div>
+          </div>
+        ) : "Task Detail"}
       >
         {selectedTask && (
-          <div className="space-y-8">
-            <div>
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Task Name</h3>
-              <p className="text-xl font-bold text-slate-900">{selectedTask.task_name}</p>
-            </div>
+          <div className="flex flex-col h-full">
+            <div className="flex-1 space-y-8">
+              {/* SUB-TASKS MANAGEMENT SECTION */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">SUB-TASKS</h3>
+                  <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">
+                    {selectedTask.subtasks?.filter((s:any) => s.is_completed).length || 0}/{selectedTask.subtasks?.length || 0}
+                  </span>
+                </div>
+                
+                <div className="space-y-1 bg-slate-50/50 p-2 rounded-xl border border-slate-100">
+                  {selectedTask.subtasks?.map((sub: any) => (
+                    <div key={sub.id} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100/50 shadow-sm transition-all group">
+                      <button 
+                        onClick={() => handleUpdateSubtask(selectedTask, sub.id, { is_completed: !sub.is_completed, status: !sub.is_completed ? 'DONE' : 'NEW' })}
+                        className="shrink-0"
+                      >
+                        {sub.is_completed ? (
+                          <CheckSquare className="w-4 h-4 text-emerald-500" />
+                        ) : (
+                          <Square className="w-4 h-4 text-slate-300" />
+                        )}
+                      </button>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Time Estimate</p>
-                <div className="flex items-center gap-2 text-indigo-600 font-bold">
-                  <Clock size={14} />
-                  <span>{selectedTask.estimated_minutes} mins</span>
+                      <div className="flex-1 flex items-center gap-1.5 text-[11px] min-w-0">
+                        <span className={cn(
+                          "font-bold text-slate-700 truncate min-w-0 flex-1",
+                          sub.is_completed && "line-through text-slate-400 font-medium"
+                        )}>
+                          {sub.name}
+                        </span>
+                        <span className="text-slate-300 font-light">-</span>
+                        <span className="shrink-0 text-slate-400 font-bold uppercase tracking-tighter truncate max-w-[80px]">
+                          {sub.assignee?.split('@')[0] || 'Unassigned'}
+                        </span>
+                        <span className="text-slate-300 font-light">-</span>
+                        <div className="flex items-center gap-1 shrink-0 font-black">
+                          <span className="text-slate-400">{sub.estimated_minutes || 0}m</span>
+                          <span className="text-slate-300 font-light">/</span>
+                          <input 
+                            type="number"
+                            className="w-10 bg-indigo-50 text-primary border-none rounded px-1 focus:ring-0 text-center font-black"
+                            value={sub.actual_minutes || 0}
+                            onChange={(e) => handleUpdateSubtask(selectedTask, sub.id, { actual_minutes: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <span className="text-slate-300 font-light">-</span>
+                        <select 
+                          value={sub.status || (sub.is_completed ? 'DONE' : 'NEW')}
+                          onChange={(e) => handleUpdateSubtask(selectedTask, sub.id, { status: e.target.value })}
+                          className="bg-transparent text-[9px] font-black text-indigo-500 uppercase tracking-tighter focus:outline-none cursor-pointer hover:text-indigo-700 transition-colors"
+                        >
+                          <option value="NEW">New</option>
+                          <option value="IN_PROGRESS">Progress</option>
+                          <option value="DONE">Done</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+
+                  {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && (
+                    <div className="text-center py-6 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">No subtasks defined</p>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Actual Time</p>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="number"
-                    className="w-16 bg-transparent border-none p-0 text-emerald-600 font-bold focus:ring-0"
-                    value={selectedTask.actual_minutes}
-                    onChange={(e) => handleUpdateActualTime(selectedTask.id, parseInt(e.target.value) || 0)}
-                  />
-                  <span className="text-emerald-600 font-bold">mins</span>
-                </div>
-              </div>
             </div>
 
-            <div>
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Status Control</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {['NEW', 'IN_PROGRESS', 'DONE', 'SUBMITTED'].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleUpdateStatus(selectedTask.id, s)}
-                    disabled={updatingTask === selectedTask.id}
-                    className={cn(
-                      "px-3 py-2 rounded-lg text-xs font-bold transition-all border",
-                      selectedTask.status === s 
-                        ? "bg-primary text-white border-primary shadow-lg shadow-primary/20" 
-                        : "bg-white text-slate-600 border-slate-200 hover:border-primary/30"
-                    )}
+            <div className="pt-6 border-t border-slate-100 flex gap-3 mt-auto">
+              {['DONE', 'SKIPPED'].includes(selectedTask.status) ? (
+                <button 
+                  onClick={() => handleResetTask(selectedTask)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-lg shadow-slate-200 uppercase tracking-widest"
+                >
+                  <RotateCw size={14} />
+                  <span>Reset Task</span>
+                </button>
+              ) : (
+                <>
+                  <button 
+                    onClick={() => { handleBatchSkip([selectedTask.id]); setIsDrawerOpen(false); }}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 text-slate-400 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all uppercase tracking-widest"
                   >
-                    {s}
+                    <Ban size={14} />
+                    <span>Skip</span>
                   </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center justify-between">
-                <span>Subtasks</span>
-                <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">
-                  {selectedTask.subtasks ? selectedTask.subtasks.filter((s:any) => s.is_completed).length : 0}/{selectedTask.subtasks ? selectedTask.subtasks.length : 0}
-                </span>
-              </h3>
-              <div className="space-y-2">
-                {selectedTask.subtasks?.map((sub: any) => (
-                  <div key={sub.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-100 shadow-sm transition-all hover:border-primary/20">
-                    <button onClick={() => handleToggleSubtask(selectedTask, sub.id)} className="text-slate-300 hover:text-primary transition-colors">
-                      {sub.is_completed ? <CheckCircle2 className="text-emerald-500" size={20} /> : <Square size={20} />}
-                    </button>
-                    <span className={cn("text-sm font-medium", sub.is_completed ? "text-slate-400 line-through" : "text-slate-700")}>
-                      {sub.name}
-                    </span>
-                    {sub.estimated_minutes && <span className="ml-auto text-[10px] font-bold text-slate-400">{sub.estimated_minutes}m</span>}
-                  </div>
-                ))}
-                {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && (
-                  <p className="text-sm text-slate-400 italic text-center py-4">No subtasks defined.</p>
-                )}
-              </div>
-            </div>
-
-            <div className="pt-6 border-t border-slate-100">
-               <button 
-                onClick={() => { handleBatchSkip([selectedTask.id]); setIsDrawerOpen(false); }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-rose-50 text-rose-600 rounded-xl text-sm font-bold hover:bg-rose-100 transition-colors"
-               >
-                 <Ban size={16} />
-                 <span>Skip this task</span>
-               </button>
+                  <button 
+                    onClick={() => { handleUpdateStatus(selectedTask.id, 'SUBMITTED'); setIsDrawerOpen(false); }}
+                    className="flex-[2] flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 uppercase tracking-widest"
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>Submit</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
