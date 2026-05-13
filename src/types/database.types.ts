@@ -37,16 +37,24 @@ export interface Tag {
 
 export interface Subtask {
   id: string;
-  title: string;
-  completed: boolean;
+  task_id?: string;
+  name: string;                      // ✅ Changed from 'title' to match DB
+  assignee?: string;                 // User email
+  estimated_minutes?: number;
+  is_completed?: boolean;
+  created_at?: string;
 }
 
 export interface Task {
   id: string;
+  user_id: string | null;           // ✅ ADDED: User who created the task
   task_name: string;
   tag_id: string | null;
+  tag?: string | null;              // Text representation of tag
   project_id: string | null;
+  project?: string | null;          // Text representation of project
   team_id: string | null;
+  team?: string | null;             // Text representation of team
   type: TaskType;
   deadline_date: string | null;
   deadline_day_num: number | null;

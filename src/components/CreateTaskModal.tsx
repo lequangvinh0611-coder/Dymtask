@@ -6,7 +6,7 @@ import { Task } from '../types/database.types';
 
 interface Subtask {
   id: string;
-  name: string; // Đã đổi content -> name cho đồng bộ với Database
+  name: string;
   assignee: string;
   estimated_minutes: number;
 }
@@ -43,6 +43,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
   });
 
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [debugInfo, setDebugInfo] = useState<string>('');
 
   const totalEstimatedMinutes = subtasks.reduce((sum, st) => sum + (Number(st.estimated_minutes) || 0), 0);
 
@@ -114,11 +115,40 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     setSubtasks(prev => prev.filter(st => st.id !== id));
   };
 
-  // --- LOGIC LƯU DATABASE ĐÃ ĐƯỢC CHUẨN HÓA ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // ✅ DIAGNOSTIC LOGGING
+    const debugData = {
+      'profile object': profile,
+      'profile.id': profile?.id,
+      'profile.id type': typeof profile?.id,
+      'profile.id length': (profile?.id || '').length,
+      'profile.id is null?': profile?.id === null,
+      'profile.id is undefined?': profile?.id === undefined,
+      'profile.id is empty string?': profile?.id === '',
+    };
+    
+    console.group('🔍 DEBUG CREATE TASK');
+    console.log('Full profile:', profile);
+    console.table(debugData);
+    console.groupEnd();
+    
+    setDebugInfo(JSON.stringify(debugData, null, 2));
+
+    if (!profile?.id) {
+      const msg = `❌ Profile ID missing!\n\nDebug:\n${JSON.stringify(debugData, null, 2)}`;
+      alert(msg);
+      return;
+    }
+
     if (subtasks.length === 0 || totalEstimatedMinutes <= 0) {
       alert('Vui lòng thêm ít nhất 1 subtask với thời gian ước tính > 0.');
+      return;
+    }
+
+    if (!formData.task_name.trim()) {
+      alert('Task name cannot be empty');
       return;
     }
 
@@ -126,7 +156,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     try {
       const uniqueAssignees = Array.from(new Set(subtasks.map(st => st.assignee).filter(Boolean)));
 
-      // Payload của Task Cha (Không chứa subtasks)
       const taskPayload = {
         task_name: formData.task_name,
         project_id: formData.project_id || null,
@@ -139,28 +168,32 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         deadline_day_num: formData.type === 'MONTHLY' ? formData.deadline_day_num : null,
         estimated_minutes: totalEstimatedMinutes,
         assignees: uniqueAssignees,
+        user_id: profile.id,  // ✅ Guaranteed non-null due to validation above
+        status: 'NEW',
+        is_active: true,
+        actual_minutes: 0,
       };
+
+      console.log('📤 Sending taskPayload:', taskPayload);
 
       let taskId = taskToEdit?.id;
 
       if (isEditMode && taskToEdit) {
-        // 1. Cập nhật Task
         const { error: updateError } = await supabase.from('tasks').update(taskPayload).eq('id', taskId);
         if (updateError) throw updateError;
-        
-        // 2. Xóa các subtask cũ trước khi thêm mới (để tránh rác dữ liệu)
         await supabase.from('subtasks').delete().eq('task_id', taskId);
       } else {
-        // 1. Tạo Task mới (Lấy về ID)
         const { data, error: insertError } = await supabase.from('tasks').insert({
-          ...taskPayload, status: 'NEW', is_active: true, actual_minutes: 0
+          ...taskPayload
         }).select('id').single();
         
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error('❌ Insert error:', insertError);
+          throw insertError;
+        }
         taskId = data.id;
       }
 
-      // 3. Insert các Subtask mới vào bảng subtasks riêng biệt
       if (taskId) {
         const subtasksPayload = subtasks.map(st => ({
           task_id: taskId,
@@ -170,14 +203,22 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
           is_completed: false
         }));
         
+        console.log('📤 Sending subtasks:', subtasksPayload);
+        
         const { error: subError } = await supabase.from('subtasks').insert(subtasksPayload);
-        if (subError) throw subError;
+        if (subError) {
+          console.error('❌ Subtask error:', subError);
+          throw subError;
+        }
       }
 
+      alert('✅ Task created successfully!');
       onSuccess();
       onClose();
     } catch (error: any) {
-      console.error("LỖI LƯU TASK:", error);
+      console.error('❌ LỖI LƯU TASK:', error);
+      const errorMsg = error.message || error.details || 'Unknown error';
+      alert(`Error creating task:\n${errorMsg}\n\nDebug Info:\n${JSON.stringify(debugData, null, 2)}`);
     } finally {
       setLoading(false);
     }
@@ -196,6 +237,16 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* DEBUG INFO DISPLAY */}
+        {debugInfo && (
+          <div className="px-6 py-3 bg-amber-50 border-b border-amber-200">
+            <p className="text-[10px] font-bold text-amber-700 mb-2">🔍 DEBUG INFO:</p>
+            <pre className="text-[9px] text-amber-600 bg-white p-2 rounded border border-amber-200 overflow-x-auto max-h-[100px]">
+              {debugInfo}
+            </pre>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Main Task Info */}
@@ -346,9 +397,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-black text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all uppercase tracking-widest">
               Cancel
             </button>
-            <button type="submit" disabled={loading || subtasks.length === 0 || totalEstimatedMinutes <= 0} className="flex-[2] py-3 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center gap-2 uppercase tracking-widest">
+            <button type="submit" disabled={loading || !profile?.id || subtasks.length === 0 || totalEstimatedMinutes <= 0} className="flex-[2] py-3 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center gap-2 uppercase tracking-widest">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {isEditMode ? 'Update Task' : 'Create Task'}
+              {!profile?.id ? 'Loading...' : (isEditMode ? 'Update Task' : 'Create Task')}
             </button>
           </div>
         </form>
