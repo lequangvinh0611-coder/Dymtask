@@ -6,7 +6,7 @@ import { Task } from '../types/database.types';
 
 interface Subtask {
   id: string;
-  content: string;
+  name: string; // Đã đổi content -> name cho đồng bộ với Database
   assignee: string;
   estimated_minutes: number;
 }
@@ -55,7 +55,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
           project_id: taskToEdit.project_id || '',
           team_id: taskToEdit.team_id || '',
           tag_id: taskToEdit.tag_id || '',
-          type: (taskToEdit.type === 'ONCE' ? 'ONETIME' : taskToEdit.type) as any, // fallback for old data
+          type: (taskToEdit.type === 'ONCE' ? 'ONETIME' : taskToEdit.type) as any,
           deadline_time: taskToEdit.deadline_time || '09:00',
           deadline_days: taskToEdit.deadline_days || [],
           deadline_date: taskToEdit.deadline_date || new Date().toISOString().split('T')[0],
@@ -69,7 +69,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
           deadline_date: new Date().toISOString().split('T')[0], deadline_day_num: 1
         });
         if (profile?.email) {
-          setSubtasks([{ id: crypto.randomUUID(), content: '', assignee: profile.email, estimated_minutes: 30 }]);
+          setSubtasks([{ id: crypto.randomUUID(), name: '', assignee: profile.email, estimated_minutes: 30 }]);
         } else {
           setSubtasks([]);
         }
@@ -99,16 +99,10 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     }));
   };
 
-  // --- CÁC HÀM XỬ LÝ SUBTASK ---
   const handleAddSubtask = () => {
     setSubtasks([
       ...subtasks,
-      { 
-        id: crypto.randomUUID(), 
-        content: '', 
-        assignee: profile?.email || '', 
-        estimated_minutes: 30 
-      }
+      { id: crypto.randomUUID(), name: '', assignee: profile?.email || '', estimated_minutes: 30 }
     ]);
   };
 
@@ -119,8 +113,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
   const removeSubtask = (id: string) => {
     setSubtasks(prev => prev.filter(st => st.id !== id));
   };
-  // -----------------------------
 
+  // --- LOGIC LƯU DATABASE ĐÃ ĐƯỢC CHUẨN HÓA ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (subtasks.length === 0 || totalEstimatedMinutes <= 0) {
@@ -132,7 +126,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     try {
       const uniqueAssignees = Array.from(new Set(subtasks.map(st => st.assignee).filter(Boolean)));
 
-      const payload = {
+      // Payload của Task Cha (Không chứa subtasks)
+      const taskPayload = {
         task_name: formData.task_name,
         project_id: formData.project_id || null,
         team_id: formData.team_id || null,
@@ -144,21 +139,41 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         deadline_day_num: formData.type === 'MONTHLY' ? formData.deadline_day_num : null,
         estimated_minutes: totalEstimatedMinutes,
         assignees: uniqueAssignees,
-        subtasks: subtasks.map(({ content, assignee, estimated_minutes }) => ({
-          content, assignee, estimated_minutes, completed: false
-        })),
       };
 
-      let result;
+      let taskId = taskToEdit?.id;
+
       if (isEditMode && taskToEdit) {
-        result = await supabase.from('tasks').update(payload).eq('id', taskToEdit.id);
+        // 1. Cập nhật Task
+        const { error: updateError } = await supabase.from('tasks').update(taskPayload).eq('id', taskId);
+        if (updateError) throw updateError;
+        
+        // 2. Xóa các subtask cũ trước khi thêm mới (để tránh rác dữ liệu)
+        await supabase.from('subtasks').delete().eq('task_id', taskId);
       } else {
-        result = await supabase.from('tasks').insert({
-          ...payload, status: 'NEW', is_active: true, actual_minutes: 0
-        });
+        // 1. Tạo Task mới (Lấy về ID)
+        const { data, error: insertError } = await supabase.from('tasks').insert({
+          ...taskPayload, status: 'NEW', is_active: true, actual_minutes: 0
+        }).select('id').single();
+        
+        if (insertError) throw insertError;
+        taskId = data.id;
       }
 
-      if (result.error) throw result.error;
+      // 3. Insert các Subtask mới vào bảng subtasks riêng biệt
+      if (taskId) {
+        const subtasksPayload = subtasks.map(st => ({
+          task_id: taskId,
+          name: st.name,
+          assignee: st.assignee,
+          estimated_minutes: st.estimated_minutes,
+          is_completed: false
+        }));
+        
+        const { error: subError } = await supabase.from('subtasks').insert(subtasksPayload);
+        if (subError) throw subError;
+      }
+
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -307,7 +322,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                 subtasks.map((st) => (
                   <div key={st.id} className="flex gap-2 items-start bg-slate-50 p-2 rounded-xl border border-slate-100 group">
                     <input required className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-500 font-medium"
-                      placeholder="Subtask content..." value={st.content} onChange={(e) => updateSubtask(st.id, { content: e.target.value })} />
+                      placeholder="Subtask name..." value={st.name} onChange={(e) => updateSubtask(st.id, { name: e.target.value })} />
                     <select required className="w-32 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:outline-none focus:border-indigo-500"
                       value={st.assignee} onChange={(e) => updateSubtask(st.id, { assignee: e.target.value })}>
                       <option value="" disabled>Select User</option>
