@@ -50,12 +50,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           console.log('[AuthStore] No profile in DB, using fallback...');
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
+            const isMaster = user.email === 'lequangvinh0611@gmail.com';
             set({
               profile: {
                 id: user.id,
                 email: user.email!,
                 name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-                role: 'user',
+                role: isMaster ? 'master' : 'user',
                 teams: [],
                 status: 'ACTIVE',
                 created_at: new Date().toISOString(),
@@ -68,6 +69,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       console.log('[AuthStore] Profile fetched successfully:', data);
+      
+      // ✅ Force Master role if email matches (Security enforcement)
+      if (data.email === 'lequangvinh0611@gmail.com' && data.role !== 'master') {
+        data.role = 'master';
+      }
+      
       set({ profile: data });
 
     } catch (error: any) {

@@ -13,9 +13,10 @@ import { supabase } from '../lib/supabase';
 interface DashboardStats {
   totalTasks: number;
   activeProjects: number;
-  teamEfficiency: string;
+  todayCompleted: number;
+  todayTotal: number;
   auditAlerts: number;
-  weeklyPerformance: any[];
+  dailyRecap: any[];
   distribution: any[];
 }
 
@@ -58,51 +59,57 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
+      const today = new Date();
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const currentDayName = dayNames[today.getDay()];
+
       const [
         { count: taskCount },
         { count: projCount },
         { count: alertCount },
-        { data: tasks }
+        { data: allTasks }
       ] = await Promise.all([
         supabase.from('tasks').select('*', { count: 'exact', head: true }),
         supabase.from('projects').select('*', { count: 'exact', head: true }),
         supabase.from('audit_logs').select('*', { count: 'exact', head: true }),
-        supabase.from('tasks').select('status, created_at')
+        supabase.from('tasks').select('status, type, deadline_days, is_active')
       ]);
 
-      // Calculate Task Distribution
-      const statusCounts = (tasks || []).reduce((acc: any, task) => {
+      const tasks = allTasks || [];
+      const activeTasks = tasks.filter(t => t.is_active);
+
+      const statusCounts = tasks.reduce((acc: any, task) => {
         acc[task.status] = (acc[task.status] || 0) + 1;
         return acc;
       }, {});
 
-      const total = tasks?.length || 1;
       const distribution = [
-        { name: 'Completed', value: statusCounts['DONE'] || 0, color: '#4F46E5' },
+        { name: 'Completed', value: (statusCounts['DONE'] || 0) + (statusCounts['SUBMITTED'] || 0), color: '#4F46E5' },
         { name: 'In Progress', value: statusCounts['IN_PROGRESS'] || 0, color: '#10B981' },
         { name: 'New', value: statusCounts['NEW'] || 0, color: '#E2E8F0' },
       ];
 
-      // Calculate real weekly performance if possible, or stay at 0
-      const weeklyData = [
-        { name: 'Mon', completed: 0, total: 0 },
-        { name: 'Tue', completed: 0, total: 0 },
-        { name: 'Wed', completed: 0, total: 0 },
-        { name: 'Thu', completed: 0, total: 0 },
-        { name: 'Fri', completed: 0, total: 0 },
-      ];
+      const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+      const dailyRecap = daysOfWeek.map(day => {
+        const count = activeTasks.filter(t => 
+          (t.type === 'DAILY') || (t.type === 'WEEKLY' && t.deadline_days?.includes(day))
+        ).length;
+        return { name: day, count };
+      });
 
-      // Calculate real efficiency
-      const doneCount = statusCounts['DONE'] || 0;
-      const efficiency = taskCount ? Math.round((doneCount / taskCount) * 100) : 0;
+      const todayTasks = activeTasks.filter(t => 
+        (t.type === 'DAILY') || (t.type === 'WEEKLY' && t.deadline_days?.includes(currentDayName))
+      );
+      const todayCompleted = todayTasks.filter(t => t.status === 'DONE' || t.status === 'SUBMITTED').length;
 
       setStats({
         totalTasks: taskCount || 0,
         activeProjects: projCount || 0,
-        teamEfficiency: `${efficiency}%`, 
+        todayCompleted,
+        todayTotal: todayTasks.length,
         auditAlerts: alertCount || 0,
-        weeklyPerformance: weeklyData,
-        distribution: distribution
+        dailyRecap,
+        distribution
       });
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -115,6 +122,8 @@ const Dashboard = () => {
     fetchDashboardData();
   }, []);
 
+  const todayProgress = stats.todayTotal > 0 ? Math.round((stats.todayCompleted / stats.todayTotal) * 100) : 0;
+
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6 bg-slate-50/30">
       <div className="flex items-center justify-between mb-2">
@@ -124,33 +133,30 @@ const Dashboard = () => {
          </h2>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Tasks" value={stats.totalTasks.toLocaleString()} icon={ClipboardListIcon} color="bg-indigo-50 text-indigo-600" trend="+0%" loading={loading} />
-        <StatCard title="Active Projects" value={stats.activeProjects.toLocaleString()} icon={Target} color="bg-emerald-50 text-emerald-600" trend="+0" loading={loading} />
-        <StatCard title="Team Efficiency" value={stats.teamEfficiency} icon={TrendingUp} color="bg-sky-50 text-sky-600" trend="+0%" loading={loading} />
-        <StatCard title="Audit Alerts" value={stats.auditAlerts.toLocaleString()} icon={AlertCircle} color="bg-rose-50 text-rose-600" trend="0" loading={loading} />
+        <StatCard title="Today's Progress" value={`${todayProgress}%`} icon={TrendingUp} color="bg-indigo-50 text-indigo-600" trend={todayProgress > 0 ? `+${todayProgress}%` : undefined} loading={loading} />
+        <StatCard title="Total Tasks" value={stats.totalTasks.toLocaleString()} icon={ClipboardListIcon} color="bg-emerald-50 text-emerald-600" loading={loading} />
+        <StatCard title="Active Projects" value={stats.activeProjects.toLocaleString()} icon={Target} color="bg-sky-50 text-sky-600" loading={loading} />
+        <StatCard title="Audit Logs" value={stats.auditAlerts.toLocaleString()} icon={AlertCircle} color="bg-rose-50 text-rose-600" loading={loading} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-[400px] flex flex-col relative overflow-hidden">
           {loading && (
             <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] flex items-center justify-center z-10">
-              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
             </div>
           )}
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-slate-800">Weekly Performance</h3>
-            <select className="text-xs border-none bg-slate-50 text-slate-500 rounded-lg px-3 py-1.5 font-bold uppercase tracking-wider">
-              <option>Last 7 Days</option>
-            </select>
+            <h3 className="font-bold text-slate-800">Recurring Tasks Recap (Mon-Fri)</h3>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Schedule</span>
           </div>
           <div className="flex-1">
             <ResponsiveContainer width="100%" height="100%">
-              <RechartsBar data={stats.weeklyPerformance} barGap={8}>
+              <RechartsBar data={stats.dailyRecap}>
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94A3B8' }} />
-                <YAxis hide />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94A3B8' }} />
                 <Tooltip cursor={{ fill: '#F1F5F9' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                <Bar dataKey="completed" fill="#4F46E5" radius={[4, 4, 0, 0]} barSize={40} />
-                <Bar dataKey="total" fill="#E2E8F0" radius={[4, 4, 0, 0]} barSize={40} />
+                <Bar dataKey="count" fill="var(--theme-color, #4F46E5)" radius={[4, 4, 0, 0]} barSize={50} />
               </RechartsBar>
             </ResponsiveContainer>
           </div>

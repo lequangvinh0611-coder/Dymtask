@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Task } from '../types/database.types';
+import { Task, Project, Team, Tag } from '../types/database.types';
 
 export interface TaskWithDetails extends Task {
-  tags?: { name: string; color?: string } | null;
-  projects?: { name: string } | null;
-  teams?: { name: string } | null;
+  tags?: Tag | null;
+  projects?: Project | null;
+  teams?: Team | null;
 }
 
 export interface TaskFilters {

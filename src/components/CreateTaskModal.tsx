@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2, Plus, Trash2, CalendarDays, Clock, Calendar } from 'lucide-react';
+import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { Task } from '../types/database.types';
+import { SearchableSelect } from './ui/SearchableSelect';
+import { logger } from '../lib/logger';
 
 interface Subtask {
   id: string;
   name: string;
   assignee: string;
   estimated_minutes: number;
+  is_completed?: boolean;
 }
 
 interface CreateTaskModalProps {
@@ -43,8 +47,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
   });
 
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
-  const [debugInfo, setDebugInfo] = useState<string>('');
-
   const totalEstimatedMinutes = subtasks.reduce((sum, st) => sum + (Number(st.estimated_minutes) || 0), 0);
 
   useEffect(() => {
@@ -117,28 +119,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // ✅ DIAGNOSTIC LOGGING
-    const debugData = {
-      'profile object': profile,
-      'profile.id': profile?.id,
-      'profile.id type': typeof profile?.id,
-      'profile.id length': (profile?.id || '').length,
-      'profile.id is null?': profile?.id === null,
-      'profile.id is undefined?': profile?.id === undefined,
-      'profile.id is empty string?': profile?.id === '',
-    };
-    
-    console.group('🔍 DEBUG CREATE TASK');
-    console.log('Full profile:', profile);
-    console.table(debugData);
-    console.groupEnd();
-    
-    setDebugInfo(JSON.stringify(debugData, null, 2));
 
     if (!profile?.id) {
-      const msg = `❌ Profile ID missing!\n\nDebug:\n${JSON.stringify(debugData, null, 2)}`;
-      alert(msg);
+      alert('❌ Profile ID missing!');
       return;
     }
 
@@ -155,9 +138,18 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     setLoading(true);
     try {
       const uniqueAssignees = Array.from(new Set(subtasks.map(st => st.assignee).filter(Boolean)));
+      
+      // Đảm bảo dữ liệu subtasks sạch sẽ
+      const structuredSubtasks = subtasks.map(st => ({
+        id: st.id || crypto.randomUUID(),
+        name: st.name.trim(),
+        assignee: st.assignee,
+        estimated_minutes: Number(st.estimated_minutes) || 0,
+        is_completed: st.is_completed || false
+      }));
 
       const taskPayload = {
-        task_name: formData.task_name,
+        task_name: formData.task_name.trim(),
         project_id: formData.project_id || null,
         team_id: formData.team_id || null,
         tag_id: formData.tag_id || null,
@@ -168,57 +160,41 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         deadline_day_num: formData.type === 'MONTHLY' ? formData.deadline_day_num : null,
         estimated_minutes: totalEstimatedMinutes,
         assignees: uniqueAssignees,
-        user_id: profile.id,  // ✅ Guaranteed non-null due to validation above
-        status: 'NEW',
+        user_id: profile.id,  
+        status: isEditMode && taskToEdit ? taskToEdit.status : ('NEW' as const),
         is_active: true,
-        actual_minutes: 0,
+        actual_minutes: isEditMode && taskToEdit ? taskToEdit.actual_minutes : 0,
+        subtasks: structuredSubtasks // CRITICAL: Save to JSONB column only
       };
 
-      console.log('📤 Sending taskPayload:', taskPayload);
-
-      let taskId = taskToEdit?.id;
+      console.log('🚀 SYSTEM_DEBUG: Saving to public.tasks table...');
+      console.log('📦 SYSTEM_DEBUG: Payload:', taskPayload);
 
       if (isEditMode && taskToEdit) {
-        const { error: updateError } = await supabase.from('tasks').update(taskPayload).eq('id', taskId);
+        const { error: updateError } = await supabase
+          .from('tasks')
+          .update(taskPayload)
+          .eq('id', taskToEdit.id);
+          
         if (updateError) throw updateError;
-        await supabase.from('subtasks').delete().eq('task_id', taskId);
+        await logger.log('UPDATE_TASK', `Updated task: ${formData.task_name}`, { taskId: taskToEdit.id });
       } else {
-        const { data, error: insertError } = await supabase.from('tasks').insert({
-          ...taskPayload
-        }).select('id').single();
+        const { error: insertError } = await supabase
+          .from('tasks')
+          .insert(taskPayload);
         
         if (insertError) {
-          console.error('❌ Insert error:', insertError);
+          console.error('🔥 SYSTEM_DEBUG: Supabase tasks table insertion failed:', insertError);
           throw insertError;
         }
-        taskId = data.id;
+        await logger.log('CREATE_TASK', `Created new task: ${formData.task_name}`);
       }
 
-      if (taskId) {
-        const subtasksPayload = subtasks.map(st => ({
-          task_id: taskId,
-          name: st.name,
-          assignee: st.assignee,
-          estimated_minutes: st.estimated_minutes,
-          is_completed: false
-        }));
-        
-        console.log('📤 Sending subtasks:', subtasksPayload);
-        
-        const { error: subError } = await supabase.from('subtasks').insert(subtasksPayload);
-        if (subError) {
-          console.error('❌ Subtask error:', subError);
-          throw subError;
-        }
-      }
-
-      alert('✅ Task created successfully!');
       onSuccess();
       onClose();
     } catch (error: any) {
-      console.error('❌ LỖI LƯU TASK:', error);
-      const errorMsg = error.message || error.details || 'Unknown error';
-      alert(`Error creating task:\n${errorMsg}\n\nDebug Info:\n${JSON.stringify(debugData, null, 2)}`);
+      console.error('⛔ SYSTEM_DEBUG: TASK_SAVE_FAILURE:', error);
+      alert(`Lỗi hệ thống: ${error.message || 'Không thể kết nối database'}`);
     } finally {
       setLoading(false);
     }
@@ -231,62 +207,60 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
       <div className="bg-white w-full max-w-2xl my-8 rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
-            {isEditMode ? 'Edit Task' : 'Create New Task'}
+            {isEditMode ? 'Edit Task v1.0.2' : 'Create New Task v1.0.2'}
           </h3>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* DEBUG INFO DISPLAY */}
-        {debugInfo && (
-          <div className="px-6 py-3 bg-amber-50 border-b border-amber-200">
-            <p className="text-[10px] font-bold text-amber-700 mb-2">🔍 DEBUG INFO:</p>
-            <pre className="text-[9px] text-amber-600 bg-white p-2 rounded border border-amber-200 overflow-x-auto max-h-[100px]">
-              {debugInfo}
-            </pre>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Main Task Info */}
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Task Name</label>
-            <input required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-              placeholder="What needs to be done?" value={formData.task_name} onChange={(e) => setFormData({ ...formData, task_name: e.target.value })} />
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Task Name</label>
+            <input 
+              required 
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium"
+              placeholder="What needs to be done?" 
+              value={formData.task_name} 
+              onChange={(e) => setFormData({ ...formData, task_name: e.target.value })} 
+            />
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Project</label>
-              <select className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
-                value={formData.project_id} onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}>
-                <option value="">Select Project</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Project</label>
+              <SearchableSelect 
+                options={projects} 
+                value={formData.project_id} 
+                onChange={(val) => setFormData({ ...formData, project_id: val })}
+                placeholder="Select Project"
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Team</label>
-              <select className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
-                value={formData.team_id} onChange={(e) => setFormData({ ...formData, team_id: e.target.value })}>
-                <option value="">Select Team</option>
-                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Team</label>
+              <SearchableSelect 
+                options={teams} 
+                value={formData.team_id} 
+                onChange={(val) => setFormData({ ...formData, team_id: val })}
+                placeholder="Select Team"
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Tag</label>
-              <select className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
-                value={formData.tag_id} onChange={(e) => setFormData({ ...formData, tag_id: e.target.value })}>
-                <option value="">Select Tag</option>
-                {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tag</label>
+              <SearchableSelect 
+                options={tags} 
+                value={formData.tag_id} 
+                onChange={(val) => setFormData({ ...formData, tag_id: val })}
+                placeholder="Select Tag"
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Type</label>
-              <select className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Type</label>
+              <select className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}>
                 <option value="ONETIME">ONETIME</option>
                 <option value="DAILY">DAILY</option>
@@ -295,24 +269,27 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">Time Deadline</label>
-              <input type="time" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Time Deadline</label>
+              <input type="time" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 value={formData.deadline_time} onChange={(e) => setFormData({ ...formData, deadline_time: e.target.value })} />
             </div>
           </div>
 
-          <div className="h-[72px] border-t border-slate-100 pt-3 mt-2">
+          <div className="h-[72px] border-t border-slate-100 pt-3">
             {formData.type === 'WEEKLY' && (
               <div className="animate-in fade-in slide-in-from-top-2">
-                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">
+                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                   <CalendarDays size={12} /> Repeat Days
                 </label>
                 <div className="flex gap-2">
                   {DAYS_OF_WEEK.map(day => (
                     <button key={day} type="button" onClick={() => toggleDay(day)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                        formData.deadline_days.includes(day) ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:bg-indigo-50'
-                      }`}>
+                      className={cn(
+                        "flex-1 py-2 rounded-lg text-xs font-bold transition-all border",
+                        formData.deadline_days.includes(day) 
+                          ? "bg-primary border-primary text-white shadow-lg shadow-primary/20" 
+                          : "bg-white border-slate-200 text-slate-500 hover:bg-primary/5 hover:border-primary/20"
+                      )}>
                       {day}
                     </button>
                   ))}
@@ -322,70 +299,80 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
 
             {formData.type === 'MONTHLY' && (
               <div className="animate-in fade-in slide-in-from-top-2">
-                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">
+                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                   <Calendar size={12} /> Day of Month (1-31)
                 </label>
-                <input type="number" min="1" max="31" className="w-1/3 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
+                <input type="number" min="1" max="31" className="w-24 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:border-primary transition-all"
                   value={formData.deadline_day_num} onChange={(e) => setFormData({ ...formData, deadline_day_num: parseInt(e.target.value) || 1 })} />
               </div>
             )}
 
             {formData.type === 'ONETIME' && (
               <div className="animate-in fade-in slide-in-from-top-2">
-                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1.5">
+                <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                   <Calendar size={12} /> Specific Date
                 </label>
-                <input type="date" className="w-1/2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
+                <input type="date" className="w-full max-w-[200px] px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:border-primary transition-all"
                   value={formData.deadline_date} onChange={(e) => setFormData({ ...formData, deadline_date: e.target.value })} />
               </div>
             )}
             
             {formData.type === 'DAILY' && (
                <div className="h-full flex items-center justify-center animate-in fade-in">
-                  <span className="text-xs font-bold text-slate-300 italic">Repeats every day</span>
+                  <span className="text-xs font-bold text-slate-300 italic uppercase tracking-widest">Repeats every day</span>
                </div>
             )}
           </div>
 
-          <hr className="border-slate-100" />
-
-          {/* Subtasks Section */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
+          <div className="pt-2">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-4">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tighter">Subtasks</label>
-                <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Subtasks</label>
+                <span className="flex items-center gap-1 text-[10px] font-black text-primary bg-primary-light px-3 py-1 rounded-full border border-primary/10">
                   <Clock size={12} />
-                  Total Est: {totalEstimatedMinutes}m
+                  Est: {totalEstimatedMinutes}m
                 </span>
               </div>
-              <button type="button" onClick={handleAddSubtask} className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg hover:bg-black transition-all shadow-sm">
+              <button 
+                type="button" 
+                onClick={handleAddSubtask} 
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black rounded-lg hover:bg-black transition-all shadow-lg shadow-black/10 uppercase tracking-widest"
+              >
                 <Plus size={12} /> Add Subtask
               </button>
             </div>
             
-            <div className="space-y-2 max-h-[180px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+            <div className="space-y-3 max-h-[180px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
               {subtasks.length === 0 ? (
-                <div className="py-6 text-center border-2 border-dashed border-red-200 rounded-xl bg-red-50/50">
-                  <p className="text-xs text-red-500 font-bold tracking-tight">At least 1 subtask is required!</p>
+                <div className="py-8 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">No subtasks added yet</p>
                 </div>
               ) : (
                 subtasks.map((st) => (
-                  <div key={st.id} className="flex gap-2 items-start bg-slate-50 p-2 rounded-xl border border-slate-100 group">
-                    <input required className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-500 font-medium"
+                  <div key={st.id} className="flex gap-3 items-start bg-white p-3 rounded-2xl border border-slate-100 shadow-sm group hover:border-primary/20 transition-all">
+                    <input required className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-primary font-medium"
                       placeholder="Subtask name..." value={st.name} onChange={(e) => updateSubtask(st.id, { name: e.target.value })} />
-                    <select required className="w-32 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:outline-none focus:border-indigo-500"
-                      value={st.assignee} onChange={(e) => updateSubtask(st.id, { assignee: e.target.value })}>
-                      <option value="" disabled>Select User</option>
-                      {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
-                    </select>
-                    <div className="flex items-center gap-1">
-                      <input type="number" min="1" required className="w-16 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center focus:outline-none focus:border-indigo-500"
-                        value={st.estimated_minutes || ''} onChange={(e) => updateSubtask(st.id, { estimated_minutes: parseInt(e.target.value) || 0 })} />
-                      <span className="text-[10px] font-bold text-slate-400">m</span>
+                    
+                    <div className="w-40">
+                      <SearchableSelect 
+                        options={users} 
+                        value={users.find(u => u.email === st.assignee)?.id || ''} 
+                        onChange={(val) => {
+                          const user = users.find(u => u.id === val);
+                          if (user) updateSubtask(st.id, { assignee: user.email });
+                        }}
+                        placeholder="Assignee"
+                      />
                     </div>
-                    <button type="button" onClick={() => removeSubtask(st.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                      <Trash2 size={14} />
+
+                    <div className="flex items-center gap-2">
+                      <input type="number" min="1" required className="w-16 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-center focus:outline-none focus:border-primary"
+                        value={st.estimated_minutes || ''} onChange={(e) => updateSubtask(st.id, { estimated_minutes: parseInt(e.target.value) || 0 })} />
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">m</span>
+                    </div>
+
+                    <button type="button" onClick={() => removeSubtask(st.id)} className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all">
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 ))
@@ -393,13 +380,17 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             </div>
           </div>
 
-          <div className="pt-2 flex gap-4">
-            <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-black text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all uppercase tracking-widest">
+          <div className="pt-4 flex gap-4">
+            <button type="button" onClick={onClose} className="flex-1 py-3.5 text-xs font-black text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all uppercase tracking-widest">
               Cancel
             </button>
-            <button type="submit" disabled={loading || !profile?.id || subtasks.length === 0 || totalEstimatedMinutes <= 0} className="flex-[2] py-3 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center gap-2 uppercase tracking-widest">
+            <button 
+              type="submit" 
+              disabled={loading || !profile?.id || subtasks.length === 0 || totalEstimatedMinutes <= 0} 
+              className="flex-[2] py-3.5 text-xs font-black text-white bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2 uppercase tracking-widest"
+            >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {!profile?.id ? 'Loading...' : (isEditMode ? 'Update Task' : 'Create Task')}
+              {isEditMode ? 'Update Task' : 'Create Task'}
             </button>
           </div>
         </form>

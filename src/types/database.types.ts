@@ -37,7 +37,6 @@ export interface Tag {
 
 export interface Subtask {
   id: string;
-  task_id?: string;
   name: string;                      // ✅ Changed from 'title' to match DB
   assignee?: string;                 // User email
   estimated_minutes?: number;

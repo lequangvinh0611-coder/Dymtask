@@ -1,7 +1,7 @@
 -- 1. Create Custom Types
 CREATE TYPE user_role AS ENUM ('master', 'admin', 'user');
 CREATE TYPE task_status AS ENUM ('NEW', 'IN_PROGRESS', 'DONE', 'SUBMITTED');
-CREATE TYPE task_type AS ENUM ('DAILY', 'WEEKLY', 'ONCE');
+CREATE TYPE task_type AS ENUM ('DAILY', 'WEEKLY', 'MONTHLY', 'ONETIME');
 
 -- 2. Create Users Table
 -- Note: In Supabase, usually users are managed via auth.users, 
@@ -43,16 +43,21 @@ CREATE TABLE public.tags (
 CREATE TABLE public.tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_name TEXT NOT NULL,
+    user_id UUID REFERENCES public.users(id), -- Creator
     tag_id UUID REFERENCES public.tags(id),
     project_id UUID REFERENCES public.projects(id),
     team_id UUID REFERENCES public.teams(id),
-    type task_type DEFAULT 'DAILY' NOT NULL,
-    deadline TEXT, -- Format like '08:30 Mon - Fri'
-    estimated_time TEXT, -- e.g. '5m'
-    actual_time TEXT DEFAULT '0m',
+    type task_type DEFAULT 'ONETIME' NOT NULL,
+    deadline_time TIME, -- Changed from TEXT to TIME
+    deadline_days TEXT[], -- For WEEKLY: ['Mon', 'Tue']
+    deadline_date DATE, -- For ONETIME
+    deadline_day_num INTEGER, -- For MONTHLY
+    estimated_minutes INTEGER DEFAULT 0,
+    actual_minutes INTEGER DEFAULT 0,
     status task_status DEFAULT 'NEW' NOT NULL,
-    subtasks JSONB DEFAULT '[]'::jsonb,
-    assignees TEXT[] DEFAULT '{}', -- Array of user emails
+    subtasks JSONB DEFAULT '[]'::jsonb, -- Integrated steps/subtasks
+    assignees TEXT[] DEFAULT '{}', -- Array of user emails for easy filtering
+    is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

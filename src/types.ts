@@ -30,8 +30,10 @@ export interface Tag {
 
 export interface Subtask {
   id: string;
-  title: string;
-  completed: boolean;
+  name: string;
+  assignee: string;
+  estimated_minutes: number;
+  is_completed: boolean;
 }
 
 export interface Task {
@@ -40,7 +42,7 @@ export interface Task {
   tag_id: string;
   project_id: string;
   team_id: string;
-  type: 'DAILY' | 'WEEKLY' | 'ONCE';
+  type: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'ONETIME';
   
   // Các field thời gian mới theo Phase 2 (Migration 1)
   deadline_time?: string | null;     // VD: "08:30" hoặc "17:00:00"
@@ -73,11 +75,14 @@ export interface AuditLog {
 export interface AppState {
   activeTab: 'TO-DO LIST' | 'TASK MANAGER' | 'DASHBOARD' | 'AUDIT LOG' | 'SETTINGS';
   setActiveTab: (tab: AppState['activeTab']) => void;
-  // Đã xóa bỏ hoàn toàn currentUser và setCurrentUser (Phase 3.1)
+  theme: 'indigo' | 'emerald' | 'slate' | 'rose';
+  setTheme: (theme: AppState['theme']) => void;
 }
 
 // Store chỉ còn quản lý trạng thái UI (activeTab)
 export const useAppStore = create<AppState>((set) => ({
   activeTab: 'TO-DO LIST',
   setActiveTab: (tab) => set({ activeTab: tab }),
+  theme: 'indigo',
+  setTheme: (theme) => set({ theme }),
 }));

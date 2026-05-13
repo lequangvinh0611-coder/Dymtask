@@ -14,8 +14,12 @@ import TaskManager from './pages/TaskManager';
 import { cn } from './lib/utils';
 
 export default function App() {
-  const { activeTab } = useAppStore();
+  const { activeTab, theme } = useAppStore();
   const { session, profile, loading, setSession, setProfile, fetchProfile, setLoading } = useAuthStore();
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     let mounted = true;
