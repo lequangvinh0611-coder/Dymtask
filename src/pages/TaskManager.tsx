@@ -159,89 +159,93 @@ const TaskManager: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
-      <div className="px-4 py-1.5 border-b border-slate-100 flex items-center bg-white shrink-0 overflow-x-auto no-scrollbar">
-        <div className="flex items-center gap-1.5">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-            <input 
-              type="text" placeholder="Tìm kiếm..." 
-              value={filters.search || ""}
-              className="pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs w-36"
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-            />
-          </div>
-
-          <select 
-            value={filters.assignee_email || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
-            onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
-          >
-            <option value="">Assignees</option>
-            {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
-          </select>
-          <select 
-            value={filters.project_id || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
-            onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
-          >
-            <option value="">Projects</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <select 
-            value={filters.tag_id || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[70px]" 
-            onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
-          >
-            <option value="">Tags</option>
-            {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-
-          <select 
-            value={filters.team_id as string || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[80px]" 
-            onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}
-          >
-            <option value="">Teams</option>
-            {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-          </select>
-
-          <select 
-            value={filters.status || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[80px]" 
-            onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
-          >
-            <option value="">Status</option>
-            <option value="NEW">New</option>
-            <option value="DONE">Done</option>
-            <option value="SKIPPED">Skipped</option>
-          </select>
-
-          <select 
-            value={filters.showInactiveOnly ? "OFF" : "ON"}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[70px]" 
-            onChange={(e) => setFilters({...filters, showInactiveOnly: e.target.value === "OFF"})}
-          >
-            <option value="ON">ON</option>
-            <option value="OFF">OFF</option>
-          </select>
-
-          <button 
-            onClick={handleExportCsv}
-            className="p-1 px-2 h-7 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded hover:bg-slate-100 transition-all flex items-center gap-1 group"
-            title="Export CSV"
-          >
-            <Download className="w-3 h-3 group-hover:text-indigo-600" />
-            <span className="group-hover:text-indigo-600">CSV</span>
-          </button>
+      <div className="px-6 py-4 flex items-center bg-white shrink-0 border-b border-slate-100 justify-between">
+        <div className="flex items-center gap-6">
+          <h2 className="text-xl font-black text-slate-800 tracking-tight">Task Manager</h2>
           
-          <button onClick={() => refetch()} className={cn("p-1 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
-             <RotateCw className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input 
+                type="text" placeholder="Tìm kiếm..." 
+                value={filters.search || ""}
+                className="pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs w-36 h-8 focus:outline-none focus:border-indigo-600"
+                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              />
+            </div>
+
+            <select 
+              value={filters.assignee_email || ""}
+              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[100px] font-bold text-slate-500" 
+              onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
+            >
+              <option value="">Assignees</option>
+              {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
+            </select>
+            <select 
+              value={filters.project_id || ""}
+              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[80px] font-bold text-slate-500" 
+              onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
+            >
+              <option value="">Projects</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <select 
+              value={filters.tag_id || ""}
+              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[70px] font-bold text-slate-500" 
+              onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
+            >
+              <option value="">Tags</option>
+              {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+
+            <select 
+              value={filters.team_id as string || ""}
+              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[80px] font-bold text-slate-500" 
+              onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}
+            >
+              <option value="">Teams</option>
+              {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+            </select>
+
+            <select 
+              value={filters.status || ""}
+              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[80px] font-bold text-slate-500" 
+              onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
+            >
+              <option value="">Status</option>
+              <option value="NEW">New</option>
+              <option value="DONE">Done</option>
+              <option value="SKIPPED">Skipped</option>
+            </select>
+
+            <select 
+              value={filters.showInactiveOnly ? "OFF" : "ON"}
+              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[70px] font-bold text-slate-500" 
+              onChange={(e) => setFilters({...filters, showInactiveOnly: e.target.value === "OFF"})}
+            >
+              <option value="ON">ON</option>
+              <option value="OFF">OFF</option>
+            </select>
+
+            <button 
+              onClick={handleExportCsv}
+              className="p-1 px-3 h-8 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all flex items-center gap-1.5 group uppercase tracking-wider"
+              title="Export CSV"
+            >
+              <Download className="w-3.5 h-3.5 group-hover:text-indigo-600" />
+              <span className="group-hover:text-indigo-600">CSV</span>
+            </button>
+            
+            <button onClick={() => refetch()} className={cn("p-1.5 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
+               <RotateCw className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-1.5">
-          <button onClick={() => { setSelectedTask(null); setIsModalOpen(true); }} className="flex items-center gap-1.5 h-7 px-3 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-[10px] font-bold uppercase tracking-wider">
-            <Plus className="w-3 h-3" /> <span>Tạo mới</span>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setSelectedTask(null); setIsModalOpen(true); }} className="flex items-center gap-1.5 h-8 px-4 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-[10px] font-black uppercase tracking-wider">
+            <Plus className="w-3.5 h-3.5" /> <span>Tạo mới</span>
           </button>
         </div>
       </div>

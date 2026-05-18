@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, Edit2, Trash2, Loader2, Users, FolderKanban, ShieldCheck, Tag as TagIcon, Settings2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Loader2, Users, FolderKanban, ShieldCheck, Tag as TagIcon, Settings2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import MasterDataModal from './MasterDataModal';
 import UserEditModal from './UserEditModal';
 import { cn } from '../lib/utils';

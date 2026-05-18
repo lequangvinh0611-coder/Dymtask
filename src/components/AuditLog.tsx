@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Trash2, Info, ChevronRight, Loader2, History, AlertCircle, RotateCw, ChevronLeft } from 'lucide-react';
+import { Search, Trash2, Info, ChevronRight, Loader2, History, AlertCircle, RotateCw, ChevronLeft, Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { AuditLog as AuditLogType } from '../types/database.types';
+import { DateRangePicker } from './ui/DateRangePicker';
 
 const AuditLog = () => {
   const [logs, setLogs] = useState<AuditLogType[]>([]);
@@ -10,6 +11,10 @@ const AuditLog = () => {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateRange, setDateRange] = useState({
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
+  });
   const pageSize = 15;
 
   const fetchLogs = async () => {
@@ -21,6 +26,13 @@ const AuditLog = () => {
 
       if (searchTerm) {
         query = query.or(`action.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+      }
+
+      if (dateRange.startDate) {
+        query = query.gte('created_at', `${dateRange.startDate}T00:00:00`);
+      }
+      if (dateRange.endDate) {
+        query = query.lte('created_at', `${dateRange.endDate}T23:59:59`);
       }
 
       const from = (page - 1) * pageSize;
@@ -42,7 +54,35 @@ const AuditLog = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [searchTerm, page]);
+  }, [searchTerm, page, dateRange]);
+
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+  const getPaginationItems = () => {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page <= 4) {
+        for (let i = 1; i <= 5; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (page >= totalPages - 3) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        pages.push(page - 1);
+        pages.push(page);
+        pages.push(page + 1);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
 
   const getActionColor = (action: string) => {
     const act = action.toUpperCase();
@@ -71,13 +111,21 @@ const AuditLog = () => {
               type="text" 
               placeholder="Search history..." 
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
               className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-600 transition-all font-medium w-64 h-8"
             />
           </div>
-          <div className="relative group">
-            <input type="date" className="bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 h-8 text-slate-500 font-bold" />
-          </div>
+          <DateRangePicker 
+            startDate={dateRange.startDate}
+            endDate={dateRange.endDate}
+            onChange={(start, end) => {
+              setDateRange({ startDate: start, endDate: end });
+              setPage(1);
+            }}
+          />
         </div>
       </div>
 
@@ -141,15 +189,42 @@ const AuditLog = () => {
         </table>
       </div>
       
-      <div className="px-4 py-2 border-t border-slate-100 bg-white flex items-center justify-center gap-1">
-          <button className="px-2 py-1 text-[10px] font-bold text-slate-400 hover:bg-slate-50 rounded"><ChevronLeft size={14} /></button>
-          {[1, 2, 3, 4, 5].map(p => (
-            <button key={p} className={cn(
-                "w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold",
-                p === 1 ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:bg-slate-100"
-            )}>{p}</button>
-          ))}
-          <button className="px-2 py-1 text-[10px] font-bold text-slate-400 hover:bg-slate-50 rounded"><ChevronRight size={14} /></button>
+      <div className="px-4 py-2 border-t border-slate-100 bg-white flex items-center justify-between">
+         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">Total: {totalCount} logs</span>
+         <div className="flex-1 flex items-center justify-center gap-1">
+            <button 
+              disabled={page === 1} 
+              onClick={() => setPage(p => p - 1)} 
+              className="px-2 py-1 text-[10px] font-bold text-slate-400 hover:bg-slate-50 rounded disabled:opacity-30"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <div className="flex gap-1 mx-2">
+              {getPaginationItems().map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => typeof item === 'number' && setPage(item)}
+                  disabled={typeof item !== 'number'}
+                  className={cn(
+                    "w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold transition-all",
+                    page === item ? "bg-indigo-600 text-white shadow-sm" : 
+                    typeof item === 'number' ? "text-slate-400 hover:bg-slate-100" : 
+                    "text-slate-300 cursor-default"
+                  )}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+            <button 
+              disabled={page === totalPages} 
+              onClick={() => setPage(p => p + 1)} 
+              className="px-2 py-1 text-[10px] font-bold text-slate-400 hover:bg-slate-50 rounded disabled:opacity-30"
+            >
+              <ChevronRight size={14} />
+            </button>
+         </div>
+         <div className="min-w-[100px]"></div>
       </div>
     </div>
   );
