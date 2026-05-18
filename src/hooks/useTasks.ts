@@ -34,6 +34,11 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
       if (filters.status) query = query.eq('status', filters.status);
       if (filters.project_id) query = query.eq('project_id', filters.project_id);
       
+      // Date filter implementation: Filter by specific deadline_date if provided
+      if (filters.date) {
+        query = query.eq('deadline_date', filters.date);
+      }
+      
       if (filters.team_id) {
         if (Array.isArray(filters.team_id)) {
           if (filters.team_id.length > 0) {

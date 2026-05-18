@@ -92,10 +92,10 @@ export default function App() {
     <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans">
       <Sidebar />
       
-      <main className="flex-1 flex flex-col min-w-0 h-full p-4 bg-slate-50/50">
-        <header className="flex items-center justify-between mb-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+      <main className="flex-1 flex flex-col min-w-0 h-full p-2 bg-slate-50/50">
+        <header className="flex items-center justify-between mb-2 shrink-0 px-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-bold text-slate-700 uppercase tracking-widest">
               {activeTab}
             </h1>
           </div>
@@ -105,22 +105,16 @@ export default function App() {
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
               className="flex-1 flex flex-col min-h-0"
             >
               {renderContent()}
             </motion.div>
           </AnimatePresence>
         </div>
-
-        <footer className="mt-4 flex items-center justify-end text-[10px] text-slate-400 font-medium shrink-0">
-          <div className="flex items-center gap-4">
-            <span>DYM Task System</span>
-          </div>
-        </footer>
       </main>
     </div>
   );

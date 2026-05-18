@@ -18,13 +18,27 @@ interface TaskListProps {
 const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   const { profile } = useAuthStore();
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState<TaskFilters>({
+  const today = new Date().toISOString().split('T')[0];
+  
+  const defaultFilters: TaskFilters = {
     assignee_email: profile?.email || undefined,
-    status: 'NEW'
-  });
+    status: 'NEW',
+    date: today
+  };
+
+  const [filters, setFilters] = useState<TaskFilters>(defaultFilters);
+
+  const isFilterChanged = 
+    filters.search !== undefined || 
+    filters.assignee_email !== defaultFilters.assignee_email || 
+    filters.project_id !== undefined || 
+    filters.tag_id !== undefined || 
+    filters.status !== defaultFilters.status || 
+    filters.date !== defaultFilters.date ||
+    (Array.isArray(filters.team_id) && filters.team_id.length > 0);
 
   useEffect(() => {
-    if (profile?.email && !filters.assignee_email) {
+    if (profile?.email && !filters.assignee_email && filters.assignee_email !== undefined) {
       setFilters(prev => ({ ...prev, assignee_email: profile.email }));
     }
   }, [profile]);
@@ -184,28 +198,36 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-bold text-slate-800">{title}</h2>
+    <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
+      <div className="px-4 py-1.5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+        <div className="flex items-center gap-2">
+           {isFilterChanged && (
+             <button 
+               onClick={() => setFilters(defaultFilters)}
+               className="p-1 px-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-1"
+             >
+               <RotateCw className="w-2.5 h-2.5" />
+               RESET
+             </button>
+           )}
+           <button onClick={() => refetch()} className={cn("p-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
+             <RotateCw className="w-3 h-3" />
+           </button>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => refetch()} className={cn("p-1.5 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
-            <RotateCw className="w-3.5 h-3.5" />
-          </button>
-          
+        <div className="flex flex-wrap items-center gap-1.5">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input 
               type="text" placeholder="Tìm kiếm..." 
-              className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs w-40"
+              value={filters.search || ""}
+              className="pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs w-36"
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
             />
           </div>
 
           <select 
             value={filters.assignee_email || ""}
-            className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs" 
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
             onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
           >
             <option value="">Tất cả Assignees</option>
@@ -213,7 +235,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
           </select>
           <select 
             value={filters.project_id || ""}
-            className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs" 
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
             onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
           >
             <option value="">Tất cả Projects</option>
@@ -221,7 +243,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
           </select>
           <select 
             value={filters.tag_id || ""}
-            className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs" 
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
             onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
           >
             <option value="">Tất cả Tags</option>
@@ -232,12 +254,12 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             value={Array.isArray(filters.team_id) ? filters.team_id : []}
             onChange={(val) => setFilters({...filters, team_id: val})}
             placeholder="Tất cả Teams"
-            className="w-36"
+            className="w-32"
             condensed={true}
           />
           <select 
             value={filters.status || ""}
-            className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs" 
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
             onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
           >
             <option value="">Tất cả Status</option>
@@ -249,8 +271,20 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
           {/* Bộ lọc Date dành riêng cho To-do List */}
           <input 
             type="date" 
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none text-slate-600" 
-            onChange={(e) => setFilters({...filters, date: e.target.value || undefined})}
+            value={filters.date || ""}
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 focus:outline-none text-slate-600" 
+            onChange={(e) => {
+              const selectedDate = e.target.value;
+              if (selectedDate) {
+                const diffTime = Math.abs(new Date(selectedDate).getTime() - new Date(today).getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays > 62) {
+                  alert("Không được phép chọn nhiều hơn 62 ngày");
+                  return;
+                }
+              }
+              setFilters({...filters, date: selectedDate || undefined});
+            }}
           />
           
           {showCreate && (
@@ -406,14 +440,14 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
               <th className="w-[30%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="w-[15%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
-              <th className="w-[8%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-              <th className="w-[8%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-              <th className="w-[8%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
+              <th className="w-[12%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Project</th>
+              <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
+              <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
+              <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
               <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
               <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="w-[8%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-              <th className="w-[3%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Act</th>
+              <th className="w-[6%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
+              <th className="w-[5%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -427,7 +461,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                   <p className="font-bold text-slate-700 truncate text-[11px]" title={task.task_name}>{task.task_name}</p>
                   <p className="text-[8px] text-slate-400 font-mono">ID: {task.id.substring(0, 8).toUpperCase()}</p>
                 </td>
-                <td className="px-4 py-1">
+                <td className="px-4 py-1 text-right pr-6">
                   <div className="text-primary font-bold text-[9px] truncate" title={task.projects?.name || 'General'}>
                     {task.projects?.name || 'General'}
                   </div>
@@ -465,7 +499,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                    </span>
                 </td>
                 <td className="px-4 py-1 text-right pr-6">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end">
                     {['DONE', 'SKIPPED'].includes(task.status) ? (
                       task.is_active && (
                         <button 
