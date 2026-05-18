@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, RotateCw, Plus, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckSquare, Square, MoreVertical, CheckCircle2, Clock, Download } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { useTasks, TaskFilters } from '../hooks/useTasks';
+import { useTasks, TaskFilters, TaskWithDetails } from '../hooks/useTasks';
 import { supabase } from '../lib/supabase';
 import CreateTaskModal from './CreateTaskModal';
 import { SideDrawer } from './ui/SideDrawer';
@@ -48,7 +48,36 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [updatingTask, setUpdatingTask] = useState<string | null>(null);
   
-  const { tasks, totalCount, loading, refetch } = useTasks(page, 15, { ...filters, is_active: true });
+  const { tasks: rawTasks, totalCount, loading, refetch } = useTasks(page, 15, { ...filters, is_active: true });
+  const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
+
+  useEffect(() => {
+    // Basic virtual recurrence filtering
+    if (!rawTasks) return;
+    
+    const filtered = rawTasks.filter(task => {
+      if (!filters.date) return true;
+      
+      const taskDate = new Date(task.created_at).toISOString().split('T')[0];
+      if (taskDate > filters.date) return false;
+
+      if (task.type === 'DAILY') return true;
+      if (task.type === 'WEEKLY') {
+        const dayOfWeek = new Date(filters.date).toLocaleDateString('en-US', { weekday: 'short' });
+        return task.deadline_days?.includes(dayOfWeek);
+      }
+      if (task.type === 'MONTHLY') {
+        const dayOfMonth = new Date(filters.date).getDate();
+        return task.deadline_day_num === dayOfMonth;
+      }
+      if (task.type === 'ONETIME' || task.type === 'ONCE') {
+        return task.deadline_date === filters.date;
+      }
+      return true;
+    });
+    
+    setTasks(filtered);
+  }, [rawTasks, filters.date]);
   
   const [projects, setProjects] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
@@ -81,7 +110,43 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   const handleUpdateStatus = async (taskId: string, status: string) => {
     setUpdatingTask(taskId);
     try {
-      await supabase.from('tasks').update({ status }).eq('id', taskId);
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      // Logic for SPOT tasks (ONETIME)
+      if (task.type === 'ONETIME' || task.type === 'ONCE') {
+        const isTerminal = ['DONE', 'SKIPPED'].includes(status);
+        await supabase.from('tasks').update({ 
+          status, 
+          is_active: !isTerminal // Backwards logic: if Done/Skipped, it becomes "Off" in Task Manager
+        }).eq('id', taskId);
+      } 
+      // Logic for Recurring Tasks (DAILY, WEEKLY, MONTHLY)
+      else if (['DAILY', 'WEEKLY', 'MONTHLY'].includes(task.type)) {
+        // We create a CLONE of the template for this specific date
+        const instancePayload = {
+          ...task,
+          id: undefined, // Let DB generate new ID
+          status: status,
+          deadline_date: filters.date,
+          type: 'ONETIME',
+          is_active: true, // Instances are always active
+          created_at: undefined,
+          updated_at: undefined,
+          // We can't add parent_id, so we'll mark it in subtasks
+          subtasks: (task.subtasks || []).map(st => ({ ...st, parent_tpl_id: task.id }))
+        };
+        // Remove joined objects before insertion
+        delete (instancePayload as any).tags;
+        delete (instancePayload as any).projects;
+        delete (instancePayload as any).teams;
+
+        await supabase.from('tasks').insert(instancePayload);
+      } else {
+        // Fallback for other cases
+        await supabase.from('tasks').update({ status }).eq('id', taskId);
+      }
+
       await logger.log('UPDATE_TASK_STATUS', `Updated task status to ${status}`, { taskId });
       refetch();
       if (selectedTask?.id === taskId) {
@@ -109,6 +174,18 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
   const handleResetTask = async (task: Task) => {
     try {
+      // 1. Check if it's an instance of a recurring task
+      const parentId = (task.subtasks as any[])?.find(st => st.parent_tpl_id)?.parent_tpl_id;
+      
+      if (parentId) {
+        // Verify parent is still active
+        const { data: parent } = await supabase.from('tasks').select('is_active').eq('id', parentId).single();
+        if (!parent || !parent.is_active) {
+          alert("Task Template đã bị Off hoặc xóa. Không thể Reset.");
+          return;
+        }
+      }
+
       const resetSubtasks = task.subtasks?.map((sub: any) => ({
         ...sub,
         status: 'NEW',
@@ -116,22 +193,24 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
         actual_minutes: 0
       })) || [];
       
-      await supabase.from('tasks').update({ 
-        status: 'NEW', 
-        actual_minutes: 0,
-        subtasks: resetSubtasks 
-      }).eq('id', task.id);
+      // If it has a parentId, resetting means DELETING the instance 
+      // so the virtual task appears as NEW again.
+      if (parentId) {
+        await supabase.from('tasks').delete().eq('id', task.id);
+      } else {
+        // If it's a SPOT task, reset its status and turn it back "ON" in Task Manager
+        await supabase.from('tasks').update({ 
+          status: 'NEW', 
+          actual_minutes: 0,
+          subtasks: resetSubtasks,
+          is_active: true
+        }).eq('id', task.id);
+      }
       
       await logger.log('RESET_TASK', `Reset task and subtasks to NEW`, { taskId: task.id });
       refetch();
-      if (selectedTask?.id === task.id) {
-        setSelectedTask(prev => prev ? { 
-          ...prev, 
-          status: 'NEW', 
-          actual_minutes: 0,
-          subtasks: resetSubtasks
-        } : null);
-      }
+      setIsDrawerOpen(false);
+      setSelectedTask(null);
     } catch (error) {
       console.error('Error resetting task:', error);
     }
@@ -271,7 +350,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
           <select 
             value={filters.assignee_email || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[100px]" 
             onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
           >
             <option value="">Assignees</option>
@@ -279,7 +358,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
           </select>
           <select 
             value={filters.project_id || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[80px]" 
             onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
           >
             <option value="">Projects</option>
@@ -287,7 +366,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
           </select>
           <select 
             value={filters.tag_id || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[70px]" 
             onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
           >
             <option value="">Tags</option>
@@ -298,12 +377,12 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             value={Array.isArray(filters.team_id) ? filters.team_id : []}
             onChange={(val) => setFilters({...filters, team_id: val})}
             placeholder="Teams"
-            className="w-28"
+            className="w-32"
             condensed={true}
           />
           <select 
             value={filters.status || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[80px]" 
             onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
           >
             <option value="">Status</option>
@@ -315,7 +394,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
           <input 
             type="date" 
             value={filters.date || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 focus:outline-none text-slate-600" 
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 focus:outline-none text-slate-600 w-32" 
             onChange={(e) => {
               const selectedDate = e.target.value;
               if (selectedDate) {
@@ -336,19 +415,9 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             title="Export CSV"
           >
             <Download className="w-3 h-3 group-hover:text-indigo-600" />
-            <span className="group-hover:text-indigo-600">EXPORT</span>
+            <span className="group-hover:text-indigo-600">CSV</span>
           </button>
           
-          {isFilterChanged && (
-            <button 
-              onClick={() => setFilters(defaultFilters)}
-              className="p-1 px-2 h-7 text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-1"
-              title="Reset Filters"
-            >
-              <RotateCw className="w-3 h-3" />
-            </button>
-          )}
-
           <button onClick={() => refetch()} className={cn("p-1 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
              <RotateCw className="w-3.5 h-3.5" />
           </button>
@@ -459,15 +528,13 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
             <div className="pt-6 border-t border-slate-100 flex gap-3 mt-auto">
               {['DONE', 'SKIPPED'].includes(selectedTask.status) ? (
-                selectedTask.is_active && (
-                  <button 
-                    onClick={() => handleResetTask(selectedTask)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-lg shadow-slate-200 uppercase tracking-widest"
-                  >
-                    <RotateCw size={14} />
-                    <span>Reset Task</span>
-                  </button>
-                )
+                <button 
+                  onClick={() => handleResetTask(selectedTask)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-lg shadow-slate-200 uppercase tracking-widest"
+                >
+                  <RotateCw size={14} />
+                  <span>Reset Task</span>
+                </button>
               ) : (
                 <>
                   <button 
@@ -507,7 +574,8 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
         <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-              <th className="w-[30%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
+              <th className="w-[5%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
+              <th className="w-[25%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
               <th className="w-[12%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Project</th>
               <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
               <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
@@ -525,9 +593,13 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                 className="hover:bg-slate-50/50 transition-all group cursor-pointer"
                 onClick={() => handleOpenDrawer(task)}
               >
+                <td className="px-4 py-1">
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">
+                    {((task.subtasks as any[])?.find(st => st.parent_tpl_id)?.parent_tpl_id || task.id).substring(0, 4)}
+                  </p>
+                </td>
                 <td className="px-4 py-1 overflow-hidden">
                   <p className="font-bold text-slate-700 truncate text-[11px]" title={task.task_name}>{task.task_name}</p>
-                  <p className="text-[8px] text-slate-400 font-mono">ID: {task.id.substring(0, 8).toUpperCase()}</p>
                 </td>
                 <td className="px-4 py-1 text-right pr-6">
                   <div className="text-primary font-bold text-[9px] truncate" title={task.projects?.name || 'General'}>
@@ -569,14 +641,12 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                 <td className="px-4 py-1 text-right pr-6">
                   <div className="flex items-center justify-end">
                     {['DONE', 'SKIPPED'].includes(task.status) ? (
-                      task.is_active && (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleResetTask(task); }}
-                          className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all"
-                        >
-                          <RotateCw size={14} />
-                        </button>
-                      )
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleResetTask(task); }}
+                        className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all"
+                      >
+                        <RotateCw size={14} />
+                      </button>
                     ) : (
                       <button 
                         onClick={(e) => { 

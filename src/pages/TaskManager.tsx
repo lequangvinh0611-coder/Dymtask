@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Search, RotateCw, Plus, Edit2, Trash2, Power, Eye, EyeOff, Filter, Clock, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { useTasks, TaskFilters } from '../hooks/useTasks';
+import { useTasks, TaskFilters, TaskWithDetails } from '../hooks/useTasks';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../lib/supabase';
 import CreateTaskModal from '../components/CreateTaskModal';
 import { Task } from '../types/database.types';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
+import { MultiSearchableSelect } from '../components/ui/MultiSearchableSelect';
 import { logger } from '../lib/logger';
 
 const TaskManager: React.FC = () => {
@@ -39,7 +40,7 @@ const TaskManager: React.FC = () => {
 
   const { tasks, totalCount, loading, refetch } = useTasks(page, 15, {
     ...filters,
-    is_active: filters.showInactiveOnly ? false : undefined
+    is_active: filters.showInactiveOnly ? false : true
   });
 
   const totalPages = Math.ceil(totalCount / 15) || 1;
@@ -184,21 +185,29 @@ const TaskManager: React.FC = () => {
           </select>
           <select 
             value={filters.tag_id || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[70px]" 
             onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
           >
             <option value="">Tags</option>
             {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
+
+          <MultiSearchableSelect 
+            options={teams}
+            value={Array.isArray(filters.team_id) ? filters.team_id : []}
+            onChange={(val) => setFilters({...filters, team_id: val})}
+            placeholder="Teams"
+            className="w-32"
+            condensed={true}
+          />
+
           <select 
-            value={filters.status || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
-            onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
+            value={filters.showInactiveOnly ? "OFF" : "ON"}
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[70px]" 
+            onChange={(e) => setFilters({...filters, showInactiveOnly: e.target.value === "OFF"})}
           >
-            <option value="">Status</option>
-            <option value="NEW">New</option>
-            <option value="DONE">Done</option>
-            <option value="SKIPPED">Skipped</option>
+            <option value="ON">ON</option>
+            <option value="OFF">OFF</option>
           </select>
 
           <button 
@@ -207,29 +216,11 @@ const TaskManager: React.FC = () => {
             title="Export CSV"
           >
             <Download className="w-3 h-3 group-hover:text-indigo-600" />
-            <span className="group-hover:text-indigo-600">EXPORT</span>
+            <span className="group-hover:text-indigo-600">CSV</span>
           </button>
           
-          {isFilterChanged && (
-            <button 
-              onClick={() => setFilters(defaultFilters)}
-              className="p-1 px-2 h-7 text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-1"
-              title="Reset Filters"
-            >
-              <RotateCw className="w-3 h-3" />
-            </button>
-          )}
-
           <button onClick={() => refetch()} className={cn("p-1 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
              <RotateCw className="w-3.5 h-3.5" />
-          </button>
-
-          <button 
-             onClick={() => setFilters(prev => ({ ...prev, showInactiveOnly: !prev.showInactiveOnly }))}
-             className={cn("p-1 px-2 h-7 text-[10px] font-bold uppercase rounded border transition-all flex items-center gap-1", filters.showInactiveOnly ? "bg-rose-50 text-rose-600 border-rose-100" : "bg-slate-50 text-slate-400 border-slate-200")}
-           >
-             {filters.showInactiveOnly ? <EyeOff size={12} /> : <Eye size={12} />}
-             <span>{filters.showInactiveOnly ? "Inactive" : "Show Inactive"}</span>
           </button>
         </div>
 
@@ -251,24 +242,27 @@ const TaskManager: React.FC = () => {
         <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-              <th className="w-[30%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
+              <th className="w-[5%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
+              <th className="w-[25%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
               <th className="w-[12%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Project</th>
               <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
               <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
               <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
               <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
               <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="w-[6%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Active</th>
+              <th className="w-[6%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
               <th className="w-[5%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {tasks.map((task) => (
               <tr key={task.id} className={cn("hover:bg-slate-50/30 transition-all group", !task.is_active && "bg-slate-50/80")}>
+                <td className="px-4 py-1.5">
+                  <span className="font-mono text-[9px] text-slate-400 uppercase font-bold">{task.id.slice(0, 4)}</span>
+                </td>
                 <td className="px-4 py-1.5 overflow-hidden">
                   <div className="flex flex-col">
                     <span className="font-bold text-slate-900 group-hover:text-primary transition-colors text-xs truncate" title={task.task_name}>{task.task_name}</span>
-                    <span className="font-mono text-[9px] text-slate-400 uppercase">ID: {task.id.slice(0, 8).toUpperCase()}</span>
                   </div>
                 </td>
                 <td className="px-4 py-1.5 text-right pr-6">
@@ -310,16 +304,20 @@ const TaskManager: React.FC = () => {
                 <td className="px-4 py-1.5 text-right pr-6">
                   <div className="flex items-center justify-end">
                     <div className="flex items-center gap-0.5 bg-slate-50 border border-slate-200 p-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm">
-                      <button 
-                        onClick={() => toggleTaskActive(task.id, task.is_active)} 
-                        title={task.is_active ? "Tạm ẩn" : "Hiện thị"}
-                        className={cn(
-                          "p-1.5 rounded hover:scale-110 transition-all", 
-                          task.is_active ? "text-emerald-500 hover:bg-emerald-50" : "text-slate-300 hover:text-emerald-500 hover:bg-emerald-50"
-                        )}
-                      >
-                        <Power size={13} />
-                      </button>
+                      {task.type !== 'ONETIME' && task.type !== 'ONCE' ? (
+                        <button 
+                          onClick={() => toggleTaskActive(task.id, task.is_active)} 
+                          title={task.is_active ? "Tạm ẩn" : "Hiện thị"}
+                          className={cn(
+                            "p-1.5 rounded hover:scale-110 transition-all", 
+                            task.is_active ? "text-emerald-500 hover:bg-emerald-50" : "text-slate-300 hover:text-emerald-500 hover:bg-emerald-50"
+                          )}
+                        >
+                          <Power size={13} />
+                        </button>
+                      ) : (
+                        <div className="w-7 h-7" /> // Placeholder for Spot tasks which don't have toggle
+                      )}
                       <button 
                         onClick={() => { setSelectedTask(task); setIsModalOpen(true); }} 
                         title="Sửa Task"

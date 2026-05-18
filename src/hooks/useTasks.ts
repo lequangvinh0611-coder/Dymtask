@@ -16,6 +16,7 @@ export interface TaskFilters {
   tag_id?: string;
   assignee_email?: string;
   date?: string;
+  is_active?: boolean;
 }
 
 export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => {
@@ -28,22 +29,14 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
     try {
       let query = supabase
         .from('tasks')
-        .select(`*, tags(name, color), projects(name), teams(name)`, { count: 'exact' });
+        .select(`*, tags(name, color), projects(name), teams(name)`, { count: filters.date ? undefined : 'exact' });
 
       if (filters.search) query = query.ilike('task_name', `%${filters.search}%`);
-      if (filters.status) query = query.eq('status', filters.status);
       if (filters.project_id) query = query.eq('project_id', filters.project_id);
-      
-      // Date filter implementation: Filter by specific deadline_date if provided
-      if (filters.date) {
-        query = query.eq('deadline_date', filters.date);
-      }
       
       if (filters.team_id) {
         if (Array.isArray(filters.team_id)) {
-          if (filters.team_id.length > 0) {
-            query = query.in('team_id', filters.team_id);
-          }
+          if (filters.team_id.length > 0) query = query.in('team_id', filters.team_id);
         } else {
           query = query.eq('team_id', filters.team_id);
         }
@@ -51,17 +44,63 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
       
       if (filters.tag_id) query = query.eq('tag_id', filters.tag_id);
       if (filters.assignee_email) query = query.contains('assignees', [filters.assignee_email]);
+      if (filters.is_active !== undefined) query = query.eq('is_active', filters.is_active);
 
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-      
-      const { data, error, count } = await query
-        .range(from, to)
-        .order('created_at', { ascending: false });
+      if (filters.date) {
+        const { data: allRelatedTasks, error } = await query
+          .or(`type.neq.ONETIME,deadline_date.eq.${filters.date}`);
 
-      if (error) throw error;
-      setTasks((data as TaskWithDetails[]) || []);
-      setTotalCount(count || 0);
+        if (error) throw error;
+
+        const targetDateStr = filters.date;
+        const targetDate = new Date(targetDateStr);
+        const dayOfWeek = targetDate.toLocaleDateString('en-US', { weekday: 'short' });
+        const dayOfMonth = targetDate.getDate();
+
+        const templates = (allRelatedTasks as TaskWithDetails[]).filter(t => t.type !== 'ONETIME' && t.is_active);
+        const instances = (allRelatedTasks as TaskWithDetails[]).filter(t => t.type === 'ONETIME');
+
+        const result: TaskWithDetails[] = [];
+        instances.forEach(inst => result.push(inst));
+
+        templates.forEach(tpl => {
+          let shouldAppear = false;
+          const creationDate = new Date(tpl.created_at).toISOString().split('T')[0];
+          if (creationDate <= targetDateStr) {
+            if (tpl.type === 'DAILY') shouldAppear = true;
+            else if (tpl.type === 'WEEKLY' && tpl.deadline_days?.includes(dayOfWeek)) shouldAppear = true;
+            else if (tpl.type === 'MONTHLY' && tpl.deadline_day_num === dayOfMonth) shouldAppear = true;
+          }
+
+          if (shouldAppear) {
+            const hasInstance = instances.some(inst => 
+              inst.task_name === tpl.task_name && 
+              inst.project_id === tpl.project_id &&
+              inst.team_id === tpl.team_id
+            );
+            if (!hasInstance) result.push({ ...tpl, status: 'NEW', actual_minutes: 0 });
+          }
+        });
+
+        let finalResults = result;
+        if (filters.status) finalResults = finalResults.filter(t => t.status === filters.status);
+
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize;
+        setTasks(finalResults.slice(from, to));
+        setTotalCount(finalResults.length);
+      } else {
+        if (filters.status) query = query.eq('status', filters.status);
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+        const { data, error, count } = await query
+          .range(from, to)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setTasks((data as TaskWithDetails[]) || []);
+        setTotalCount(count || 0);
+      }
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {
