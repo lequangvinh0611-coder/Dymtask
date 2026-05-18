@@ -208,6 +208,12 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             <option value="">Tất cả Teams</option>
             {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
+          <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}>
+            <option value="">Tất cả Status</option>
+            <option value="NEW">New</option>
+            <option value="DONE">Done</option>
+            <option value="SKIPPED">Skipped</option>
+          </select>
 
           {/* Bộ lọc Date dành riêng cho To-do List */}
           <input 
@@ -303,6 +309,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                           <option value="NEW">New</option>
                           <option value="IN_PROGRESS">Progress</option>
                           <option value="DONE">Done</option>
+                          <option value="SKIPPED">Skip</option>
                         </select>
                       </div>
                     </div>
@@ -319,25 +326,39 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
             <div className="pt-6 border-t border-slate-100 flex gap-3 mt-auto">
               {['DONE', 'SKIPPED'].includes(selectedTask.status) ? (
-                <button 
-                  onClick={() => handleResetTask(selectedTask)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-lg shadow-slate-200 uppercase tracking-widest"
-                >
-                  <RotateCw size={14} />
-                  <span>Reset Task</span>
-                </button>
+                selectedTask.is_active && (
+                  <button 
+                    onClick={() => handleResetTask(selectedTask)}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-lg shadow-slate-200 uppercase tracking-widest"
+                  >
+                    <RotateCw size={14} />
+                    <span>Reset Task</span>
+                  </button>
+                )
               ) : (
                 <>
                   <button 
-                    onClick={() => { handleBatchSkip([selectedTask.id]); setIsDrawerOpen(false); }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 text-slate-400 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all uppercase tracking-widest"
-                  >
-                    <Ban size={14} />
-                    <span>Skip</span>
-                  </button>
-                  <button 
-                    onClick={() => { handleUpdateStatus(selectedTask.id, 'SUBMITTED'); setIsDrawerOpen(false); }}
-                    className="flex-[2] flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 uppercase tracking-widest"
+                    onClick={() => {
+                      const subtasks = selectedTask.subtasks || [];
+                      const hasNew = subtasks.some((s: any) => (s.status || 'NEW') === 'NEW');
+                      if (hasNew) {
+                        alert('Không thể submit khi còn subtask ở trạng thái New');
+                        return;
+                      }
+                      
+                      let newStatus: string = 'DONE';
+                      const hasDone = subtasks.some((s: any) => s.status === 'DONE');
+                      const allSkipped = subtasks.length > 0 && subtasks.every((s: any) => s.status === 'SKIPPED');
+                      
+                      if (hasDone) newStatus = 'DONE';
+                      else if (allSkipped) newStatus = 'SKIPPED';
+                      else if (subtasks.length === 0) newStatus = 'DONE';
+
+                      handleUpdateStatus(selectedTask.id, newStatus);
+                      setIsDrawerOpen(false);
+                    }}
+                    disabled={updatingTask === selectedTask.id || (selectedTask.subtasks || []).some((s: any) => (s.status || 'NEW') === 'NEW')}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <CheckCircle2 size={14} />
                     <span>Submit</span>
@@ -419,19 +440,36 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2 px-1">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleUpdateStatus(task.id, 'SUBMITTED'); }}
-                      disabled={task.status === 'SUBMITTED' || updatingTask === task.id}
-                      className="p-2 text-primary hover:bg-primary-light rounded-lg transition-all disabled:opacity-30 tooltip"
-                    >
-                      <CheckCircle2 size={18} />
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleBatchSkip([task.id]); }}
-                      className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                    >
-                      <Ban size={18} />
-                    </button>
+                    {['DONE', 'SKIPPED'].includes(task.status) ? (
+                      task.is_active && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleResetTask(task); }}
+                          className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-all tooltip"
+                          title="Reset Task"
+                        >
+                          <RotateCw size={18} />
+                        </button>
+                      )
+                    ) : (
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          const subtasks = task.subtasks || [];
+                          let newStatus: string = 'DONE';
+                          const hasDone = subtasks.some((s: any) => s.status === 'DONE');
+                          const allSkipped = subtasks.length > 0 && subtasks.every((s: any) => s.status === 'SKIPPED');
+                          if (hasDone) newStatus = 'DONE';
+                          else if (allSkipped) newStatus = 'SKIPPED';
+                          else if (subtasks.length === 0) newStatus = 'DONE';
+                          handleUpdateStatus(task.id, newStatus); 
+                        }}
+                        disabled={['DONE', 'SKIPPED'].includes(task.status) || updatingTask === task.id || (task.subtasks || []).some((s: any) => (s.status || 'NEW') === 'NEW')}
+                        className="p-2 text-primary hover:bg-primary-light rounded-lg transition-all disabled:opacity-30 tooltip flex items-center justify-center"
+                        title="Submit Task"
+                      >
+                        <CheckCircle2 size={18} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
