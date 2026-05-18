@@ -15,7 +15,8 @@ export interface TaskFilters {
   team_id?: string | string[];
   tag_id?: string;
   assignee_email?: string;
-  date?: string;
+  startDate?: string;
+  endDate?: string;
   is_active?: boolean;
 }
 
@@ -29,7 +30,7 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
     try {
       let query = supabase
         .from('tasks')
-        .select(`*, tags(name, color), projects(name), teams(name)`, { count: filters.date ? undefined : 'exact' });
+        .select(`*, tags(name, color), projects(name), teams(name)`, { count: (filters.startDate || filters.endDate) ? undefined : 'exact' });
 
       if (filters.search) query = query.ilike('task_name', `%${filters.search}%`);
       if (filters.project_id) query = query.eq('project_id', filters.project_id);
@@ -46,44 +47,75 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
       if (filters.assignee_email) query = query.contains('assignees', [filters.assignee_email]);
       if (filters.is_active !== undefined) query = query.eq('is_active', filters.is_active);
 
-      if (filters.date) {
+      if (filters.startDate || filters.endDate) {
+        const startStr = filters.startDate || filters.endDate!;
+        const endStr = filters.endDate || filters.startDate!;
+        
+        // Fetch all templates and instances within or related to the range
         const { data: allRelatedTasks, error } = await query
-          .or(`type.neq.ONETIME,deadline_date.eq.${filters.date}`);
+          .or(`type.neq.ONETIME,and(deadline_date.gte.${startStr},deadline_date.lte.${endStr})`);
 
         if (error) throw error;
 
-        const targetDateStr = filters.date;
-        const targetDate = new Date(targetDateStr);
-        const dayOfWeek = targetDate.toLocaleDateString('en-US', { weekday: 'short' });
-        const dayOfMonth = targetDate.getDate();
-
+        const start = new Date(startStr);
+        const end = new Date(endStr);
+        const result: TaskWithDetails[] = [];
+        
         const templates = (allRelatedTasks as TaskWithDetails[]).filter(t => t.type !== 'ONETIME' && t.is_active);
         const instances = (allRelatedTasks as TaskWithDetails[]).filter(t => t.type === 'ONETIME');
 
-        const result: TaskWithDetails[] = [];
+        // Add instances that fall within the range
         instances.forEach(inst => result.push(inst));
 
-        templates.forEach(tpl => {
-          let shouldAppear = false;
-          const creationDate = new Date(tpl.created_at).toISOString().split('T')[0];
-          if (creationDate <= targetDateStr) {
-            if (tpl.type === 'DAILY') shouldAppear = true;
-            else if (tpl.type === 'WEEKLY' && tpl.deadline_days?.includes(dayOfWeek)) shouldAppear = true;
-            else if (tpl.type === 'MONTHLY' && tpl.deadline_day_num === dayOfMonth) shouldAppear = true;
-          }
+        // For each day in the range, check which templates should appear
+        const curr = new Date(start);
+        while (curr <= end) {
+          const dateStr = curr.toISOString().split('T')[0];
+          const dayOfWeek = curr.toLocaleDateString('en-US', { weekday: 'short' });
+          const dayOfMonth = curr.getDate();
 
-          if (shouldAppear) {
-            const hasInstance = instances.some(inst => 
-              inst.task_name === tpl.task_name && 
-              inst.project_id === tpl.project_id &&
-              inst.team_id === tpl.team_id
-            );
-            if (!hasInstance) result.push({ ...tpl, status: 'NEW', actual_minutes: 0 });
-          }
-        });
+          templates.forEach(tpl => {
+            let shouldAppear = false;
+            const creationDate = new Date(tpl.created_at).toISOString().split('T')[0];
+            
+            if (creationDate <= dateStr) {
+              if (tpl.type === 'DAILY') shouldAppear = true;
+              else if (tpl.type === 'WEEKLY' && tpl.deadline_days?.includes(dayOfWeek)) shouldAppear = true;
+              else if (tpl.type === 'MONTHLY' && tpl.deadline_day_num === dayOfMonth) shouldAppear = true;
+            }
+
+            if (shouldAppear) {
+              // Check if there's already an instance for this specific date
+              const hasInstance = instances.some(inst => 
+                inst.task_name === tpl.task_name && 
+                inst.project_id === tpl.project_id &&
+                inst.team_id === tpl.team_id &&
+                inst.deadline_date === dateStr
+              );
+              if (!hasInstance) {
+                // Return a virtual task for this specific date
+                result.push({ 
+                  ...tpl, 
+                  status: 'NEW', 
+                  actual_minutes: 0,
+                  deadline_date: dateStr // Assign the specific date to the virtual task
+                });
+              }
+            }
+          });
+          curr.setDate(curr.getDate() + 1);
+        }
 
         let finalResults = result;
         if (filters.status) finalResults = finalResults.filter(t => t.status === filters.status);
+
+        // Sort by deadline_date then task_name
+        finalResults.sort((a, b) => {
+          const dateA = a.deadline_date || '';
+          const dateB = b.deadline_date || '';
+          if (dateA !== dateB) return dateA.localeCompare(dateB);
+          return (a.task_name || '').localeCompare(b.task_name || '');
+        });
 
         const from = (page - 1) * pageSize;
         const to = from + pageSize;

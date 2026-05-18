@@ -37,7 +37,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
   const [formData, setFormData] = useState({
     task_name: '',
     project_id: '',
-    team_id: '',
     tag_id: '',
     type: 'ONETIME' as 'ONETIME' | 'DAILY' | 'WEEKLY' | 'MONTHLY',
     deadline_time: '09:00',
@@ -56,7 +55,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         setFormData({
           task_name: taskToEdit.task_name,
           project_id: taskToEdit.project_id || '',
-          team_id: taskToEdit.team_id || '',
           tag_id: taskToEdit.tag_id || '',
           type: (taskToEdit.type === 'ONCE' ? 'ONETIME' : taskToEdit.type) as any,
           deadline_time: taskToEdit.deadline_time || '09:00',
@@ -67,7 +65,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         setSubtasks((taskToEdit.subtasks as any as Subtask[]) || []);
       } else {
         setFormData({
-          task_name: '', project_id: '', team_id: '', tag_id: '',
+          task_name: '', project_id: '', tag_id: '',
           type: 'ONETIME', deadline_time: '09:00', deadline_days: [],
           deadline_date: new Date().toISOString().split('T')[0], deadline_day_num: 1
         });
@@ -137,9 +135,29 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
 
     setLoading(true);
     try {
-      const uniqueAssignees = Array.from(new Set(subtasks.map(st => st.assignee).filter(Boolean)));
+      const uniqueAssigneeEmails = Array.from(new Set(subtasks.map(st => st.assignee).filter(Boolean)));
       
-      // Đảm bảo dữ liệu subtasks sạch sẽ
+      // Derive teams from assignees
+      const assigneeUsers = users.filter(u => uniqueAssigneeEmails.includes(u.email));
+      // Each user has a 'teams' field in the DB (based on Settings update logic)
+      // Since we don't have a direct join here, we'll fetch full user details if needed, 
+      // but let's assume 'users' already has 'teams' from fetchMetadata if we modify it.
+      
+      // Fetch user team info specifically
+      const { data: userDataWithTeams } = await supabase
+        .from('users')
+        .select('email, teams')
+        .in('email', uniqueAssigneeEmails);
+      
+      const derivedTeams = Array.from(new Set((userDataWithTeams || []).flatMap(u => (u as any).teams || [])));
+      const firstTeamName = derivedTeams[0] || null;
+      
+      // Get team ID for the first team name if possible, or just store names? 
+      // Existing code uses team_id (UUID). Let's find the ID for the first team name.
+      const { data: teamObj } = firstTeamName 
+        ? await supabase.from('teams').select('id').eq('name', firstTeamName).single()
+        : { data: null };
+
       const structuredSubtasks = subtasks.map(st => ({
         id: st.id || crypto.randomUUID(),
         name: st.name.trim(),
@@ -148,10 +166,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         is_completed: st.is_completed || false
       }));
 
-      const taskPayload = {
+      const taskPayload: any = {
         task_name: formData.task_name.trim(),
         project_id: formData.project_id || null,
-        team_id: formData.team_id || null,
+        team_id: teamObj?.id || null, // Keep for backward compatibility
+        team_ids: derivedTeams, // New column to store all derived team names
         tag_id: formData.tag_id || null,
         type: formData.type,
         deadline_time: formData.deadline_time || null,
@@ -159,12 +178,12 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         deadline_date: formData.type === 'ONETIME' ? formData.deadline_date : null,
         deadline_day_num: formData.type === 'MONTHLY' ? formData.deadline_day_num : null,
         estimated_minutes: totalEstimatedMinutes,
-        assignees: uniqueAssignees,
+        assignees: uniqueAssigneeEmails,
         user_id: profile.id,  
         status: isEditMode && taskToEdit ? taskToEdit.status : ('NEW' as const),
         is_active: true,
         actual_minutes: isEditMode && taskToEdit ? taskToEdit.actual_minutes : 0,
-        subtasks: structuredSubtasks // CRITICAL: Save to JSONB column only
+        subtasks: structuredSubtasks
       };
 
       console.log('🚀 SYSTEM_DEBUG: Saving to public.tasks table...');
@@ -227,7 +246,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Project</label>
               <SearchableSelect 
@@ -235,15 +254,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                 value={formData.project_id} 
                 onChange={(val) => setFormData({ ...formData, project_id: val })}
                 placeholder="Select Project"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Team</label>
-              <SearchableSelect 
-                options={teams} 
-                value={formData.team_id} 
-                onChange={(val) => setFormData({ ...formData, team_id: val })}
-                placeholder="Select Team"
               />
             </div>
             <div>

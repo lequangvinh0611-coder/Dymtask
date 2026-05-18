@@ -1,30 +1,38 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Trash2, Info, ChevronRight, Loader2, History, AlertCircle, RotateCw } from 'lucide-react';
+import { Search, Trash2, Info, ChevronRight, Loader2, History, AlertCircle, RotateCw, ChevronLeft } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { AuditLog as AuditLogType } from '../types/database.types';
 
 const AuditLog = () => {
   const [logs, setLogs] = useState<AuditLogType[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const pageSize = 15;
 
   const fetchLogs = async () => {
     setLoading(true);
     try {
       let query = supabase
         .from('audit_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .select('*', { count: 'exact' });
 
       if (searchTerm) {
         query = query.or(`action.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
       }
 
-      const { data, error } = await query;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error, count } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
       if (error) throw error;
       setLogs(data || []);
+      setTotalCount(count || 0);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
     } finally {
@@ -34,7 +42,7 @@ const AuditLog = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [searchTerm]);
+  }, [searchTerm, page]);
 
   const getActionColor = (action: string) => {
     const act = action.toUpperCase();

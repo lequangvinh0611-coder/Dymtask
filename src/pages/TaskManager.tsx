@@ -16,7 +16,9 @@ const TaskManager: React.FC = () => {
   const today = new Date().toISOString().split('T')[0];
   const defaultFilters: TaskFilters & { showInactiveOnly?: boolean } = {
     assignee_email: profile?.email || undefined,
-    status: 'NEW'
+    status: 'NEW',
+    startDate: '',
+    endDate: ''
   };
   const [filters, setFilters] = useState<TaskFilters & { showInactiveOnly?: boolean }>(defaultFilters);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -29,6 +31,8 @@ const TaskManager: React.FC = () => {
     filters.tag_id !== undefined || 
     filters.status !== defaultFilters.status || 
     filters.showInactiveOnly !== undefined ||
+    filters.startDate !== defaultFilters.startDate ||
+    filters.endDate !== defaultFilters.endDate ||
     (Array.isArray(filters.team_id) && filters.team_id.length > 0);
   
   const [projects, setProjects] = useState<any[]>([]);
@@ -192,14 +196,14 @@ const TaskManager: React.FC = () => {
             {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
 
-          <MultiSearchableSelect 
-            options={teams}
-            value={Array.isArray(filters.team_id) ? filters.team_id : []}
-            onChange={(val) => setFilters({...filters, team_id: val})}
-            placeholder="Teams"
-            className="w-32"
-            condensed={true}
-          />
+          <select 
+            value={filters.team_id as string || ""}
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[80px]" 
+            onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}
+          >
+            <option value="">Teams</option>
+            {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+          </select>
 
           <select 
             value={filters.status || ""}
@@ -211,6 +215,42 @@ const TaskManager: React.FC = () => {
             <option value="DONE">Done</option>
             <option value="SKIPPED">Skipped</option>
           </select>
+
+          <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 h-7">
+            <input 
+              type="date" 
+              value={filters.startDate || ""}
+              className="bg-transparent text-[10px] focus:outline-none text-slate-600 w-24" 
+              onChange={(e) => {
+                const val = e.target.value;
+                if (filters.endDate) {
+                  const diff = Math.abs(new Date(val).getTime() - new Date(filters.endDate).getTime());
+                  if (Math.ceil(diff / (1000 * 60 * 60 * 24)) > 62) {
+                    alert("Khoảng cách tối đa là 62 ngày");
+                    return;
+                  }
+                }
+                setFilters({...filters, startDate: val});
+              }}
+            />
+            <span className="text-[10px] text-slate-300">-</span>
+            <input 
+              type="date" 
+              value={filters.endDate || ""}
+              className="bg-transparent text-[10px] focus:outline-none text-slate-600 w-24" 
+              onChange={(e) => {
+                const val = e.target.value;
+                if (filters.startDate) {
+                  const diff = Math.abs(new Date(val).getTime() - new Date(filters.startDate).getTime());
+                  if (Math.ceil(diff / (1000 * 60 * 60 * 24)) > 62) {
+                    alert("Khoảng cách tối đa là 62 ngày");
+                    return;
+                  }
+                }
+                setFilters({...filters, endDate: val});
+              }}
+            />
+          </div>
 
           <select 
             value={filters.showInactiveOnly ? "OFF" : "ON"}
@@ -287,8 +327,12 @@ const TaskManager: React.FC = () => {
                    </span>
                 </td>
                 <td className="px-4 py-1.5 overflow-hidden">
-                   <div className="text-[9px] font-medium text-slate-400 truncate" title={task.teams?.name || 'Internal'}>
-                     {task.teams?.name || 'Internal'}
+                   <div className="text-[9px] font-medium text-slate-400 truncate" title={(task as any).team_ids?.join(', ') || task.teams?.name || 'Internal'}>
+                     {(task as any).team_ids && (task as any).team_ids.length > 0 ? (
+                       (task as any).team_ids.length > 1 
+                         ? `${(task as any).team_ids[0]} +${(task as any).team_ids.length - 1}`
+                         : (task as any).team_ids[0]
+                     ) : (task.teams?.name || 'Internal')}
                    </div>
                 </td>
                 <td className="px-4 py-1.5 font-bold text-indigo-500 uppercase text-[9px] tracking-tighter">

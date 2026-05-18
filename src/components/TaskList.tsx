@@ -23,7 +23,8 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   const defaultFilters: TaskFilters = {
     assignee_email: profile?.email || undefined,
     status: 'NEW',
-    date: today
+    startDate: today,
+    endDate: today
   };
 
   const [filters, setFilters] = useState<TaskFilters>(defaultFilters);
@@ -34,7 +35,8 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
     filters.project_id !== undefined || 
     filters.tag_id !== undefined || 
     filters.status !== defaultFilters.status || 
-    filters.date !== defaultFilters.date ||
+    filters.startDate !== defaultFilters.startDate ||
+    filters.endDate !== defaultFilters.endDate ||
     (Array.isArray(filters.team_id) && filters.team_id.length > 0);
 
   useEffect(() => {
@@ -99,7 +101,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
           ...task,
           id: undefined, // Let DB generate new ID
           status: status,
-          deadline_date: filters.date,
+          deadline_date: task.deadline_date,
           type: 'ONETIME',
           is_active: true, // Instances are always active
           created_at: undefined,
@@ -343,14 +345,16 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             <option value="">Tags</option>
             {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
-          <MultiSearchableSelect 
-            options={teams}
-            value={Array.isArray(filters.team_id) ? filters.team_id : []}
-            onChange={(val) => setFilters({...filters, team_id: val})}
-            placeholder="Teams"
-            className="w-32"
-            condensed={true}
-          />
+
+          <select 
+            value={filters.team_id as string || ""}
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[80px]" 
+            onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}
+          >
+            <option value="">Teams</option>
+            {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+          </select>
+
           <select 
             value={filters.status || ""}
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[80px]" 
@@ -362,23 +366,41 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             <option value="SKIPPED">Skipped</option>
           </select>
 
-          <input 
-            type="date" 
-            value={filters.date || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 focus:outline-none text-slate-600 w-32" 
-            onChange={(e) => {
-              const selectedDate = e.target.value;
-              if (selectedDate) {
-                const diffTime = Math.abs(new Date(selectedDate).getTime() - new Date(today).getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays > 62) {
-                  alert("Không được phép chọn nhiều hơn 62 ngày");
-                  return;
+          <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 h-7">
+            <input 
+              type="date" 
+              value={filters.startDate || ""}
+              className="bg-transparent text-[10px] focus:outline-none text-slate-600 w-24" 
+              onChange={(e) => {
+                const val = e.target.value;
+                if (filters.endDate) {
+                  const diff = Math.abs(new Date(val).getTime() - new Date(filters.endDate).getTime());
+                  if (Math.ceil(diff / (1000 * 60 * 60 * 24)) > 62) {
+                    alert("Khoảng cách tối đa là 62 ngày");
+                    return;
+                  }
                 }
-              }
-              setFilters({...filters, date: selectedDate || undefined});
-            }}
-          />
+                setFilters({...filters, startDate: val});
+              }}
+            />
+            <span className="text-[10px] text-slate-300">-</span>
+            <input 
+              type="date" 
+              value={filters.endDate || ""}
+              className="bg-transparent text-[10px] focus:outline-none text-slate-600 w-24" 
+              onChange={(e) => {
+                const val = e.target.value;
+                if (filters.startDate) {
+                  const diff = Math.abs(new Date(val).getTime() - new Date(filters.startDate).getTime());
+                  if (Math.ceil(diff / (1000 * 60 * 60 * 24)) > 62) {
+                    alert("Khoảng cách tối đa là 62 ngày");
+                    return;
+                  }
+                }
+                setFilters({...filters, endDate: val});
+              }}
+            />
+          </div>
 
           <button 
             onClick={handleExportCsv}
@@ -583,8 +605,12 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                   </span>
                 </td>
                 <td className="px-4 py-1 overflow-hidden">
-                  <div className="text-[9px] font-medium text-slate-400 truncate" title={task.teams?.name || 'Internal'}>
-                    {task.teams?.name || 'Internal'}
+                  <div className="text-[9px] font-medium text-slate-400 truncate" title={(task as any).team_ids?.join(', ') || task.teams?.name || 'Internal'}>
+                    {(task as any).team_ids && (task as any).team_ids.length > 0 ? (
+                      (task as any).team_ids.length > 1 
+                        ? `${(task as any).team_ids[0]} +${(task as any).team_ids.length - 1}`
+                        : (task as any).team_ids[0]
+                    ) : (task.teams?.name || 'Internal')}
                   </div>
                 </td>
                 <td className="px-4 py-1">
