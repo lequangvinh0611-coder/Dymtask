@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, RotateCw, Plus, Edit2, Trash2, Power, Eye, EyeOff, Filter, Clock } from 'lucide-react';
+import { Search, RotateCw, Plus, Edit2, Trash2, Power, Eye, EyeOff, Filter, Clock, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTasks, TaskFilters } from '../hooks/useTasks';
 import { useAuthStore } from '../store/authStore';
@@ -11,11 +11,11 @@ import { logger } from '../lib/logger';
 
 const TaskManager: React.FC = () => {
   const { profile } = useAuthStore();
+  const [page, setPage] = useState(1);
   const today = new Date().toISOString().split('T')[0];
   const defaultFilters: TaskFilters & { showInactiveOnly?: boolean } = {
     assignee_email: profile?.email || undefined,
-    status: 'NEW',
-    date: today
+    status: 'NEW'
   };
   const [filters, setFilters] = useState<TaskFilters & { showInactiveOnly?: boolean }>(defaultFilters);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,7 +27,6 @@ const TaskManager: React.FC = () => {
     filters.project_id !== undefined || 
     filters.tag_id !== undefined || 
     filters.status !== defaultFilters.status || 
-    filters.date !== defaultFilters.date ||
     filters.showInactiveOnly !== undefined ||
     (Array.isArray(filters.team_id) && filters.team_id.length > 0);
   
@@ -38,11 +37,71 @@ const TaskManager: React.FC = () => {
 
   const isUser = profile?.role === 'user';
 
-  // Management view can see all tasks, but we can toggle active status filter
-  const { tasks, totalCount, loading, refetch } = useTasks(1, 1000, {
+  const { tasks, totalCount, loading, refetch } = useTasks(page, 15, {
     ...filters,
     is_active: filters.showInactiveOnly ? false : undefined
   });
+
+  const totalPages = Math.ceil(totalCount / 15) || 1;
+
+  const handleExportCsv = () => {
+    if (!tasks || tasks.length === 0) return;
+    
+    const headers = ['ID', 'Task Name', 'Project', 'Tag', 'Team', 'Type', 'Deadline Date', 'Deadline Time', 'Estimated Minutes', 'Actual Minutes', 'Status', 'Active'];
+    const csvContent = [
+      headers.join(','),
+      ...tasks.map(task => [
+        task.id,
+        `"${task.task_name.replace(/"/g, '""')}"`,
+        `"${(task.projects?.name || 'General').replace(/"/g, '""')}"`,
+        `"${(task.tags?.name || 'No Tag').replace(/"/g, '""')}"`,
+        `"${(task.teams?.name || 'Internal').replace(/"/g, '""')}"`,
+        task.type,
+        task.deadline_date || '',
+        task.deadline_time || '',
+        task.estimated_minutes,
+        task.actual_minutes,
+        task.status,
+        task.is_active
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `task_manager_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getPaginationItems = () => {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page <= 4) {
+        for (let i = 1; i <= 5; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (page >= totalPages - 3) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        pages.push(page - 1);
+        pages.push(page);
+        pages.push(page + 1);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
 
   useEffect(() => {
     const fetchMeta = async () => {
@@ -95,29 +154,8 @@ const TaskManager: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
-      <div className="px-4 py-1.5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
-        <div className="flex items-center gap-2">
-           {isFilterChanged && (
-             <button 
-               onClick={() => setFilters(defaultFilters)}
-               className="p-1 px-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-1"
-             >
-               <RotateCw className="w-2.5 h-2.5" />
-               RESET
-             </button>
-           )}
-           <button onClick={() => refetch()} className={cn("p-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
-             <RotateCw className="w-3 h-3" />
-           </button>
-           <button 
-             onClick={() => setFilters(prev => ({ ...prev, showInactiveOnly: !prev.showInactiveOnly }))}
-             className={cn("p-1 text-[10px] font-bold uppercase rounded border transition-all flex items-center gap-1", filters.showInactiveOnly ? "bg-rose-50 text-rose-600 border-rose-100" : "bg-slate-50 text-slate-400 border-slate-200")}
-           >
-             {filters.showInactiveOnly ? <EyeOff size={12} /> : <Eye size={12} />}
-             {filters.showInactiveOnly ? "Inactive" : "Show Inactive"}
-           </button>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+      <div className="px-4 py-1.5 border-b border-slate-100 flex items-center bg-white shrink-0 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1.5">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input 
@@ -133,7 +171,7 @@ const TaskManager: React.FC = () => {
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
             onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
           >
-            <option value="">Tất cả Assignees</option>
+            <option value="">Assignees</option>
             {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
           </select>
           <select 
@@ -141,7 +179,7 @@ const TaskManager: React.FC = () => {
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
             onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
           >
-            <option value="">Tất cả Projects</option>
+            <option value="">Projects</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select 
@@ -149,7 +187,7 @@ const TaskManager: React.FC = () => {
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
             onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
           >
-            <option value="">Tất cả Tags</option>
+            <option value="">Tags</option>
             {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           <select 
@@ -157,29 +195,45 @@ const TaskManager: React.FC = () => {
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7" 
             onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
           >
-            <option value="">Tất cả Status</option>
+            <option value="">Status</option>
             <option value="NEW">New</option>
             <option value="DONE">Done</option>
             <option value="SKIPPED">Skipped</option>
           </select>
-          <input 
-            type="date" 
-            value={filters.date || ""}
-            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 focus:outline-none text-slate-600" 
-            onChange={(e) => {
-              const selectedDate = e.target.value;
-              if (selectedDate) {
-                const diffTime = Math.abs(new Date(selectedDate).getTime() - new Date(today).getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays > 62) {
-                  alert("Không được phép chọn nhiều hơn 62 ngày");
-                  return;
-                }
-              }
-              setFilters({...filters, date: selectedDate || undefined});
-            }}
-          />
+
+          <button 
+            onClick={handleExportCsv}
+            className="p-1 px-2 h-7 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded hover:bg-slate-100 transition-all flex items-center gap-1 group"
+            title="Export CSV"
+          >
+            <Download className="w-3 h-3 group-hover:text-indigo-600" />
+            <span className="group-hover:text-indigo-600">EXPORT</span>
+          </button>
           
+          {isFilterChanged && (
+            <button 
+              onClick={() => setFilters(defaultFilters)}
+              className="p-1 px-2 h-7 text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-1"
+              title="Reset Filters"
+            >
+              <RotateCw className="w-3 h-3" />
+            </button>
+          )}
+
+          <button onClick={() => refetch()} className={cn("p-1 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
+             <RotateCw className="w-3.5 h-3.5" />
+          </button>
+
+          <button 
+             onClick={() => setFilters(prev => ({ ...prev, showInactiveOnly: !prev.showInactiveOnly }))}
+             className={cn("p-1 px-2 h-7 text-[10px] font-bold uppercase rounded border transition-all flex items-center gap-1", filters.showInactiveOnly ? "bg-rose-50 text-rose-600 border-rose-100" : "bg-slate-50 text-slate-400 border-slate-200")}
+           >
+             {filters.showInactiveOnly ? <EyeOff size={12} /> : <Eye size={12} />}
+             <span>{filters.showInactiveOnly ? "Inactive" : "Show Inactive"}</span>
+          </button>
+        </div>
+
+        <div className="ml-auto flex items-center gap-1.5">
           <button onClick={() => { setSelectedTask(null); setIsModalOpen(true); }} className="flex items-center gap-1.5 h-7 px-3 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-[10px] font-bold uppercase tracking-wider">
             <Plus className="w-3 h-3" /> <span>Tạo mới</span>
           </button>
@@ -197,12 +251,14 @@ const TaskManager: React.FC = () => {
         <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-              <th className="w-[30%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Details</th>
-              <th className="w-[12%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Classification</th>
-              <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Schedule</th>
-              <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Estimation</th>
-              <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Time</th>
-              <th className="w-[6%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
+              <th className="w-[30%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
+              <th className="w-[12%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Project</th>
+              <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
+              <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
+              <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
+              <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
+              <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
+              <th className="w-[6%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Active</th>
               <th className="w-[5%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Actions</th>
             </tr>
           </thead>
@@ -216,32 +272,32 @@ const TaskManager: React.FC = () => {
                   </div>
                 </td>
                 <td className="px-4 py-1.5 text-right pr-6">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-primary font-bold text-[10px] truncate">{task.projects?.name || 'General'}</span>
-                    <div className="flex gap-1 items-center">
-                       <span className="px-1 py-0.5 rounded text-[8px] font-bold uppercase bg-slate-100 text-slate-400 border border-slate-200">
-                         {task.tags?.name || 'No Tag'}
-                       </span>
-                       <span className="text-[9px] font-bold text-slate-400 truncate max-w-[50px]">{task.teams?.name || 'Root'}</span>
-                    </div>
+                  <div className="text-primary font-bold text-[10px] truncate" title={task.projects?.name || 'General'}>
+                    {task.projects?.name || 'General'}
                   </div>
                 </td>
                 <td className="px-4 py-1.5">
-                  <div className="flex items-center gap-2">
-                    <Clock size={12} className="text-slate-300 shrink-0" />
-                    <div className="min-w-0">
-                      <div className="font-bold text-slate-700 text-xs">{task.deadline_time || '--:--'}</div>
-                      <div className="text-[9px] text-slate-400 font-bold truncate">
-                        {renderDeadlineContext(task)}
-                      </div>
-                    </div>
+                   <span className="px-1.5 py-0 rounded text-[8px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                     {task.tags?.name || 'No Tag'}
+                   </span>
+                </td>
+                <td className="px-4 py-1.5 overflow-hidden">
+                   <div className="text-[9px] font-medium text-slate-400 truncate" title={task.teams?.name || 'Internal'}>
+                     {task.teams?.name || 'Internal'}
+                   </div>
+                </td>
+                <td className="px-4 py-1.5 font-bold text-indigo-500 uppercase text-[9px] tracking-tighter">
+                   {task.type}
+                </td>
+                <td className="px-4 py-1.5">
+                  <div className="flex flex-col text-[10px]">
+                    <span className="font-bold text-slate-700">{task.deadline_time || '--:--'}</span>
+                    <span className="text-[8px] text-slate-400 font-bold uppercase">{task.deadline_date || '--/--/--'}</span>
                   </div>
                 </td>
-                <td className="px-4 py-1.5 text-center">
-                    <div className="text-primary font-black text-xs">{task.estimated_minutes}m</div>
-                </td>
-                <td className="px-4 py-1.5 text-center">
-                    <div className="text-emerald-500 font-black text-xs">{task.actual_minutes}m</div>
+                <td className="px-4 py-1.5 text-[8px] font-bold uppercase tracking-tight">
+                    <div className="text-primary">Est: {task.estimated_minutes}m</div>
+                    <div className="text-emerald-500">Act: {task.actual_minutes}m</div>
                 </td>
                 <td className="px-4 py-1.5 text-center">
                    <span className={cn(
@@ -288,11 +344,42 @@ const TaskManager: React.FC = () => {
           </tbody>
         </table>
       </div>
-      <div className="px-4 py-1.5 border-t border-slate-100 bg-white flex items-center justify-end">
-         <div className="flex items-center gap-1">
-            {/* Pagination can go here if needed, keeping it empty for now to match UI spacing */}
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total: {totalCount} Entities</span>
+      <div className="px-4 py-2 border-t border-slate-100 bg-white flex items-center justify-between">
+         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">Total: {totalCount} Entities</span>
+         <div className="flex-1 flex items-center justify-center gap-1">
+            <button 
+              disabled={page === 1} 
+              onClick={() => setPage(p => p - 1)} 
+              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <div className="flex gap-1 mx-2">
+              {getPaginationItems().map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => typeof item === 'number' && setPage(item)}
+                  disabled={typeof item !== 'number'}
+                  className={cn(
+                    "w-7 h-7 flex items-center justify-center rounded text-xs font-bold transition-all",
+                    page === item ? "bg-indigo-600 text-white shadow-sm" : 
+                    typeof item === 'number' ? "text-slate-500 hover:bg-slate-100 hover:text-slate-700" : 
+                    "text-slate-300 cursor-default"
+                  )}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+            <button 
+              disabled={page === totalPages} 
+              onClick={() => setPage(p => p + 1)} 
+              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
+            >
+              <ChevronRight size={14} />
+            </button>
          </div>
+         <div className="min-w-[100px]"></div>
       </div>
     </div>
   );
