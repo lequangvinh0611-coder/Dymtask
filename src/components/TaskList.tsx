@@ -48,36 +48,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [updatingTask, setUpdatingTask] = useState<string | null>(null);
   
-  const { tasks: rawTasks, totalCount, loading, refetch } = useTasks(page, 15, { ...filters, is_active: true });
-  const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
-
-  useEffect(() => {
-    // Basic virtual recurrence filtering
-    if (!rawTasks) return;
-    
-    const filtered = rawTasks.filter(task => {
-      if (!filters.date) return true;
-      
-      const taskDate = new Date(task.created_at).toISOString().split('T')[0];
-      if (taskDate > filters.date) return false;
-
-      if (task.type === 'DAILY') return true;
-      if (task.type === 'WEEKLY') {
-        const dayOfWeek = new Date(filters.date).toLocaleDateString('en-US', { weekday: 'short' });
-        return task.deadline_days?.includes(dayOfWeek);
-      }
-      if (task.type === 'MONTHLY') {
-        const dayOfMonth = new Date(filters.date).getDate();
-        return task.deadline_day_num === dayOfMonth;
-      }
-      if (task.type === 'ONETIME' || task.type === 'ONCE') {
-        return task.deadline_date === filters.date;
-      }
-      return true;
-    });
-    
-    setTasks(filtered);
-  }, [rawTasks, filters.date]);
+  const { tasks, totalCount, loading, refetch } = useTasks(page, 15, { ...filters, is_active: true });
   
   const [projects, setProjects] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);

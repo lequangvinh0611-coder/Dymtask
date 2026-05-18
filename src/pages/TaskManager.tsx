@@ -202,6 +202,17 @@ const TaskManager: React.FC = () => {
           />
 
           <select 
+            value={filters.status || ""}
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[80px]" 
+            onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
+          >
+            <option value="">Status</option>
+            <option value="NEW">New</option>
+            <option value="DONE">Done</option>
+            <option value="SKIPPED">Skipped</option>
+          </select>
+
+          <select 
             value={filters.showInactiveOnly ? "OFF" : "ON"}
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[70px]" 
             onChange={(e) => setFilters({...filters, showInactiveOnly: e.target.value === "OFF"})}
