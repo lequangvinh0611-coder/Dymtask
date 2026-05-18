@@ -15,8 +15,12 @@ interface TaskListProps {
 }
 
 const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
+  const { profile } = useAuthStore();
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState<TaskFilters>({});
+  const [filters, setFilters] = useState<TaskFilters>({
+    assignee_email: profile?.email || undefined,
+    status: 'NEW'
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -172,47 +176,62 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+    <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
         <div className="flex items-center gap-3">
-          <h2 className="text-xl font-bold text-slate-800">{title}</h2>
-          <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold border border-indigo-100 rounded">SYNCED</span>
+          <h2 className="text-lg font-bold text-slate-800">{title}</h2>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button onClick={() => refetch()} className={cn("p-2 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
-            <RotateCw className="w-4 h-4" />
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => refetch()} className={cn("p-1.5 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
+            <RotateCw className="w-3.5 h-3.5" />
           </button>
           
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input 
               type="text" placeholder="Tìm kiếm..." 
-              className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm w-48"
+              className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs w-40"
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
             />
           </div>
 
-          <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}>
+          <select 
+            value={filters.assignee_email || ""}
+            className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs" 
+            onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
+          >
             <option value="">Tất cả Assignees</option>
             {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
           </select>
-          <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}>
-            <option value="">Tất cả Tags</option>
-            {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-          <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}>
+          <select 
+            value={filters.project_id || ""}
+            className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs" 
+            onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
+          >
             <option value="">Tất cả Projects</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select 
+            value={filters.tag_id || ""}
+            className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs" 
+            onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
+          >
+            <option value="">Tất cả Tags</option>
+            {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           <MultiSearchableSelect 
             options={teams}
             value={Array.isArray(filters.team_id) ? filters.team_id : []}
             onChange={(val) => setFilters({...filters, team_id: val})}
             placeholder="Tất cả Teams"
-            className="w-48"
+            className="w-36"
             condensed={true}
           />
-          <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}>
+          <select 
+            value={filters.status || ""}
+            className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs" 
+            onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
+          >
             <option value="">Tất cả Status</option>
             <option value="NEW">New</option>
             <option value="DONE">Done</option>
@@ -378,75 +397,74 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
         <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-              <th className="w-[30%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="w-[10%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-              <th className="w-[15%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
-              <th className="w-[10%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-              <th className="w-[12%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-              <th className="w-[10%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="w-[8%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-              <th className="w-[5%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right">Actions</th>
+              <th className="w-[28%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
+              <th className="w-[12%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
+              <th className="w-[10%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
+              <th className="w-[10%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
+              <th className="w-[10%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
+              <th className="w-[12%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
+              <th className="w-[8%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
+              <th className="w-[7%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
+              <th className="w-[3%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Act</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {tasks.map((task, index) => (
+            {tasks.map((task) => (
               <tr 
                 key={task.id} 
                 className="hover:bg-slate-50/50 transition-all group cursor-pointer"
                 onClick={() => handleOpenDrawer(task)}
               >
-                <td className="px-6 py-4 overflow-hidden">
-                  <p className="font-bold text-slate-700 truncate" title={task.task_name}>{task.task_name}</p>
-                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {task.id.substring(0, 8).toUpperCase()}</p>
+                <td className="px-4 py-1.5 overflow-hidden">
+                  <p className="font-bold text-slate-700 truncate text-xs" title={task.task_name}>{task.task_name}</p>
+                  <p className="text-[9px] text-slate-400 font-mono">ID: {task.id.substring(0, 8).toUpperCase()}</p>
                 </td>
-                <td className="px-6 py-4">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
-                    {task.tags?.name || 'No Tag'}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-primary font-bold text-xs truncate" title={task.projects?.name || 'General'}>
+                <td className="px-4 py-1.5">
+                  <div className="text-primary font-bold text-[10px] truncate" title={task.projects?.name || 'General'}>
                     {task.projects?.name || 'General'}
                   </div>
                 </td>
-                <td className="px-6 py-4 overflow-hidden">
+                <td className="px-4 py-1.5">
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                    {task.tags?.name || 'No Tag'}
+                  </span>
+                </td>
+                <td className="px-4 py-1.5 overflow-hidden">
                   <div className="text-[10px] font-medium text-slate-400 truncate" title={task.teams?.name || 'Internal'}>
                     {task.teams?.name || 'Internal'}
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-4 py-1.5">
+                  <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-tighter">
+                    {task.type}
+                  </span>
+                </td>
+                <td className="px-4 py-1.5">
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-700">{task.deadline_time || '--:--'}</span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                      {renderDeadlineContext(task)}
+                    <span className="text-[11px] font-bold text-slate-700">{task.deadline_time || '--:--'}</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">
+                      {task.deadline_date || '--/--/--'}
                     </span>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-[10px] font-bold uppercase tracking-tight">
-                  <div className="text-primary mb-0.5 flex items-center gap-1">
-                    <div className="w-1 h-1 rounded-full bg-primary" />
-                    Est: {task.estimated_minutes}m
-                  </div>
-                  <div className="text-emerald-500 flex items-center gap-1">
-                    <div className="w-1 h-1 rounded-full bg-emerald-500" />
-                    Act: {task.actual_minutes}m
-                  </div>
+                <td className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-tight">
+                  <div className="text-primary mb-0.5">Est: {task.estimated_minutes}m</div>
+                  <div className="text-emerald-500">Act: {task.actual_minutes}m</div>
                 </td>
-                <td className="px-6 py-4 text-center">
-                   <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider", getStatusBadge(task.status))}>
+                <td className="px-4 py-1.5 text-center">
+                   <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-wider", getStatusBadge(task.status))}>
                      {task.status || 'NEW'}
                    </span>
                 </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2 px-1">
+                <td className="px-4 py-1.5 text-right pr-6">
+                  <div className="flex items-center justify-end gap-1">
                     {['DONE', 'SKIPPED'].includes(task.status) ? (
                       task.is_active && (
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleResetTask(task); }}
-                          className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-all tooltip"
-                          title="Reset Task"
+                          className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all"
                         >
-                          <RotateCw size={18} />
+                          <RotateCw size={14} />
                         </button>
                       )
                     ) : (
@@ -463,10 +481,9 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                           handleUpdateStatus(task.id, newStatus); 
                         }}
                         disabled={['DONE', 'SKIPPED'].includes(task.status) || updatingTask === task.id || (task.subtasks || []).some((s: any) => (s.status || 'NEW') === 'NEW')}
-                        className="p-2 text-primary hover:bg-primary-light rounded-lg transition-all disabled:opacity-30 tooltip flex items-center justify-center"
-                        title="Submit Task"
+                        className="p-1 text-primary hover:bg-primary-light rounded transition-all disabled:opacity-30"
                       >
-                        <CheckCircle2 size={18} />
+                        <CheckCircle2 size={14} />
                       </button>
                     )}
                   </div>
@@ -476,12 +493,44 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
           </tbody>
         </table>
       </div>
-      <div className="p-4 border-t border-slate-100 bg-white flex items-center justify-between">
-         <span className="text-[10px] font-bold text-slate-400 uppercase">Tổng: {totalCount} Tasks</span>
-         <div className="flex items-center gap-2">
-            <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="p-2 border rounded-lg disabled:opacity-30"><ChevronLeft size={16} /></button>
-            <span className="text-xs font-bold">Trang {page} / {totalPages}</span>
-            <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} className="p-2 border rounded-lg disabled:opacity-30"><ChevronRight size={16} /></button>
+      <div className="px-4 py-2 border-t border-slate-100 bg-white flex items-center justify-between">
+         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tổng: {totalCount} Tasks</span>
+         <div className="flex items-center gap-1">
+            <button 
+              disabled={page === 1} 
+              onClick={() => setPage(p => p - 1)} 
+              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <div className="flex gap-1 mx-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum = i + 1;
+                if (totalPages > 5 && page > 3) {
+                  pageNum = page - 2 + i;
+                  if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    className={cn(
+                      "w-7 h-7 flex items-center justify-center rounded text-xs font-bold transition-all",
+                      page === pageNum ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    )}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+            <button 
+              disabled={page === totalPages} 
+              onClick={() => setPage(p => p + 1)} 
+              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
+            >
+              <ChevronRight size={14} />
+            </button>
          </div>
       </div>
     </div>
