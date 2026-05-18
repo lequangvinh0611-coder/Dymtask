@@ -89,7 +89,7 @@ export default function Settings() {
     const userToUpdate = users.find(u => u.id === userId);
     
     // Safety check for Master email
-    if (userToUpdate?.email === 'lequangvinh0611@gmail.com' && data.role !== 'master') {
+    if (userToUpdate?.email === 'lequangvinh0611@gmail.com' && data.role !== 'MASTER') {
       alert('Cannot downgrade the Master account role.');
       return;
     }
@@ -98,9 +98,9 @@ export default function Settings() {
       const { error } = await supabase
         .from('users')
         .update({
-          role: data.role.toLowerCase(),
-          status: data.status,
-          teams: data.teams
+          role: data.role.toUpperCase(),
+          status: data.status.toUpperCase(),
+          team_ids: data.teams
         })
         .eq('id', userId);
 
@@ -141,172 +141,136 @@ export default function Settings() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
-      {/* Navigation Bar inside same header area style */}
-      <div className="px-4 py-1.5 border-b border-slate-100 flex items-center bg-white shrink-0 justify-between">
-        <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as TabType)}
-              className={cn(
-                "flex items-center gap-1.5 px-4 py-1 rounded-lg text-[10px] font-bold uppercase transition-all tracking-wider",
-                activeTab === tab.id
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              <tab.icon size={14} />
-              <span>{tab.label}</span>
-            </button>
-          ))}
+      {/* Header Bar */}
+      <div className="px-6 py-4 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
+        <div className="flex items-center gap-6">
+          <h2 className="text-xl font-black text-slate-800 tracking-tight">Settings</h2>
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as TabType)}
+                className={cn(
+                  "flex items-center gap-1.5 px-6 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all tracking-wider",
+                  activeTab === tab.id
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                )}
+              >
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {activeTab !== 'USERS' && (
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search..." 
+              className="pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs w-48 h-8 focus:outline-none focus:border-indigo-600"
+            />
+          </div>
+          {activeTab === 'USERS' && (
+            <select className="px-3 h-8 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500 min-w-[120px]">
+              <option value="">All Teams</option>
+              {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+            </select>
+          )}
           <button 
             onClick={handleAdd}
-            className="flex items-center gap-1.5 h-7 px-3 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-[10px] font-bold uppercase tracking-wider"
+            className="flex items-center gap-1.5 h-8 px-4 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-[10px] font-black uppercase tracking-wider"
           >
             <Plus size={14} />
-            <span>Add {activeTab.slice(0, -1)}</span>
+            <span>Add {activeTab !== 'USERS' ? activeTab.slice(0, -1) : 'User'}</span>
           </button>
-        )}
+        </div>
       </div>
 
-      {/* Content Area */}
       <div className="flex-1 overflow-auto">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400">
-            <Loader2 className="animate-spin mb-4 text-primary" size={32} />
-            <p className="text-[10px] font-bold uppercase tracking-widest italic">Synchronizing Database...</p>
-          </div>
-        ) : (
-          <table className="w-full text-left border-collapse table-fixed">
-            <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
-              <tr>
-                <th className={cn(
-                  "px-6 py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest",
-                  activeTab === 'USERS' ? "w-[30%]" : "w-[60%]"
-                )}>
-                  {activeTab === 'USERS' ? 'Identify / Auth' : 'Label'}
-                </th>
-                {activeTab === 'USERS' ? (
-                  <>
-                    <th className="px-6 py-2 w-[25%] text-[9px] font-bold text-slate-400 uppercase tracking-widest">Team Membership</th>
-                    <th className="px-6 py-2 w-[15%] text-[9px] font-bold text-slate-400 uppercase tracking-widest">Privileges</th>
-                    <th className="px-6 py-2 w-[15%] text-[9px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
-                  </>
-                ) : (
-                  <th className="px-6 py-2 w-[25%] text-[9px] font-bold text-slate-400 uppercase tracking-widest">Index At</th>
-                )}
-                <th className="px-6 py-2 w-[15%] text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right pr-10">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-[11px]">
+        <table className="w-full text-left border-collapse table-fixed min-w-[1000px]">
+          <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+            <tr>
+              <th className="px-8 py-2 w-[25%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Name / Email</th>
               {activeTab === 'USERS' ? (
-                users.length === 0 ? (
-                  <tr><td colSpan={5} className="py-24 text-center text-slate-400 text-[10px] font-black uppercase italic tracking-widest">No entries</td></tr>
-                ) : (
-                  users.map((user) => (
-                    <tr key={user.id} className="hover:bg-slate-50/50 group transition-all">
-                      <td className="px-6 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-[9px] uppercase shrink-0">
-                            {user.name?.[0] || user.email?.[0]}
-                          </div>
-                          <div className="flex flex-col truncate">
-                            <span className="font-bold text-slate-900 group-hover:text-primary transition-colors truncate">{user.name?.toUpperCase()}</span>
-                            <span className="text-[9px] font-bold text-slate-400 truncate">{user.email?.toLowerCase()}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-3">
-                        <div className="flex gap-1 flex-wrap">
-                          {user.teams?.length > 0 ? (
-                            user.teams.map((t: string) => (
-                              <span key={t} className="px-1.5 py-0.5 bg-slate-50 text-slate-500 rounded text-[8px] font-bold uppercase border border-slate-200">
-                                {t}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-slate-300 text-[9px] font-bold uppercase italic tracking-tighter">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-3">
-                        <span className={cn(
-                          "px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border",
-                          user.role === 'master' ? "bg-rose-50 text-rose-600 border-rose-100" :
-                          user.role === 'admin' ? "bg-indigo-50 text-indigo-600 border-indigo-100" : 
-                          "bg-amber-50 text-amber-600 border-amber-100"
-                        )}>
-                          {user.role || 'USER'}
+                <>
+                  <th className="px-8 py-2 w-[25%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Teams</th>
+                  <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Role</th>
+                  <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                </>
+              ) : (
+                <th className="px-8 py-2 w-[55%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Date Created</th>
+              )}
+              <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest text-right pr-12">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 text-[11px]">
+            {activeTab === 'USERS' ? (
+              users.map((user) => (
+                <tr key={user.id} className="hover:bg-slate-50/50 group transition-all">
+                  <td className="px-8 py-3">
+                    <div className="flex flex-col truncate">
+                      <span className="font-black text-slate-800 uppercase tracking-tight truncate">{user.name}</span>
+                      <span className="text-[9px] font-bold text-slate-400 tracking-tighter truncate">{user.email}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-3">
+                    <div className="flex gap-1 flex-wrap">
+                      {(user.team_ids || user.teams || []).map((t: string) => (
+                        <span key={t} className="px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 rounded text-[8px] font-bold uppercase">
+                          {t}
                         </span>
-                      </td>
-                      <td className="px-6 py-3">
-                        <div className="flex items-center gap-1.5">
-                           <div className={cn("w-1 h-1 rounded-full", user.status === 'INACTIVE' ? "bg-slate-300" : "bg-emerald-500 animate-pulse")} />
-                           <span className={cn(
-                             "text-[9px] font-black uppercase tracking-widest",
-                             user.status === 'INACTIVE' ? "text-slate-400" : "text-emerald-600"
-                           )}>
-                             {user.status || 'ACTIVE'}
-                           </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-3 text-right pr-10">
-                        <button 
-                          onClick={() => handleEdit(user)}
-                          className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )
-              ) : (() => {
-                const list = activeTab === 'PROJECTS' ? projects : activeTab === 'TEAMS' ? teams : tags;
-                if (list.length === 0) return (
-                  <tr>
-                    <td colSpan={3} className="py-24 text-center text-slate-300">
-                      <p className="text-[10px] font-black uppercase tracking-widest italic">Zero entries</p>
-                    </td>
-                  </tr>
-                );
-                
-                return list.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50 group transition-all">
-                    <td className="px-6 py-3 truncate">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1 h-1 rounded-full bg-indigo-400" />
-                        <span className="font-bold text-slate-900 truncate uppercase tracking-widest">{item.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                      {new Date(item.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-3 text-right pr-10">
-                      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                        <button 
-                          onClick={() => handleEdit(item)}
-                          className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(item.id)} 
-                          className="p-1.5 text-slate-200 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ));
-              })()}
-            </tbody>
-          </table>
-        )}
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-8 py-3">
+                    <span className={cn(
+                      "px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border",
+                      user.role === 'MASTER' ? "bg-rose-50 text-rose-500 border-rose-100" :
+                      user.role === 'ADMIN' ? "bg-indigo-50 text-indigo-500 border-indigo-100" : 
+                      "bg-amber-50 text-amber-600 border-amber-100"
+                    )}>{user.role || 'USER'}</span>
+                  </td>
+                  <td className="px-8 py-3">
+                    <span className={cn(
+                      "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
+                      user.status === 'ACTIVE' ? "bg-emerald-50 text-emerald-500 border-emerald-100" : "bg-slate-100 text-slate-400 border-slate-200"
+                    )}>{user.status || 'ACTIVE'}</span>
+                  </td>
+                  <td className="px-8 py-3 text-right pr-12">
+                    <button onClick={() => handleEdit(user)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+                (() => {
+                    const list = activeTab === 'PROJECTS' ? projects : activeTab === 'TEAMS' ? teams : tags;
+                    return list.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50/50 group transition-all">
+                          <td className="px-8 py-3 font-black text-slate-800 uppercase tracking-widest">{item.name}</td>
+                          <td className="px-8 py-3 text-slate-400 font-bold uppercase text-[9px]">{new Date(item.created_at).toLocaleDateString()}</td>
+                          <td className="px-8 py-3 text-right pr-12 flex items-center justify-end gap-3 h-full">
+                            <button onClick={() => handleEdit(item)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
+                            <button onClick={() => handleDelete(item.id)} className="text-slate-200 hover:text-rose-600 transition-all"><Trash2 size={14} /></button>
+                          </td>
+                        </tr>
+                    ));
+                })()
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="px-6 py-3 border-t border-slate-100 bg-white flex items-center justify-center gap-1.5">
+          <button className="px-2 py-1 text-slate-300"><ChevronLeft size={16} /></button>
+          {[1, 2, 3, 4, 5].map(p => (
+            <button key={p} className={cn(
+                "w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all",
+                p === 1 ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" : "text-slate-400 hover:bg-slate-50"
+            )}>{p}</button>
+          ))}
+          <button className="px-2 py-1 text-slate-300"><ChevronRight size={16} /></button>
       </div>
 
       <div className="px-4 py-2 border-t border-slate-100 bg-white">

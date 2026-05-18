@@ -216,42 +216,6 @@ const TaskManager: React.FC = () => {
             <option value="SKIPPED">Skipped</option>
           </select>
 
-          <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 h-7">
-            <input 
-              type="date" 
-              value={filters.startDate || ""}
-              className="bg-transparent text-[10px] focus:outline-none text-slate-600 w-24" 
-              onChange={(e) => {
-                const val = e.target.value;
-                if (filters.endDate) {
-                  const diff = Math.abs(new Date(val).getTime() - new Date(filters.endDate).getTime());
-                  if (Math.ceil(diff / (1000 * 60 * 60 * 24)) > 62) {
-                    alert("Khoảng cách tối đa là 62 ngày");
-                    return;
-                  }
-                }
-                setFilters({...filters, startDate: val});
-              }}
-            />
-            <span className="text-[10px] text-slate-300">-</span>
-            <input 
-              type="date" 
-              value={filters.endDate || ""}
-              className="bg-transparent text-[10px] focus:outline-none text-slate-600 w-24" 
-              onChange={(e) => {
-                const val = e.target.value;
-                if (filters.startDate) {
-                  const diff = Math.abs(new Date(val).getTime() - new Date(filters.startDate).getTime());
-                  if (Math.ceil(diff / (1000 * 60 * 60 * 24)) > 62) {
-                    alert("Khoảng cách tối đa là 62 ngày");
-                    return;
-                  }
-                }
-                setFilters({...filters, endDate: val});
-              }}
-            />
-          </div>
-
           <select 
             value={filters.showInactiveOnly ? "OFF" : "ON"}
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-7 min-w-[70px]" 
