@@ -14,6 +14,7 @@ interface MultiSearchableSelectProps {
   onChange: (value: string[]) => void;
   placeholder?: string;
   className?: string;
+  condensed?: boolean;
 }
 
 export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
@@ -21,7 +22,8 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
   value,
   onChange,
   placeholder = "Select options...",
-  className
+  className,
+  condensed = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -63,12 +65,24 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
         className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm cursor-pointer hover:border-indigo-300 transition-colors min-h-[40px]"
       >
         {selectedOptions.length > 0 ? (
-          selectedOptions.map(option => (
-            <span key={option.id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
-              {option.name}
-              <X className="w-3 h-3 cursor-pointer hover:text-indigo-900" onClick={(e) => removeOption(e, option.id)} />
-            </span>
-          ))
+          condensed ? (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium max-w-[120px]">
+                <span className="truncate">{selectedOptions[0].name}</span>
+                <X className="w-3 h-3 cursor-pointer hover:text-indigo-900 shrink-0" onClick={(e) => removeOption(e, selectedOptions[0].id)} />
+              </span>
+              {selectedOptions.length > 1 && (
+                <span className="text-[10px] font-bold text-slate-400">+{selectedOptions.length - 1}</span>
+              )}
+            </div>
+          ) : (
+            selectedOptions.map(option => (
+              <span key={option.id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
+                {option.name}
+                <X className="w-3 h-3 cursor-pointer hover:text-indigo-900" onClick={(e) => removeOption(e, option.id)} />
+              </span>
+            ))
+          )
         ) : (
           <span className="text-slate-400">{placeholder}</span>
         )}

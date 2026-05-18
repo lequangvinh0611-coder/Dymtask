@@ -12,9 +12,10 @@ export interface TaskFilters {
   search?: string;
   status?: string;
   project_id?: string;
-  team_id?: string;
+  team_id?: string | string[];
   tag_id?: string;
   assignee_email?: string;
+  date?: string;
 }
 
 export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => {
@@ -32,7 +33,17 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
       if (filters.search) query = query.ilike('task_name', `%${filters.search}%`);
       if (filters.status) query = query.eq('status', filters.status);
       if (filters.project_id) query = query.eq('project_id', filters.project_id);
-      if (filters.team_id) query = query.eq('team_id', filters.team_id);
+      
+      if (filters.team_id) {
+        if (Array.isArray(filters.team_id)) {
+          if (filters.team_id.length > 0) {
+            query = query.in('team_id', filters.team_id);
+          }
+        } else {
+          query = query.eq('team_id', filters.team_id);
+        }
+      }
+      
       if (filters.tag_id) query = query.eq('tag_id', filters.tag_id);
       if (filters.assignee_email) query = query.contains('assignees', [filters.assignee_email]);
 

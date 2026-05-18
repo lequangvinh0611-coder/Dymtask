@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, RotateCw, Plus, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckSquare, Square, MoreVertical, Ban, CheckCircle2, Clock } from 'lucide-react';
+import { Search, RotateCw, Plus, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckSquare, Square, MoreVertical, CheckCircle2, Clock } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTasks, TaskFilters } from '../hooks/useTasks';
 import { supabase } from '../lib/supabase';
@@ -7,6 +7,7 @@ import CreateTaskModal from './CreateTaskModal';
 import { SideDrawer } from './ui/SideDrawer';
 import { logger } from '../lib/logger';
 import { Task } from '../types/database.types';
+import { MultiSearchableSelect } from './ui/MultiSearchableSelect';
 
 interface TaskListProps {
   title: string;
@@ -165,7 +166,6 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
       'NEW': 'bg-[#EBF1FF] text-[#4A7CE1] border-[#D6E4FF]',
       'IN_PROGRESS': 'bg-[#FFF9EB] text-[#D97706] border-[#FEF3C7]',
       'DONE': 'bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]',
-      'SUBMITTED': 'bg-[#F5F3FF] text-[#7C3AED] border-[#EDE9FE]',
       'SKIPPED': 'bg-rose-50 text-rose-600 border-rose-100'
     };
     return statusMap[status] || 'bg-slate-50 text-slate-600 border-slate-200';
@@ -204,10 +204,14 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             <option value="">Tất cả Projects</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}>
-            <option value="">Tất cả Teams</option>
-            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
+          <MultiSearchableSelect 
+            options={teams}
+            value={Array.isArray(filters.team_id) ? filters.team_id : []}
+            onChange={(val) => setFilters({...filters, team_id: val})}
+            placeholder="Tất cả Teams"
+            className="w-48"
+            condensed={true}
+          />
           <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}>
             <option value="">Tất cả Status</option>
             <option value="NEW">New</option>
@@ -371,49 +375,44 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
       </SideDrawer>
 
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-left border-collapse min-w-[1000px]">
+        <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project/Team</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right">Actions</th>
+              <th className="w-[30%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
+              <th className="w-[10%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
+              <th className="w-[15%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
+              <th className="w-[10%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
+              <th className="w-[12%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
+              <th className="w-[10%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
+              <th className="w-[8%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
+              <th className="w-[5%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {tasks.map((task) => (
+            {tasks.map((task, index) => (
               <tr 
                 key={task.id} 
                 className="hover:bg-slate-50/50 transition-all group cursor-pointer"
                 onClick={() => handleOpenDrawer(task)}
               >
-                <td className="px-6 py-4">
-                  <p className="font-bold text-slate-700">{task.task_name}</p>
-                  {task.subtasks && task.subtasks.length > 0 && (
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <div className="w-24 h-1 bg-slate-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-emerald-500 transition-all duration-500" 
-                          style={{ width: `${(task.subtasks.filter((s:any) => s.is_completed).length / task.subtasks.length) * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
-                        {task.subtasks.filter((s:any) => s.is_completed).length}/{task.subtasks.length}
-                      </span>
-                    </div>
-                  )}
+                <td className="px-6 py-4 overflow-hidden">
+                  <p className="font-bold text-slate-700 truncate" title={task.task_name}>{task.task_name}</p>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {task.id.substring(0, 8).toUpperCase()}</p>
                 </td>
                 <td className="px-6 py-4">
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
                     {task.tags?.name || 'No Tag'}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-sm text-slate-500">
-                  <div className="text-primary font-bold text-xs">{task.projects?.name || 'General'}</div>
-                  <div className="text-[10px] font-medium text-slate-400">{task.teams?.name || 'Internal'}</div>
+                <td className="px-6 py-4">
+                  <div className="text-primary font-bold text-xs truncate" title={task.projects?.name || 'General'}>
+                    {task.projects?.name || 'General'}
+                  </div>
+                </td>
+                <td className="px-6 py-4 overflow-hidden">
+                  <div className="text-[10px] font-medium text-slate-400 truncate" title={task.teams?.name || 'Internal'}>
+                    {task.teams?.name || 'Internal'}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-col">
