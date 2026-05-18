@@ -7,6 +7,7 @@ import CreateTaskModal from './CreateTaskModal';
 import { SideDrawer } from './ui/SideDrawer';
 import { logger } from '../lib/logger';
 import { Task } from '../types/database.types';
+import { useAuthStore } from '../store/authStore';
 import { MultiSearchableSelect } from './ui/MultiSearchableSelect';
 
 interface TaskListProps {
@@ -21,6 +22,13 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
     assignee_email: profile?.email || undefined,
     status: 'NEW'
   });
+
+  useEffect(() => {
+    if (profile?.email && !filters.assignee_email) {
+      setFilters(prev => ({ ...prev, assignee_email: profile.email }));
+    }
+  }, [profile]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -397,15 +405,15 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
         <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-              <th className="w-[28%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="w-[12%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
-              <th className="w-[10%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-              <th className="w-[10%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-              <th className="w-[10%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
-              <th className="w-[12%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-              <th className="w-[8%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="w-[7%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-              <th className="w-[3%] px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Act</th>
+              <th className="w-[30%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
+              <th className="w-[15%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
+              <th className="w-[8%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
+              <th className="w-[8%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
+              <th className="w-[8%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
+              <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
+              <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
+              <th className="w-[8%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
+              <th className="w-[3%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Act</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -415,48 +423,48 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                 className="hover:bg-slate-50/50 transition-all group cursor-pointer"
                 onClick={() => handleOpenDrawer(task)}
               >
-                <td className="px-4 py-1.5 overflow-hidden">
-                  <p className="font-bold text-slate-700 truncate text-xs" title={task.task_name}>{task.task_name}</p>
-                  <p className="text-[9px] text-slate-400 font-mono">ID: {task.id.substring(0, 8).toUpperCase()}</p>
+                <td className="px-4 py-1 overflow-hidden">
+                  <p className="font-bold text-slate-700 truncate text-[11px]" title={task.task_name}>{task.task_name}</p>
+                  <p className="text-[8px] text-slate-400 font-mono">ID: {task.id.substring(0, 8).toUpperCase()}</p>
                 </td>
-                <td className="px-4 py-1.5">
-                  <div className="text-primary font-bold text-[10px] truncate" title={task.projects?.name || 'General'}>
+                <td className="px-4 py-1">
+                  <div className="text-primary font-bold text-[9px] truncate" title={task.projects?.name || 'General'}>
                     {task.projects?.name || 'General'}
                   </div>
                 </td>
-                <td className="px-4 py-1.5">
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                <td className="px-4 py-1">
+                  <span className="px-1.5 py-0 rounded text-[8px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
                     {task.tags?.name || 'No Tag'}
                   </span>
                 </td>
-                <td className="px-4 py-1.5 overflow-hidden">
-                  <div className="text-[10px] font-medium text-slate-400 truncate" title={task.teams?.name || 'Internal'}>
+                <td className="px-4 py-1 overflow-hidden">
+                  <div className="text-[9px] font-medium text-slate-400 truncate" title={task.teams?.name || 'Internal'}>
                     {task.teams?.name || 'Internal'}
                   </div>
                 </td>
-                <td className="px-4 py-1.5">
-                  <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-tighter">
+                <td className="px-4 py-1">
+                  <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">
                     {task.type}
                   </span>
                 </td>
-                <td className="px-4 py-1.5">
+                <td className="px-4 py-1">
                   <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-slate-700">{task.deadline_time || '--:--'}</span>
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">
+                    <span className="text-[10px] font-bold text-slate-700">{task.deadline_time || '--:--'}</span>
+                    <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tight">
                       {task.deadline_date || '--/--/--'}
                     </span>
                   </div>
                 </td>
-                <td className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-tight">
-                  <div className="text-primary mb-0.5">Est: {task.estimated_minutes}m</div>
+                <td className="px-4 py-1 text-[8px] font-bold uppercase tracking-tight">
+                  <div className="text-primary">Est: {task.estimated_minutes}m</div>
                   <div className="text-emerald-500">Act: {task.actual_minutes}m</div>
                 </td>
-                <td className="px-4 py-1.5 text-center">
-                   <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-wider", getStatusBadge(task.status))}>
+                <td className="px-4 py-1 text-center">
+                   <span className={cn("px-1.5 py-0 rounded-full text-[8px] font-black border uppercase tracking-wider", getStatusBadge(task.status))}>
                      {task.status || 'NEW'}
                    </span>
                 </td>
-                <td className="px-4 py-1.5 text-right pr-6">
+                <td className="px-4 py-1 text-right pr-6">
                   <div className="flex items-center justify-end gap-1">
                     {['DONE', 'SKIPPED'].includes(task.status) ? (
                       task.is_active && (

@@ -187,28 +187,35 @@ const TaskManager: React.FC = () => {
                    </span>
                 </td>
                 <td className="px-4 py-1.5 text-right pr-6">
-                  <div className="flex items-center justify-end gap-1 group-hover:opacity-100 transition-all">
-                    <button 
-                      onClick={() => toggleTaskActive(task.id, task.is_active)} 
-                      title={task.is_active ? "Tạm ẩn" : "Hiện thị"}
-                      className={cn("p-1.5 rounded transition-all", task.is_active ? "text-emerald-500 hover:bg-emerald-50" : "text-slate-300 hover:text-emerald-500 hover:bg-emerald-50")}
-                    >
-                      <Power size={14} />
-                    </button>
-                    <button 
-                      onClick={() => { setSelectedTask(task); setIsModalOpen(true); }} 
-                      className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 transition-all font-bold text-[10px] uppercase"
-                    >
-                      SỬA
-                    </button>
-                    {!isUser && (
+                  <div className="flex items-center justify-end">
+                    <div className="flex items-center gap-0.5 bg-slate-50 border border-slate-200 p-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm">
                       <button 
-                        onClick={() => handleDelete(task.id)} 
-                        className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                        onClick={() => toggleTaskActive(task.id, task.is_active)} 
+                        title={task.is_active ? "Tạm ẩn" : "Hiện thị"}
+                        className={cn(
+                          "p-1.5 rounded hover:scale-110 transition-all", 
+                          task.is_active ? "text-emerald-500 hover:bg-emerald-50" : "text-slate-300 hover:text-emerald-500 hover:bg-emerald-50"
+                        )}
                       >
-                        <Trash2 size={14} />
+                        <Power size={13} />
                       </button>
-                    )}
+                      <button 
+                        onClick={() => { setSelectedTask(task); setIsModalOpen(true); }} 
+                        title="Sửa Task"
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 transition-all hover:scale-110"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      {!isUser && (
+                        <button 
+                          onClick={() => handleDelete(task.id)} 
+                          title="Xóa vĩnh viễn"
+                          className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded transition-all hover:scale-110"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </td>
               </tr>

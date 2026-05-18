@@ -92,33 +92,12 @@ export default function App() {
     <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans">
       <Sidebar />
       
-      <main className="flex-1 flex flex-col min-w-0 h-full p-6 bg-slate-50/50">
-        <header className="flex items-center justify-between mb-6 shrink-0">
+      <main className="flex-1 flex flex-col min-w-0 h-full p-4 bg-slate-50/50">
+        <header className="flex items-center justify-between mb-4 shrink-0">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
               {activeTab}
             </h1>
-            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 text-[10px] font-bold uppercase tracking-widest">
-              Live Preview
-            </span>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm">
-               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Role:</span>
-               <span className={cn(
-                 "text-[10px] font-black uppercase px-2 py-0.5 rounded border",
-                 userRole === 'MASTER' ? "text-rose-600 bg-rose-50 border-rose-100" : 
-                 userRole === 'ADMIN' ? "text-sky-600 bg-sky-50 border-sky-100" :
-                 "text-amber-600 bg-amber-50 border-amber-100"
-               )}>
-                 {userRole}
-               </span>
-            </div>
-            <div className="h-8 w-px bg-slate-200 mx-2"></div>
-            <button className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-              Schema: Supabase V1.2
-            </button>
           </div>
         </header>
 
@@ -137,20 +116,9 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        <footer className="mt-6 flex items-center justify-between text-[11px] text-slate-400 font-medium shrink-0">
-          <div className="flex items-center gap-6">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Supabase Instance: Active (asia-southeast1)
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-              Type-Safe Enums Generated
-            </span>
-          </div>
+        <footer className="mt-4 flex items-center justify-end text-[10px] text-slate-400 font-medium shrink-0">
           <div className="flex items-center gap-4">
-            <span>Server Time: {new Date().toLocaleTimeString()}</span>
-            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-500 font-mono">v1.2.5-prod</span>
+            <span>DYM Task System</span>
           </div>
         </footer>
       </main>
