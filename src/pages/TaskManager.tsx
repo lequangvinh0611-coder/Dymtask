@@ -269,7 +269,7 @@ const TaskManager: React.FC = () => {
             {tasks.map((task) => (
               <tr key={task.id} className={cn("hover:bg-slate-50/30 transition-all group", !task.is_active && "bg-slate-50/80")}>
                 <td className="px-4 py-1.5">
-                  <span className="font-mono text-[9px] text-slate-400 uppercase font-bold">{task.id.slice(0, 4)}</span>
+                  <span className="font-mono text-[9px] text-slate-400 uppercase font-bold">{String(task.display_id || 0).padStart(6, '0')}</span>
                 </td>
                 <td className="px-4 py-1.5 overflow-hidden">
                   <div className="flex flex-col">

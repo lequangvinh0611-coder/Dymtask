@@ -566,7 +566,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
               >
                 <td className="px-4 py-1">
                   <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">
-                    {((task.subtasks as any[])?.find(st => st.parent_tpl_id)?.parent_tpl_id || task.id).substring(0, 4)}
+                    {String(task.display_id || 0).padStart(6, '0')}
                   </p>
                 </td>
                 <td className="px-4 py-1 overflow-hidden">
