@@ -89,7 +89,7 @@ export default function Settings() {
     const userToUpdate = users.find(u => u.id === userId);
     
     // Safety check for Master email
-    if (userToUpdate?.email === 'lequangvinh0611@gmail.com' && data.role !== 'MASTER') {
+    if (userToUpdate?.email === 'lequangvinh0611@gmail.com' && data.role.toUpperCase() !== 'MASTER') {
       alert('Cannot downgrade the Master account role.');
       return;
     }
@@ -217,11 +217,13 @@ export default function Settings() {
                   </td>
                   <td className="px-8 py-3">
                     <div className="flex gap-1 flex-wrap">
-                      {(Array.isArray(user.team_ids) ? user.team_ids : Array.isArray(user.teams) ? user.teams : []).map((t: string) => (
+                      {(Array.isArray(user.team_ids) ? user.team_ids : Array.isArray(user.teams) ? user.teams : []).map((t: string) => {
+                        const cleanT = t.toString().replace(/[\[\]"]/g, '').trim();
+                        return (
                         <span key={t} className="px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 rounded text-[8px] font-bold uppercase">
-                          {t}
+                          {cleanT}
                         </span>
-                      ))}
+                      )})}
                     </div>
                   </td>
                   <td className="px-8 py-3">
