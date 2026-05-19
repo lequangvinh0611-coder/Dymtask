@@ -198,6 +198,12 @@ const Dashboard = () => {
       if (filters.project_id) query = query.eq('project_id', filters.project_id);
       if (filters.tag_id) query = query.eq('tag_id', filters.tag_id);
 
+      // To-do list mode logic: Show Active OR Inactive completed today
+      const localToday = new Date().toLocaleDateString('en-CA');
+      query = query.or(`is_active.eq.true,and(is_active.eq.false,updated_at.gte.${localToday}T00:00:00)`);
+      // Hide instances in general unless they were completed today (handled by OR above, but let's be safe)
+      // Actually, instances SHOULD show in Dashboard if they are the "DONE" version of a daily task.
+
       const { data: allTasks } = await query;
       const tasks = allTasks || [];
 

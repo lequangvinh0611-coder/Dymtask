@@ -20,6 +20,7 @@ export interface TaskFilters {
   endDate?: string;
   is_active?: boolean;
   masterDataMode?: boolean; // ✅ Added to differentiate Task Manager view
+  todoListMode?: boolean;   // ✅ Added for To-do list view
 }
 
 export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => {
@@ -48,12 +49,18 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
       
       if (filters.tag_id) query = query.eq('tag_id', filters.tag_id);
       if (filters.assignee_email) query = query.contains('assignees', [filters.assignee_email]);
-      if (filters.is_active !== undefined) query = query.eq('is_active', filters.is_active);
-
-      // Handle Master Data Mode (Task Manager) filtering
+      
+      // Handle Master Data Mode vs To-do List Mode
       if (filters.masterDataMode) {
-        // Only show ONETIME tasks that are NEW, but always show Recurring templates that are Active
+        query = query.eq('is_active', true);
         query = query.or(`type.neq.ONETIME,and(type.eq.ONETIME,status.eq.NEW)`);
+        query = query.filter('task_name', 'not.ilike', '%(Instance)%');
+      } else if (filters.todoListMode) {
+        // Show Active tasks OR Inactive tasks completed TODAY
+        const localToday = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+        query = query.or(`is_active.eq.true,and(is_active.eq.false,updated_at.gte.${localToday}T00:00:00)`);
+      } else if (filters.is_active !== undefined) {
+        query = query.eq('is_active', filters.is_active);
       }
 
       if (filters.startDate || filters.endDate) {

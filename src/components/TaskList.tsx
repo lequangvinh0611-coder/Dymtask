@@ -52,7 +52,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [updatingTask, setUpdatingTask] = useState<string | null>(null);
   
-  const { tasks, totalCount, loading, refetch } = useTasks(page, 15, { ...filters, is_active: true });
+  const { tasks, totalCount, loading, refetch } = useTasks(page, 15, { ...filters, todoListMode: true });
   
   const [projects, setProjects] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
@@ -103,8 +103,9 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
         const isTerminal = ['DONE', 'SKIPPED'].includes(status);
         const instancePayload = {
           ...task,
+          task_name: `${task.task_name} (Instance)`, // Mark as hidden history
           status: status,
-          deadline_date: task.deadline_date,
+          deadline_date: task.deadline_date || today,
           type: 'ONETIME' as const,
           is_active: !isTerminal, // Deactivate if terminal to hide from Master Data
         };
@@ -544,12 +545,13 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                         if (isTemplate) {
                           const instancePayload = {
                             ...selectedTask,
+                            task_name: `${selectedTask.task_name} (Instance)`, // Mark as instance
                             status: newStatus,
                             subtasks: finalizedSubtasks,
                             actual_minutes: totalActual,
                             deadline_date: selectedTask.deadline_date || today,
                             type: 'ONETIME' as const,
-                            is_active: true, // Instance is active until it's finished (but we are finishing it now)
+                            is_active: false, // History instances are always inactive
                           };
 
                           // Scrub fields before insert
@@ -559,11 +561,11 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                           // Tag subtasks with parent link
                           instancePayload.subtasks = finalizedSubtasks.map((st: any) => ({ ...st, parent_tpl_id: selectedTask.id }));
 
-                          // Insert as completed instance
-                          await supabase.from('tasks').insert({
-                            ...instancePayload,
-                            is_active: false // Completed instance is hidden
-                          });
+                          // Insert as history record
+                          await supabase.from('tasks').insert(instancePayload);
+                          
+                          // IMPORTANT: We DO NOT update the template's is_active. 
+                          // It stays "ON" in Task Manager.
                         } else {
                           // Standard ONETIME task or already an Instance
                           await supabase.from('tasks').update({ 
