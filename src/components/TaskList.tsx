@@ -310,7 +310,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
-      <div className="px-6 py-1.5 flex items-center bg-white shrink-0 border-b border-slate-100 justify-between">
+      <div className="px-6 py-1 flex items-center bg-white shrink-0 border-b border-slate-100 justify-between">
         <div className="flex items-center gap-1.5">
           <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -533,19 +533,19 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
       </SideDrawer>
 
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
+        <table className="w-full text-left border-collapse table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-              <th className="w-[4%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
+              <th className="w-[8%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
               <th className="w-[20%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="w-[22%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-10">Project</th>
-              <th className="w-[8%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-              <th className="w-[8%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-              <th className="w-[8%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
-              <th className="w-[9%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-              <th className="w-[9%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="w-[6%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-              <th className="w-[4%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-10">Actions</th>
+              <th className="w-[20%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-10">Project</th>
+              <th className="w-[10%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
+              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
+              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
+              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
+              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
+              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
+              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 italic-none">
@@ -604,8 +604,8 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                      {task.status || 'NEW'}
                    </span>
                 </td>
-                <td className="px-6 py-2 text-right pr-10">
-                  <div className="flex items-center justify-end">
+                <td className="px-6 py-2 text-center">
+                  <div className="flex items-center justify-center">
                     {['DONE', 'SKIPPED'].includes(task.status) ? (
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleResetTask(task); }}
