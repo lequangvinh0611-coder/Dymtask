@@ -127,24 +127,33 @@ USING (
 -- 10. Policies for users table
 -- Use a more direct check for roles to avoid recursion if possible, 
 -- or ensure the helper function is robust.
+DROP POLICY IF EXISTS "Users can see all other users" ON public.users;
 CREATE POLICY "Users can see all other users" ON public.users
 FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.users;
 CREATE POLICY "Users can insert their own profile" ON public.users
 FOR INSERT WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can edit their own profile" ON public.users;
 CREATE POLICY "Users can edit their own profile" ON public.users
 FOR UPDATE USING (auth.uid() = id);
 
--- Master/Admin policy for managing other users
-CREATE POLICY "Admins manage all users" ON public.users
-FOR ALL USING (
-  EXISTS (
+-- Helper function to check if master safely (bypasses RLS to avoid recursion)
+CREATE OR REPLACE FUNCTION public.check_is_master()
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
     SELECT 1 FROM public.users 
-    WHERE id = auth.uid() 
-    AND role IN ('master', 'admin')
-  )
-);
+    WHERE id = auth.uid() AND role = 'master'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Master/Admin policy for managing other users
+DROP POLICY IF EXISTS "Admins manage all users" ON public.users;
+CREATE POLICY "Master manage all users" ON public.users
+FOR ALL USING (public.check_is_master());
 
 -- Functions & Triggers for updated_at
 CREATE OR REPLACE FUNCTION update_modified_column()
