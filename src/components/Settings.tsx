@@ -139,6 +139,36 @@ export default function Settings() {
     { id: 'TAGS', label: 'Tags', icon: TagIcon },
   ];
 
+  const getSortedUsers = (users: any[]) => {
+    const roleOrder: Record<string, number> = { 'master': 0, 'admin': 1, 'user': 2 };
+    
+    return [...users].sort((a, b) => {
+      // 1. Status (Rightmost)
+      const statusA = (a.status || 'ACTIVE').toUpperCase();
+      const statusB = (b.status || 'ACTIVE').toUpperCase();
+      if (statusA !== statusB) return statusA.localeCompare(statusB); // ACTIVE < INACTIVE
+
+      // 2. Role
+      const roleA = roleOrder[(a.role || 'user').toLowerCase()] ?? 3;
+      const roleB = roleOrder[(b.role || 'user').toLowerCase()] ?? 3;
+      if (roleA !== roleB) return roleA - roleB;
+
+      // 3. Teams
+      const teamsA = (Array.isArray(a.team_ids) ? a.team_ids : []).join(',');
+      const teamsB = (Array.isArray(b.team_ids) ? b.team_ids : []).join(',');
+      if (teamsA !== teamsB) return teamsA.localeCompare(teamsB);
+
+      // 4. Name / Email (Leftmost)
+      const nameA = (a.name || a.email || '').toLowerCase();
+      const nameB = (b.name || b.email || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  };
+
+  const getSortedList = (list: any[]) => {
+    return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
       {/* Header Bar */}
@@ -206,7 +236,7 @@ export default function Settings() {
           </thead>
           <tbody className="divide-y divide-slate-100 text-[11px]">
             {activeTab === 'USERS' ? (
-              users.map((user) => (
+              getSortedUsers(users).map((user) => (
                 <tr key={user.id} className="hover:bg-slate-50/50 group transition-all h-[41px]">
                   <td className="px-8 py-3">
                     <div className="flex flex-col truncate">
@@ -248,7 +278,7 @@ export default function Settings() {
             ) : (
                 (() => {
                     const list = activeTab === 'PROJECTS' ? projects : activeTab === 'TEAMS' ? teams : tags;
-                    return list.map((item) => (
+                    return getSortedList(list).map((item) => (
                         <tr key={item.id} className="hover:bg-slate-50/50 group transition-all h-[41px]">
                           <td className="px-8 py-3 font-black text-slate-800 uppercase tracking-widest">{item.name}</td>
                           <td className="px-8 py-3 text-slate-400 font-bold uppercase text-[9px]">{new Date(item.created_at).toLocaleDateString()}</td>

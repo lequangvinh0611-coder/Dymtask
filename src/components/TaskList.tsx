@@ -31,14 +31,15 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   const [filters, setFilters] = useState<TaskFilters>(defaultFilters);
 
   const isFilterChanged = 
-    filters.search !== undefined || 
+    (filters.search && filters.search !== "") || 
     filters.assignee_email !== defaultFilters.assignee_email || 
     filters.project_id !== undefined || 
     filters.tag_id !== undefined || 
     filters.status !== defaultFilters.status || 
-    filters.startDate !== defaultFilters.startDate ||
-    filters.endDate !== defaultFilters.endDate ||
-    (Array.isArray(filters.team_id) && filters.team_id.length > 0);
+    (filters.startDate && filters.startDate !== defaultFilters.startDate) ||
+    (filters.endDate && filters.endDate !== defaultFilters.endDate) ||
+    (Array.isArray(filters.team_id) && filters.team_id.length > 0) ||
+    (typeof filters.team_id === 'string' && filters.team_id !== "");
 
   useEffect(() => {
     if (profile?.email && !filters.assignee_email && filters.assignee_email !== undefined) {
@@ -324,7 +325,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
             <select 
               value={filters.assignee_email || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[180px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
             >
               <option value="">PERSONNEL</option>
@@ -382,7 +383,17 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
               <span className="group-hover:text-indigo-600">CSV</span>
             </button>
             
-            <button onClick={() => refetch()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
+            {isFilterChanged && (
+              <button 
+                onClick={() => setFilters(defaultFilters)} 
+                className="p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                title="Reset Filters"
+              >
+                 <RotateCw className="w-5 h-5" />
+              </button>
+            )}
+            
+            <button onClick={() => refetch()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")} title="Refresh">
                <RotateCw className="w-5 h-5" />
             </button>
           </div>
@@ -563,10 +574,10 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                 <td className="px-6 py-2 overflow-hidden">
                   <p className="font-bold text-slate-700 truncate text-[13px] tracking-tight" title={task.task_name}>{task.task_name}</p>
                 </td>
-                <td className="px-6 py-2">
-                  <div className="text-indigo-600 font-bold text-[10px] uppercase tracking-wide truncate" title={task.projects?.name || 'General'}>
+                <td className="px-6 py-2 overflow-hidden">
+                  <p className="font-bold text-slate-700 truncate text-[13px] tracking-tight" title={task.projects?.name || 'General'}>
                     {task.projects?.name || 'General'}
-                  </div>
+                  </p>
                 </td>
                 <td className="px-6 py-2">
                   <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200 tracking-wider">

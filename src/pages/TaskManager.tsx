@@ -25,15 +25,16 @@ const TaskManager: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const isFilterChanged = 
-    filters.search !== undefined || 
+    (filters.search && filters.search !== "") || 
     filters.assignee_email !== defaultFilters.assignee_email || 
     filters.project_id !== undefined || 
     filters.tag_id !== undefined || 
     filters.status !== defaultFilters.status || 
-    filters.showInactiveOnly !== undefined ||
-    filters.startDate !== defaultFilters.startDate ||
-    filters.endDate !== defaultFilters.endDate ||
-    (Array.isArray(filters.team_id) && filters.team_id.length > 0);
+    (filters.showInactiveOnly !== undefined && filters.showInactiveOnly !== false) ||
+    (filters.startDate && filters.startDate !== defaultFilters.startDate) ||
+    (filters.endDate && filters.endDate !== defaultFilters.endDate) ||
+    (Array.isArray(filters.team_id) && filters.team_id.length > 0) ||
+    (typeof filters.team_id === 'string' && filters.team_id !== "");
   
   useEffect(() => {
     if (profile?.email && !filters.assignee_email && filters.assignee_email !== undefined) {
@@ -179,7 +180,7 @@ const TaskManager: React.FC = () => {
 
             <select 
               value={filters.assignee_email || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[180px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
             >
               <option value="">PERSONNEL</option>
@@ -229,7 +230,17 @@ const TaskManager: React.FC = () => {
               <span className="group-hover:text-indigo-600">CSV</span>
             </button>
             
-            <button onClick={() => refetch()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
+            {isFilterChanged && (
+              <button 
+                onClick={() => setFilters(defaultFilters)} 
+                className="p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                title="Reset Filters"
+              >
+                 <RotateCw className="w-5 h-5" />
+              </button>
+            )}
+            
+            <button onClick={() => refetch()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")} title="Refresh">
                <RotateCw className="w-5 h-5" />
             </button>
           </div>
@@ -273,9 +284,11 @@ const TaskManager: React.FC = () => {
                     <span className="font-bold text-slate-700 group-hover:text-indigo-600 transition-colors text-[13px] tracking-tight truncate" title={task.task_name}>{task.task_name}</span>
                   </div>
                 </td>
-                <td className="px-6 py-2">
-                  <div className="text-indigo-600 font-bold text-[10px] uppercase tracking-wide truncate" title={task.projects?.name || 'General'}>
-                    {task.projects?.name || 'General'}
+                <td className="px-6 py-2 overflow-hidden">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-slate-700 truncate text-[13px] tracking-tight" title={task.projects?.name || 'General'}>
+                      {task.projects?.name || 'General'}
+                    </span>
                   </div>
                 </td>
                 <td className="px-6 py-2">
