@@ -560,25 +560,25 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                 className="hover:bg-indigo-50/30 transition-all group cursor-pointer"
                 onClick={() => handleOpenDrawer(task)}
               >
-                <td className="px-6 py-3.5">
+                <td className="px-6 py-3">
                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">
                     {String(task.display_id || 0).padStart(6, '0')}
                   </p>
                 </td>
-                <td className="px-6 py-3.5 overflow-hidden">
+                <td className="px-6 py-3 overflow-hidden">
                   <p className="font-bold text-slate-800 truncate text-sm tracking-tight" title={task.task_name}>{task.task_name}</p>
                 </td>
-                <td className="px-6 py-3.5 text-right pr-10">
+                <td className="px-6 py-3 text-right pr-10">
                   <div className="text-indigo-600 font-bold text-[10px] uppercase tracking-wide truncate" title={task.projects?.name || 'General'}>
                     {task.projects?.name || 'General'}
                   </div>
                 </td>
-                <td className="px-6 py-3.5">
+                <td className="px-6 py-3">
                   <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200 tracking-wider">
                     {task.tags?.name || 'No Tag'}
                   </span>
                 </td>
-                <td className="px-6 py-3.5 overflow-hidden">
+                <td className="px-6 py-3 overflow-hidden">
                   <div className="text-[10px] font-bold text-slate-500 truncate uppercase tracking-tight" title={(task as any).team_ids?.join(', ') || task.teams?.name || 'Internal'}>
                     {(task as any).team_ids && (task as any).team_ids.length > 0 ? (
                       (task as any).team_ids.length > 1 
@@ -587,12 +587,12 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                     ) : (task.teams?.name || 'Internal')}
                   </div>
                 </td>
-                <td className="px-6 py-3.5">
+                <td className="px-6 py-3">
                   <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">
                     {task.type}
                   </span>
                 </td>
-                <td className="px-6 py-3.5">
+                <td className="px-6 py-3">
                   <div className="flex flex-col">
                     <span className="text-sm font-black text-slate-800">{task.deadline_time || '--:--'}</span>
                     <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
@@ -600,16 +600,16 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                     </span>
                   </div>
                 </td>
-                <td className="px-6 py-3.5 text-[9px] font-black uppercase tracking-widest">
+                <td className="px-6 py-3 text-[9px] font-black uppercase tracking-widest">
                   <div className="text-indigo-600">Est: {task.estimated_minutes}m</div>
                   <div className="text-emerald-600">Act: {task.actual_minutes}m</div>
                 </td>
-                <td className="px-6 py-3.5 text-center">
+                <td className="px-6 py-3 text-center">
                    <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-widest", getStatusBadge(task.status))}>
                      {task.status || 'NEW'}
                    </span>
                 </td>
-                <td className="px-6 py-3.5 text-right pr-10">
+                <td className="px-6 py-3 text-right pr-10">
                   <div className="flex items-center justify-end">
                     {['DONE', 'SKIPPED'].includes(task.status) ? (
                       <button 

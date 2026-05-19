@@ -41,7 +41,7 @@ export default function UserEditModal({ isOpen, onClose, onSave, user, available
     try {
       const payload = {
         role: role.toString().toLowerCase().trim(),
-        status: status.toString().toLowerCase().trim(),
+        status: status.toString().toUpperCase().trim(),
         teams: selectedTeams.map(t => t.toString().toUpperCase().trim())
       };
       await onSave(user.id, payload);

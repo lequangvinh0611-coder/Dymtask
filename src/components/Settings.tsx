@@ -99,7 +99,7 @@ export default function Settings() {
         .from('users')
         .update({
           role: data.role.toLowerCase(),
-          status: data.status.toLowerCase(),
+          status: data.status.toUpperCase(),
           team_ids: data.teams
         })
         .eq('id', userId);
