@@ -71,7 +71,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 h-7 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-100 transition-all min-w-[180px]"
+        className="flex items-center gap-2 px-3 h-8 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all min-w-[180px]"
       >
         <CalendarIcon size={14} className="text-slate-400" />
         <span>
