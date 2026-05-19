@@ -111,15 +111,15 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Helper function to get current user role
 CREATE OR REPLACE FUNCTION public.get_current_user_role()
-RETURNS user_role AS $$
-  SELECT role FROM public.users WHERE id = auth.uid();
+RETURNS text AS $$
+  SELECT role::text FROM public.users WHERE id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER;
 
 -- Policy for tasks: SELECT, INSERT, UPDATE, DELETE
 CREATE POLICY "Task Access Policy" ON public.tasks
 FOR ALL
 USING (
-  (SELECT public.get_current_user_role()) = 'master' 
+  public.get_current_user_role() = 'master' 
   OR 
   (auth.jwt() ->> 'email') = ANY(assignees)
 );
@@ -145,7 +145,7 @@ RETURNS boolean AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.users 
-    WHERE id = auth.uid() AND role = 'master'
+    WHERE id = auth.uid() AND role::text = 'master'
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
