@@ -51,7 +51,8 @@ const TaskManager: React.FC = () => {
 
   const { tasks, totalCount, loading, refetch } = useTasks(page, 15, {
     ...filters,
-    is_active: filters.showInactiveOnly ? false : true
+    is_active: filters.showInactiveOnly ? false : true,
+    masterDataMode: !filters.showInactiveOnly // Enable filtering in standard "ON" view
   });
 
   const totalPages = Math.ceil(totalCount / 15) || 1;

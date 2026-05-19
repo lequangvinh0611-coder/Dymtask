@@ -19,6 +19,7 @@ export interface TaskFilters {
   startDate?: string;
   endDate?: string;
   is_active?: boolean;
+  masterDataMode?: boolean; // ✅ Added to differentiate Task Manager view
 }
 
 export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => {
@@ -48,6 +49,12 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
       if (filters.tag_id) query = query.eq('tag_id', filters.tag_id);
       if (filters.assignee_email) query = query.contains('assignees', [filters.assignee_email]);
       if (filters.is_active !== undefined) query = query.eq('is_active', filters.is_active);
+
+      // Handle Master Data Mode (Task Manager) filtering
+      if (filters.masterDataMode) {
+        // Only show ONETIME tasks that are NEW, but always show Recurring templates that are Active
+        query = query.or(`type.neq.ONETIME,and(type.eq.ONETIME,status.eq.NEW)`);
+      }
 
       if (filters.startDate || filters.endDate) {
         const startStr = filters.startDate || filters.endDate!;
