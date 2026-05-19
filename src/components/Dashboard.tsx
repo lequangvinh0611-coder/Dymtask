@@ -290,14 +290,14 @@ const Dashboard = () => {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-50 overflow-hidden">
       {/* Header Bar */}
-      <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100 h-10">
+      <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100 z-30 relative min-h-[44px]">
         <div className="flex items-center gap-1.5 flex-1 py-0.5">
           <MultiSearchableSelect 
             options={meta.users.map(u => ({ id: u.email, name: u.name || u.email }))}
             value={filters.assignee_email || []}
             onChange={(val) => setFilters({...filters, assignee_email: val})}
             placeholder="PERSONNEL"
-            className="min-w-[120px]"
+            className="min-w-[180px]"
           />
           <MultiSearchableSelect 
             options={meta.projects}
