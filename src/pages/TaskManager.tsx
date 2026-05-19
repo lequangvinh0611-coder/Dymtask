@@ -35,6 +35,12 @@ const TaskManager: React.FC = () => {
     filters.endDate !== defaultFilters.endDate ||
     (Array.isArray(filters.team_id) && filters.team_id.length > 0);
   
+  useEffect(() => {
+    if (profile?.email && !filters.assignee_email && filters.assignee_email !== undefined) {
+      setFilters(prev => ({ ...prev, assignee_email: profile.email }));
+    }
+  }, [profile]);
+
   const [projects, setProjects] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
@@ -244,16 +250,16 @@ const TaskManager: React.FC = () => {
         <table className="w-full text-left border-collapse table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-              <th className="w-[8%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
-              <th className="w-[20%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="w-[20%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
-              <th className="w-[10%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Actions</th>
+                <th className="w-[8%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
+                <th className="w-[20%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
+                <th className="w-[20%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
+                <th className="w-[10%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -264,7 +270,7 @@ const TaskManager: React.FC = () => {
                 </td>
                 <td className="px-6 py-2 overflow-hidden">
                   <div className="flex flex-col">
-                    <span className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors text-sm tracking-tight truncate" title={task.task_name}>{task.task_name}</span>
+                    <span className="font-bold text-slate-700 group-hover:text-indigo-600 transition-colors text-[13px] tracking-tight truncate" title={task.task_name}>{task.task_name}</span>
                   </div>
                 </td>
                 <td className="px-6 py-2">
@@ -293,8 +299,8 @@ const TaskManager: React.FC = () => {
                 </td>
                 <td className="px-6 py-2">
                   <div className="flex flex-col">
-                    <span className="text-sm font-black text-slate-800">{task.deadline_time || '--:--'}</span>
-                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{task.deadline_date || '--/--/--'}</span>
+                    <span className="text-[13px] font-bold text-slate-700 font-mono tracking-tight">{task.deadline_time || '--:--'}</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{task.deadline_date || '--/--/--'}</span>
                   </div>
                 </td>
                 <td className="px-6 py-2 text-[9px] font-black uppercase tracking-tight">

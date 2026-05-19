@@ -303,9 +303,9 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
       'NEW': 'bg-[#EBF1FF] text-[#4A7CE1] border-[#D6E4FF]',
       'IN_PROGRESS': 'bg-[#FFF9EB] text-[#D97706] border-[#FEF3C7]',
       'DONE': 'bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]',
-      'SKIPPED': 'bg-rose-50 text-rose-600 border-rose-100'
+      'SKIPPED': 'bg-slate-50 text-slate-500 border-slate-200'
     };
-    return statusMap[status] || 'bg-slate-50 text-slate-600 border-slate-200';
+    return statusMap[status] || 'bg-slate-50 text-slate-500 border-slate-200';
   };
 
   return (
@@ -401,14 +401,14 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
         isOpen={isDrawerOpen} 
         onClose={() => setIsDrawerOpen(false)} 
         title={selectedTask ? (
-          <div className="flex flex-col gap-1">
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">{selectedTask.task_name}</h2>
+          <div className="flex flex-col gap-1.5">
+            <h2 className="text-xl font-black text-slate-900 tracking-tight leading-tight">{selectedTask.task_name}</h2>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded border border-slate-100 font-mono">
                 ID: {selectedTask.id.substring(0, 8).toUpperCase()}
               </span>
               <span className={cn(
-                "px-2 py-0.5 rounded text-[9px] font-black uppercase border tracking-wider",
+                "px-2 py-0.5 rounded text-[10px] font-bold uppercase border tracking-wider",
                 getStatusBadge(selectedTask.status)
               )}>
                 {selectedTask.status}
@@ -536,16 +536,16 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
         <table className="w-full text-left border-collapse table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-              <th className="w-[8%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
-              <th className="w-[20%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="w-[20%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
-              <th className="w-[10%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-              <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Actions</th>
+                <th className="w-[8%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
+                <th className="w-[20%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
+                <th className="w-[20%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
+                <th className="w-[10%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
+                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 italic-none">
@@ -561,7 +561,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                   </p>
                 </td>
                 <td className="px-6 py-2 overflow-hidden">
-                  <p className="font-bold text-slate-800 truncate text-sm tracking-tight" title={task.task_name}>{task.task_name}</p>
+                  <p className="font-bold text-slate-700 truncate text-[13px] tracking-tight" title={task.task_name}>{task.task_name}</p>
                 </td>
                 <td className="px-6 py-2">
                   <div className="text-indigo-600 font-bold text-[10px] uppercase tracking-wide truncate" title={task.projects?.name || 'General'}>
@@ -589,8 +589,8 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                 </td>
                 <td className="px-6 py-2">
                   <div className="flex flex-col">
-                    <span className="text-sm font-black text-slate-800">{task.deadline_time || '--:--'}</span>
-                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
+                    <span className="text-[13px] font-bold text-slate-700 font-mono tracking-tight">{task.deadline_time || '--:--'}</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
                       {task.deadline_date || '--/--/--'}
                     </span>
                   </div>

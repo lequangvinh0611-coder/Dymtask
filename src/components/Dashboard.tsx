@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 import { DateRangePicker } from './ui/DateRangePicker';
 
 interface DashboardStats {
@@ -31,11 +32,11 @@ const StatHeaderCard = ({ title, value, icon: Icon, color, loading, subtitle }: 
       <div className={cn("p-1.5 rounded-lg", color)}>
         <Icon className="w-4 h-4" />
       </div>
-      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{title}</p>
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{title}</p>
     </div>
     <div className="mt-auto">
-      <p className="text-2xl font-black text-slate-900 tracking-tight leading-none">{value}</p>
-      {subtitle && <p className="text-[8px] font-bold text-slate-300 uppercase mt-1 tracking-wider">{subtitle}</p>}
+      <p className="text-2xl font-black text-slate-800 tracking-tight leading-none">{value}</p>
+      {subtitle && <p className="text-[9px] font-bold text-slate-300 uppercase mt-1 tracking-widest">{subtitle}</p>}
     </div>
   </div>
 );
@@ -68,33 +69,33 @@ const RoadmapColumn = ({ day, date, tasks, isToday }: any) => {
 
   const Row = ({ label, count, time }: any) => (
     <div className="flex items-center justify-between py-2.5 border-b border-slate-50 last:border-0">
-      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{label}</span>
       <div className="flex items-center gap-4">
-        <span className="text-base font-black text-slate-800">{count}</span>
-        <span className="text-[9px] font-bold text-slate-400 w-14 text-right">{Math.floor(time/60)}h {time%60}m</span>
+        <span className="text-base font-black text-slate-800 tracking-tight">{count}</span>
+        <span className="text-[10px] font-bold text-slate-400 w-16 text-right font-mono">{Math.floor(time/60)}h {time%60}m</span>
       </div>
     </div>
   );
 
   return (
     <div className={cn(
-      "flex-1 min-w-[220px] bg-white rounded-2xl border p-5 flex flex-col relative",
-      isToday ? "border-indigo-600 shadow-xl shadow-indigo-100/50 ring-1 ring-indigo-600/10" : "border-slate-100"
+      "flex-1 min-w-[220px] bg-white rounded-2xl border p-5 flex flex-col relative transition-all duration-300",
+      isToday ? "border-indigo-600 shadow-xl shadow-indigo-100/30 ring-1 ring-indigo-600/5 scale-[1.01] z-10" : "border-slate-100"
     )}>
       {isToday && (
-        <span className="absolute top-5 right-5 bg-indigo-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest shadow-lg shadow-indigo-200">Today</span>
+        <span className="absolute top-5 right-5 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest shadow-lg shadow-indigo-200">Today</span>
       )}
       <div className="mb-8">
-        <h4 className="text-[16px] font-black text-indigo-600 uppercase tracking-tighter">{day}</h4>
-        <p className="text-[10px] font-bold text-slate-400 mt-1">{date}</p>
+        <h4 className="text-[18px] font-black text-indigo-600 uppercase tracking-tighter leading-tight">{day}</h4>
+        <p className="text-[11px] font-bold text-slate-400 mt-1 tracking-tight">{date}</p>
       </div>
 
       <div className="flex-1 space-y-1.5">
-        <div className="bg-indigo-50/50 p-4 rounded-xl mb-6 flex items-center justify-between border border-indigo-100/50">
-          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Total</span>
+        <div className="bg-indigo-50/30 p-4 rounded-xl mb-6 flex items-center justify-between border border-indigo-100/50">
+          <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-widest">Total</span>
           <div className="flex items-center gap-4">
             <span className="text-xl font-black text-indigo-600 tracking-tight">{stats.total}</span>
-            <span className="text-[9px] font-bold text-indigo-400 w-14 text-right">{Math.floor(stats.est/60)}h {stats.est%60}m</span>
+            <span className="text-[10px] font-bold text-indigo-400 w-16 text-right font-mono">{Math.floor(stats.est/60)}h {stats.est%60}m</span>
           </div>
         </div>
 
@@ -117,14 +118,21 @@ const RoadmapColumn = ({ day, date, tasks, isToday }: any) => {
 };
 
 const Dashboard = () => {
+  const { profile } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const today = new Date().toISOString().split('T')[0];
   const [filters, setFilters] = useState<any>({
-    assignee_email: undefined,
+    assignee_email: profile?.email || undefined,
     team_ids: undefined,
     startDate: today,
     endDate: today
   });
+
+  useEffect(() => {
+    if (profile?.email && !filters.assignee_email && filters.assignee_email !== undefined) {
+      setFilters((prev: any) => ({ ...prev, assignee_email: profile.email }));
+    }
+  }, [profile]);
 
   const [meta, setMeta] = useState({
     teams: [] as any[],
