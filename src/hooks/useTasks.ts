@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Task, Project, Team, Tag } from '../types/database.types';
+import { useAppStore } from '../types';
 
 export interface TaskWithDetails extends Task {
   tags?: Tag | null;
@@ -24,6 +25,7 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const { refreshKey } = useAppStore();
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -142,15 +144,12 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
 
   useEffect(() => {
     fetchTasks();
+  }, [fetchTasks, refreshKey]);
+
+  useEffect(() => {
     const channel = supabase.channel('tasks_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          fetchTasks(); // Fetch lại để lấy dữ liệu JOIN
-        } else if (payload.eventType === 'UPDATE') {
-          setTasks(prev => prev.map(t => t.id === payload.new.id ? { ...t, ...payload.new } : t));
-        } else if (payload.eventType === 'DELETE') {
-          setTasks(prev => prev.filter(t => t.id !== payload.old.id));
-        }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+        fetchTasks();
       }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchTasks]);

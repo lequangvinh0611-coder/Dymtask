@@ -95,7 +95,11 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 h-full p-2 bg-slate-50/50">
         <header className="flex items-center justify-between mb-2 shrink-0 px-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-sm font-bold text-slate-700 uppercase tracking-widest">
+            <h1 
+              className="text-sm font-bold text-slate-700 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors"
+              onClick={() => useAppStore.getState().triggerRefresh()}
+              title="Click to refresh data"
+            >
               {activeTab}
             </h1>
           </div>

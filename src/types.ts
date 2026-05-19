@@ -79,6 +79,8 @@ export interface AppState {
   setActiveTab: (tab: AppState['activeTab']) => void;
   theme: 'indigo' | 'emerald' | 'slate' | 'rose';
   setTheme: (theme: AppState['theme']) => void;
+  refreshKey: number;
+  triggerRefresh: () => void;
 }
 
 // Store chỉ còn quản lý trạng thái UI (activeTab)
@@ -87,4 +89,6 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
   theme: 'indigo',
   setTheme: (theme) => set({ theme }),
+  refreshKey: 0,
+  triggerRefresh: () => set((state) => ({ refreshKey: state.refreshKey + 1 })),
 }));

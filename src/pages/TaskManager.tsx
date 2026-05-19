@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, RotateCw, Plus, Edit2, Trash2, Power, Eye, EyeOff, Filter, Clock, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, RotateCw, RotateCcw, Plus, Edit2, Trash2, Power, Eye, EyeOff, Filter, Clock, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTasks, TaskFilters, TaskWithDetails } from '../hooks/useTasks';
 import { useAuthStore } from '../store/authStore';
@@ -180,7 +180,7 @@ const TaskManager: React.FC = () => {
 
             <select 
               value={filters.assignee_email || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[180px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[220px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
             >
               <option value="">PERSONNEL</option>
@@ -233,16 +233,12 @@ const TaskManager: React.FC = () => {
             {isFilterChanged && (
               <button 
                 onClick={() => setFilters(defaultFilters)} 
-                className="p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                className="p-2 ml-1 text-indigo-600 hover:text-indigo-800 transition-colors"
                 title="Reset Filters"
               >
-                 <RotateCw className="w-5 h-5" />
+                 <RotateCcw className="w-5 h-5" />
               </button>
             )}
-            
-            <button onClick={() => refetch()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")} title="Refresh">
-               <RotateCw className="w-5 h-5" />
-            </button>
           </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { setSelectedTask(null); setIsModalOpen(true); }} className="flex items-center gap-2 h-8 px-5 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-200">
