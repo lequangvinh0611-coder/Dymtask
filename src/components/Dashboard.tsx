@@ -8,6 +8,7 @@ import {
   CalendarDays as CalendarDayIcon,
   Calendar as CalendarIcon,
   RotateCw,
+  RotateCcw,
   Clock,
   CheckCircle2,
   FastForward
@@ -15,6 +16,7 @@ import {
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
+import { useAppStore } from '../types';
 import { DateRangePicker } from './ui/DateRangePicker';
 
 interface DashboardStats {
@@ -119,20 +121,37 @@ const RoadmapColumn = ({ day, date, tasks, isToday }: any) => {
 
 const Dashboard = () => {
   const { profile } = useAuthStore();
+  const { refreshKey } = useAppStore();
   const [loading, setLoading] = useState(true);
   const today = new Date().toISOString().split('T')[0];
-  const [filters, setFilters] = useState<any>({
+  
+  const defaultFilters = useMemo(() => ({
     assignee_email: profile?.email || undefined,
     team_ids: undefined,
+    project_id: undefined,
+    tag_id: undefined,
     startDate: today,
     endDate: today
-  });
+  }), [profile?.email, today]);
+
+  const [filters, setFilters] = useState<any>(defaultFilters);
 
   useEffect(() => {
     if (profile?.email && !filters.assignee_email && filters.assignee_email !== undefined) {
       setFilters((prev: any) => ({ ...prev, assignee_email: profile.email }));
     }
   }, [profile]);
+
+  const isFilterChanged = useMemo(() => {
+    return (
+      filters.assignee_email !== defaultFilters.assignee_email ||
+      filters.team_ids !== defaultFilters.team_ids ||
+      filters.project_id !== defaultFilters.project_id ||
+      filters.tag_id !== defaultFilters.tag_id ||
+      filters.startDate !== defaultFilters.startDate ||
+      filters.endDate !== defaultFilters.endDate
+    );
+  }, [filters, defaultFilters]);
 
   const [meta, setMeta] = useState({
     teams: [] as any[],
@@ -237,7 +256,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [filters]);
+  }, [filters, refreshKey]);
 
   const roadmapDates = useMemo(() => {
     const now = new Date();
@@ -299,9 +318,15 @@ const Dashboard = () => {
             onChange={(start, end) => setFilters({...filters, startDate: start, endDate: end})} 
           />
 
-          <button onClick={() => fetchDashboardData()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
-             <RotateCw className="w-5 h-5" />
-          </button>
+          {isFilterChanged && (
+            <button 
+              onClick={() => setFilters(defaultFilters)} 
+              className="p-2 ml-1 text-indigo-600 hover:text-indigo-800 transition-colors"
+              title="Reset Filters"
+            >
+               <RotateCcw className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 

@@ -1,20 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Trash2, Info, ChevronRight, Loader2, History, AlertCircle, RotateCw, ChevronLeft, Calendar as CalendarIcon } from 'lucide-react';
+import { Search, Trash2, Info, ChevronRight, Loader2, History, AlertCircle, RotateCw, RotateCcw, ChevronLeft, Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
+import { useAppStore } from '../types';
 import { AuditLog as AuditLogType } from '../types/database.types';
 import { DateRangePicker } from './ui/DateRangePicker';
 
 const AuditLog = () => {
+  const { refreshKey } = useAppStore();
   const [logs, setLogs] = useState<AuditLogType[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const today = new Date().toISOString().split('T')[0];
   const [dateRange, setDateRange] = useState({
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+    startDate: today,
+    endDate: today
   });
+
+  const isFilterChanged = searchTerm !== '' || dateRange.startDate !== today || dateRange.endDate !== today;
+
+  const handleReset = () => {
+    setSearchTerm('');
+    setDateRange({ startDate: today, endDate: today });
+    setPage(1);
+  };
   const pageSize = 15;
 
   const fetchLogs = async () => {
@@ -54,7 +66,7 @@ const AuditLog = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [searchTerm, page, dateRange]);
+  }, [searchTerm, page, dateRange, refreshKey]);
 
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
@@ -125,9 +137,15 @@ const AuditLog = () => {
               setPage(1);
             }}
           />
-          <button onClick={() => fetchLogs()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
-             <RotateCw className="w-5 h-5" />
-          </button>
+          {isFilterChanged && (
+            <button 
+              onClick={handleReset} 
+              className="p-2 ml-1 text-indigo-600 hover:text-indigo-800 transition-colors"
+              title="Reset Filters"
+            >
+               <RotateCcw className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 
