@@ -19,7 +19,8 @@ export default function UserEditModal({ isOpen, onClose, onSave, user, available
     if (user && isOpen) {
       setRole(user.role?.toString().toUpperCase().trim() || 'USER');
       setStatus(user.status?.toString().toUpperCase().trim() || 'ACTIVE');
-      setSelectedTeams(Array.isArray(user.teams) ? user.teams.map((t: any) => t.toString().toUpperCase().trim()) : []);
+      const teams = user.team_ids || user.teams;
+      setSelectedTeams(Array.isArray(teams) ? teams.map((t: any) => t.toString().toUpperCase().trim()) : []);
     }
   }, [user, isOpen]);
 

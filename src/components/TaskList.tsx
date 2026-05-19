@@ -320,14 +320,14 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
               <input 
                 type="text" placeholder="Tìm kiếm..." 
                 value={filters.search || ""}
-                className="pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs w-36 h-8 focus:outline-none focus:border-indigo-600"
+                className="pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-sm w-44 h-10 focus:outline-none focus:border-indigo-600 transition-all"
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               />
             </div>
 
             <select 
               value={filters.assignee_email || ""}
-              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[100px] font-bold text-slate-500" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-10 min-w-[120px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer" 
               onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
             >
               <option value="">Assignees</option>
@@ -335,7 +335,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             </select>
             <select 
               value={filters.project_id || ""}
-              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[80px] font-bold text-slate-500" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-10 min-w-[100px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer" 
               onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
             >
               <option value="">Projects</option>
@@ -343,7 +343,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             </select>
             <select 
               value={filters.tag_id || ""}
-              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[70px] font-bold text-slate-500" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-10 min-w-[90px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer" 
               onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
             >
               <option value="">Tags</option>
@@ -352,7 +352,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
             <select 
               value={filters.team_id as string || ""}
-              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[80px] font-bold text-slate-500" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-10 min-w-[100px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer" 
               onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}
             >
               <option value="">Teams</option>
@@ -361,7 +361,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
             <select 
               value={filters.status || ""}
-              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[80px] font-bold text-slate-500" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-10 min-w-[100px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer" 
               onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
             >
               <option value="">Status</option>
@@ -378,23 +378,23 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
             <button 
               onClick={handleExportCsv}
-              className="p-1 px-3 h-8 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all flex items-center gap-1.5 group uppercase tracking-wider"
+              className="p-1 px-4 h-10 text-xs font-black text-slate-500 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all flex items-center gap-2 group uppercase tracking-widest"
               title="Export CSV"
             >
-              <Download className="w-3.5 h-3.5 group-hover:text-indigo-600" />
+              <Download className="w-4 h-4 group-hover:text-indigo-600" />
               <span className="group-hover:text-indigo-600">CSV</span>
             </button>
             
-            <button onClick={() => refetch()} className={cn("p-1.5 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
-               <RotateCw className="w-4 h-4" />
+            <button onClick={() => refetch()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
+               <RotateCw className="w-5 h-5" />
             </button>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {showCreate && (
-             <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-1.5 h-8 px-4 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-[10px] font-black uppercase tracking-wider">
-                <Plus className="w-3.5 h-3.5" /> <span>Create Task</span>
+             <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 h-10 px-5 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-200">
+                <Plus className="w-4 h-4" /> <span>Create Task</span>
              </button>
           )}
         </div>
@@ -477,7 +477,6 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                           className="bg-transparent text-[9px] font-black text-indigo-500 uppercase tracking-tighter focus:outline-none cursor-pointer hover:text-indigo-700 transition-colors"
                         >
                           <option value="NEW">New</option>
-                          <option value="IN_PROGRESS">Progress</option>
                           <option value="DONE">Done</option>
                           <option value="SKIPPED">Skip</option>
                         </select>
@@ -542,45 +541,45 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
         <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-              <th className="w-[5%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
-              <th className="w-[25%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="w-[12%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Project</th>
-              <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-              <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-              <th className="w-[9%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
-              <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-              <th className="w-[10%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="w-[6%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-              <th className="w-[5%] px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-6">Actions</th>
+              <th className="w-[5%] px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
+              <th className="w-[25%] px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
+              <th className="w-[12%] px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-10">Project</th>
+              <th className="w-[9%] px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
+              <th className="w-[9%] px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
+              <th className="w-[9%] px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
+              <th className="w-[10%] px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
+              <th className="w-[10%] px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
+              <th className="w-[6%] px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
+              <th className="w-[5%] px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-10">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 italic-none">
             {tasks.map((task) => (
               <tr 
                 key={task.id} 
-                className="hover:bg-slate-50/50 transition-all group cursor-pointer"
+                className="hover:bg-indigo-50/30 transition-all group cursor-pointer"
                 onClick={() => handleOpenDrawer(task)}
               >
-                <td className="px-4 py-1">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">
+                <td className="px-6 py-4">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">
                     {String(task.display_id || 0).padStart(6, '0')}
                   </p>
                 </td>
-                <td className="px-4 py-1 overflow-hidden">
-                  <p className="font-bold text-slate-700 truncate text-[11px]" title={task.task_name}>{task.task_name}</p>
+                <td className="px-6 py-4 overflow-hidden">
+                  <p className="font-bold text-slate-800 truncate text-sm tracking-tight" title={task.task_name}>{task.task_name}</p>
                 </td>
-                <td className="px-4 py-1 text-right pr-6">
-                  <div className="text-primary font-bold text-[9px] truncate" title={task.projects?.name || 'General'}>
+                <td className="px-6 py-4 text-right pr-10">
+                  <div className="text-indigo-600 font-bold text-[10px] uppercase tracking-wide truncate" title={task.projects?.name || 'General'}>
                     {task.projects?.name || 'General'}
                   </div>
                 </td>
-                <td className="px-4 py-1">
-                  <span className="px-1.5 py-0 rounded text-[8px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                <td className="px-6 py-4">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200 tracking-wider">
                     {task.tags?.name || 'No Tag'}
                   </span>
                 </td>
-                <td className="px-4 py-1 overflow-hidden">
-                  <div className="text-[9px] font-medium text-slate-400 truncate" title={(task as any).team_ids?.join(', ') || task.teams?.name || 'Internal'}>
+                <td className="px-6 py-4 overflow-hidden">
+                  <div className="text-[10px] font-bold text-slate-500 truncate uppercase tracking-tight" title={(task as any).team_ids?.join(', ') || task.teams?.name || 'Internal'}>
                     {(task as any).team_ids && (task as any).team_ids.length > 0 ? (
                       (task as any).team_ids.length > 1 
                         ? `${(task as any).team_ids[0]} +${(task as any).team_ids.length - 1}`
@@ -588,36 +587,36 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                     ) : (task.teams?.name || 'Internal')}
                   </div>
                 </td>
-                <td className="px-4 py-1">
-                  <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">
+                <td className="px-6 py-4">
+                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">
                     {task.type}
                   </span>
                 </td>
-                <td className="px-4 py-1">
+                <td className="px-6 py-4">
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-slate-700">{task.deadline_time || '--:--'}</span>
-                    <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tight">
+                    <span className="text-sm font-black text-slate-800">{task.deadline_time || '--:--'}</span>
+                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
                       {task.deadline_date || '--/--/--'}
                     </span>
                   </div>
                 </td>
-                <td className="px-4 py-1 text-[8px] font-bold uppercase tracking-tight">
-                  <div className="text-primary">Est: {task.estimated_minutes}m</div>
-                  <div className="text-emerald-500">Act: {task.actual_minutes}m</div>
+                <td className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">
+                  <div className="text-indigo-600">Est: {task.estimated_minutes}m</div>
+                  <div className="text-emerald-600">Act: {task.actual_minutes}m</div>
                 </td>
-                <td className="px-4 py-1 text-center">
-                   <span className={cn("px-1.5 py-0 rounded-full text-[8px] font-black border uppercase tracking-wider", getStatusBadge(task.status))}>
+                <td className="px-6 py-4 text-center">
+                   <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-widest", getStatusBadge(task.status))}>
                      {task.status || 'NEW'}
                    </span>
                 </td>
-                <td className="px-4 py-1 text-right pr-6">
+                <td className="px-6 py-4 text-right pr-10">
                   <div className="flex items-center justify-end">
                     {['DONE', 'SKIPPED'].includes(task.status) ? (
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleResetTask(task); }}
-                        className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all"
+                        className="p-1.5 text-slate-600 hover:bg-slate-200 rounded-lg transition-all"
                       >
-                        <RotateCw size={14} />
+                        <RotateCw size={16} />
                       </button>
                     ) : (
                       <button 
@@ -633,9 +632,9 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                           handleUpdateStatus(task.id, newStatus); 
                         }}
                         disabled={['DONE', 'SKIPPED'].includes(task.status) || updatingTask === task.id || (task.subtasks || []).some((s: any) => (s.status || 'NEW') === 'NEW')}
-                        className="p-1 text-primary hover:bg-primary-light rounded transition-all disabled:opacity-30"
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-all disabled:opacity-30"
                       >
-                        <CheckCircle2 size={14} />
+                        <CheckCircle2 size={16} />
                       </button>
                     )}
                   </div>
