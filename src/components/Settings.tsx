@@ -23,9 +23,6 @@ export default function Settings() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
 
-  const [page, setPage] = useState(1);
-  const pageSize = 15;
-
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -35,36 +32,13 @@ export default function Settings() {
         { data: teamsData },
         { data: tagsData }
       ] = await Promise.all([
-        supabase.from('users').select('*'),
-        supabase.from('projects').select('*').order('name', { ascending: true }),
-        supabase.from('teams').select('*').order('name', { ascending: true }),
-        supabase.from('tags').select('*').order('name', { ascending: true })
+        supabase.from('users').select('*').order('created_at', { ascending: false }),
+        supabase.from('projects').select('*').order('created_at', { ascending: false }),
+        supabase.from('teams').select('*').order('created_at', { ascending: false }),
+        supabase.from('tags').select('*').order('created_at', { ascending: false })
       ]);
 
-      // Sort users with custom priority
-      const sortedUsers = (usersData || []).sort((a, b) => {
-        // 1. Status (ACTIVE first)
-        if (a.status === 'ACTIVE' && b.status !== 'ACTIVE') return -1;
-        if (a.status !== 'ACTIVE' && b.status === 'ACTIVE') return 1;
-
-        // 2. Role Priority
-        const rolePriority: Record<string, number> = { 'MASTER': 0, 'ADMIN': 1, 'USER': 2 };
-        const aRole = (a.role || 'USER').toUpperCase();
-        const bRole = (b.role || 'USER').toUpperCase();
-        if (rolePriority[aRole] !== rolePriority[bRole]) {
-          return (rolePriority[aRole] ?? 99) - (rolePriority[bRole] ?? 99);
-        }
-
-        // 3. Team (First team comparison)
-        const aTeam = (a.team_ids?.[0] || '').toUpperCase();
-        const bTeam = (b.team_ids?.[0] || '').toUpperCase();
-        if (aTeam !== bTeam) return aTeam.localeCompare(bTeam);
-
-        // 4. Name
-        return (a.name || '').localeCompare(b.name || '');
-      });
-
-      setUsers(sortedUsers);
+      setUsers(usersData || []);
       setProjects(projectsData || []);
       setTeams(teamsData || []);
       setTags(tagsData || []);
@@ -78,46 +52,6 @@ export default function Settings() {
   useEffect(() => {
     fetchData();
   }, []);
-
-  const getCurrentList = () => {
-    switch (activeTab) {
-      case 'USERS': return users;
-      case 'PROJECTS': return projects;
-      case 'TEAMS': return teams;
-      case 'TAGS': return tags;
-      default: return [];
-    }
-  };
-
-  const currentList = getCurrentList();
-  const paginatedList = currentList.slice((page - 1) * pageSize, page * pageSize);
-  const totalPages = Math.ceil(currentList.length / pageSize) || 1;
-
-  const getPaginationItems = () => {
-    const pages = [];
-    if (totalPages <= 7) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      if (page <= 4) {
-        for (let i = 1; i <= 5; i++) pages.push(i);
-        pages.push('...');
-        pages.push(totalPages);
-      } else if (page >= totalPages - 3) {
-        pages.push(1);
-        pages.push('...');
-        for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
-      } else {
-        pages.push(1);
-        pages.push('...');
-        pages.push(page - 1);
-        pages.push(page);
-        pages.push(page + 1);
-        pages.push('...');
-        pages.push(totalPages);
-      }
-    }
-    return pages;
-  };
 
   const handleAdd = () => {
     setEditingItem(null);
@@ -208,25 +142,27 @@ export default function Settings() {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
       {/* Header Bar */}
-      <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100 gap-6">
-        <div className="flex items-center bg-slate-100 p-0.5 rounded-lg gap-0.5">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id as TabType); setPage(1); }}
-              className={cn(
-                "flex items-center gap-1.5 px-6 py-1.5 rounded-md text-[10px] font-black uppercase transition-all tracking-wider",
-                activeTab === tab.id
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
-                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-              )}
-            >
-              <span>{tab.label}</span>
-            </button>
-          ))}
+      <div className="px-6 py-1 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as TabType)}
+                className={cn(
+                  "flex items-center gap-1.5 px-6 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all tracking-wider",
+                  activeTab === tab.id
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                )}
+              >
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex-1 flex items-center justify-end gap-3">
+        <div className="flex items-center gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input 
@@ -255,22 +191,22 @@ export default function Settings() {
         <table className="w-full text-left border-collapse table-fixed min-w-[1000px]">
           <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
             <tr>
-              <th className="px-8 py-2 w-[25%] text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Name / Email</th>
+              <th className="px-8 py-2 w-[25%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Name / Email</th>
               {activeTab === 'USERS' ? (
                 <>
-                  <th className="px-8 py-2 w-[25%] text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Teams</th>
-                  <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Role</th>
-                  <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Status</th>
+                  <th className="px-8 py-2 w-[25%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Teams</th>
+                  <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Role</th>
+                  <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>
                 </>
               ) : (
-                <th className="px-8 py-2 w-[55%] text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Date Created</th>
+                <th className="px-8 py-2 w-[55%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Date Created</th>
               )}
-              <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest text-right pr-12 bg-slate-50/50">Actions</th>
+              <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest text-right pr-12">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-[11px]">
             {activeTab === 'USERS' ? (
-              paginatedList.map((user) => (
+              users.map((user) => (
                 <tr key={user.id} className="hover:bg-slate-50/50 group transition-all h-[41px]">
                   <td className="px-8 py-3">
                     <div className="flex flex-col truncate">
@@ -278,7 +214,7 @@ export default function Settings() {
                       <span className="text-[9px] font-bold text-slate-400 tracking-tighter truncate">{user.email}</span>
                     </div>
                   </td>
-                  <td className="px-8 py-3 text-slate-400 font-bold uppercase text-[9px]">
+                  <td className="px-8 py-3">
                     <div className="flex gap-1 flex-wrap">
                       {(Array.isArray(user.team_ids) ? user.team_ids : Array.isArray(user.teams) ? user.teams : [])
                         .map((t: string) => t.toString().replace(/[\[\]"]/g, '').trim())
@@ -293,8 +229,8 @@ export default function Settings() {
                   <td className="px-8 py-3">
                     <span className={cn(
                       "px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border",
-                      user.role?.toUpperCase() === 'MASTER' ? "bg-rose-50 text-rose-500 border-rose-100" :
-                      user.role?.toUpperCase() === 'ADMIN' ? "bg-indigo-50 text-indigo-500 border-indigo-100" : 
+                      user.role === 'MASTER' ? "bg-rose-50 text-rose-500 border-rose-100" :
+                      user.role === 'ADMIN' ? "bg-indigo-50 text-indigo-500 border-indigo-100" : 
                       "bg-amber-50 text-amber-600 border-amber-100"
                     )}>{user.role || 'USER'}</span>
                   </td>
@@ -310,18 +246,21 @@ export default function Settings() {
                 </tr>
               ))
             ) : (
-              paginatedList.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/50 group transition-all h-[41px]">
-                  <td className="px-8 py-3 font-black text-slate-800 uppercase tracking-widest">{item.name}</td>
-                  <td className="px-8 py-3 text-slate-400 font-bold uppercase text-[9px]">{new Date(item.created_at).toLocaleDateString()}</td>
-                  <td className="px-8 py-3 text-right pr-12">
-                    <div className="flex items-center justify-end gap-3">
-                      <button onClick={() => handleEdit(item)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
-                      <button onClick={() => handleDelete(item.id)} className="text-slate-200 hover:text-rose-600 transition-all"><Trash2 size={14} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                (() => {
+                    const list = activeTab === 'PROJECTS' ? projects : activeTab === 'TEAMS' ? teams : tags;
+                    return list.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50/50 group transition-all h-[41px]">
+                          <td className="px-8 py-3 font-black text-slate-800 uppercase tracking-widest">{item.name}</td>
+                          <td className="px-8 py-3 text-slate-400 font-bold uppercase text-[9px]">{new Date(item.created_at).toLocaleDateString()}</td>
+                          <td className="px-8 py-3 text-right pr-12">
+                            <div className="flex items-center justify-end gap-3">
+                              <button onClick={() => handleEdit(item)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
+                              <button onClick={() => handleDelete(item.id)} className="text-slate-200 hover:text-rose-600 transition-all"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                    ));
+                })()
             )}
           </tbody>
         </table>
@@ -329,37 +268,19 @@ export default function Settings() {
 
       <div className="px-4 py-0 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">
-            TỔNG: {currentList.length} ENTITIES
+            TỔNG: {activeTab === 'USERS' ? users.length : (activeTab === 'PROJECTS' ? projects.length : (activeTab === 'TEAMS' ? teams.length : tags.length))} ENTITIES
           </span>
           <div className="flex-1 flex items-center justify-center gap-1">
-            <button 
-              disabled={page === 1}
-              onClick={() => setPage(p => p - 1)}
-              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
-            >
-              <ChevronLeft size={14} />
-            </button>
+            <button className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"><ChevronLeft size={14} /></button>
             <div className="flex gap-1 mx-2">
-              {getPaginationItems().map((p, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => typeof p === 'number' && setPage(p)}
-                  disabled={typeof p !== 'number'}
-                  className={cn(
+              {[1].map(p => (
+                <button key={p} className={cn(
                     "w-7 h-7 flex items-center justify-center rounded text-xs font-bold transition-all",
-                    p === page ? "bg-indigo-600 text-white shadow-sm" : 
-                    typeof p === 'number' ? "text-slate-400 hover:bg-slate-100" :
-                    "text-slate-300 cursor-default"
+                    p === 1 ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:bg-slate-100"
                 )}>{p}</button>
               ))}
             </div>
-            <button 
-              disabled={page === totalPages}
-              onClick={() => setPage(p => p + 1)}
-              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
-            >
-              <ChevronRight size={14} />
-            </button>
+            <button className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"><ChevronRight size={14} /></button>
           </div>
           <div className="min-w-[100px]"></div>
       </div>

@@ -24,15 +24,11 @@ const TaskManager: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
-  const resetFilters = () => {
-    setFilters(defaultFilters);
-  };
-
   const isFilterChanged = 
-    (filters.search !== undefined && filters.search !== "") || 
-    (Array.isArray(filters.assignee_email) ? filters.assignee_email.length > 0 : (filters.assignee_email !== defaultFilters.assignee_email && filters.assignee_email !== undefined)) || 
-    (Array.isArray(filters.project_id) ? filters.project_id.length > 0 : filters.project_id !== undefined) || 
-    (Array.isArray(filters.tag_id) ? filters.tag_id.length > 0 : filters.tag_id !== undefined) || 
+    filters.search !== undefined || 
+    filters.assignee_email !== defaultFilters.assignee_email || 
+    filters.project_id !== undefined || 
+    filters.tag_id !== undefined || 
     filters.status !== defaultFilters.status || 
     filters.showInactiveOnly !== undefined ||
     filters.startDate !== defaultFilters.startDate ||
@@ -170,50 +166,54 @@ const TaskManager: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
       <div className="px-6 py-1 flex items-center bg-white shrink-0 border-b border-slate-100 justify-between">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-          <div className="relative flex-shrink-0">
+        <div className="flex items-center gap-1.5">
+          <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input 
                 type="text" placeholder="Tìm kiếm..." 
                 value={filters.search || ""}
-                className="pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs w-44 h-8 focus:outline-none focus:border-indigo-600 transition-all font-bold text-slate-600"
+                className="pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-sm w-44 h-8 focus:outline-none focus:border-indigo-600 transition-all"
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               />
             </div>
 
-            <MultiSearchableSelect 
-              options={users.map(u => ({ id: u.email, name: u.name || u.email }))}
-              value={Array.isArray(filters.assignee_email) ? filters.assignee_email : (filters.assignee_email ? [filters.assignee_email] : [])}
-              onChange={(val) => setFilters({...filters, assignee_email: val})}
-              placeholder="PERSONNEL"
-              className="min-w-[140px]"
-            />
-            <MultiSearchableSelect 
-              options={projects}
-              value={Array.isArray(filters.project_id) ? filters.project_id : (filters.project_id ? [filters.project_id] : [])}
-              onChange={(val) => setFilters({...filters, project_id: val})}
-              placeholder="PROJECTS"
-              className="min-w-[140px]"
-            />
-            <MultiSearchableSelect 
-              options={tags}
-              value={Array.isArray(filters.tag_id) ? filters.tag_id : (filters.tag_id ? [filters.tag_id] : [])}
-              onChange={(val) => setFilters({...filters, tag_id: val})}
-              placeholder="TAGS"
-              className="min-w-[140px]"
-            />
+            <select 
+              value={filters.assignee_email || ""}
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+              onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
+            >
+              <option value="">PERSONNEL</option>
+              {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
+            </select>
+            <select 
+              value={filters.project_id || ""}
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+              onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
+            >
+              <option value="">PROJECTS</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <select 
+              value={filters.tag_id || ""}
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+              onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
+            >
+              <option value="">TAGS</option>
+              {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
 
-            <MultiSearchableSelect 
-              options={teams}
-              value={Array.isArray(filters.team_id) ? filters.team_id : (filters.team_id ? [filters.team_id] : [])}
-              onChange={(val) => setFilters({...filters, team_id: val})}
-              placeholder="TEAMS"
-              className="min-w-[140px]"
-            />
+            <select 
+              value={filters.team_id as string || ""}
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+              onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}
+            >
+              <option value="">TEAMS</option>
+              {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+            </select>
 
             <select 
               value={filters.showInactiveOnly ? "OFF" : "ON"}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 min-w-[80px] font-black text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center tracking-widest uppercase" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[100px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, showInactiveOnly: e.target.value === "OFF"})}
             >
               <option value="ON">ON</option>
@@ -222,19 +222,17 @@ const TaskManager: React.FC = () => {
 
             <button 
               onClick={handleExportCsv}
-              className="p-1 px-4 h-8 text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all flex items-center gap-2 group uppercase tracking-widest flex-shrink-0"
+              className="p-1 px-4 h-8 text-xs font-black text-slate-500 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all flex items-center gap-2 group uppercase tracking-widest"
               title="Export CSV"
             >
               <Download className="w-4 h-4 group-hover:text-indigo-600" />
               <span className="group-hover:text-indigo-600">CSV</span>
             </button>
             
-            {isFilterChanged && (
-              <button onClick={resetFilters} className={cn("p-2 text-slate-400 hover:text-indigo-600 transition-colors flex-shrink-0", loading && "animate-spin text-indigo-600")}>
-                <RotateCw className="w-5 h-5" />
-              </button>
-            )}
-        </div>
+            <button onClick={() => refetch()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
+               <RotateCw className="w-5 h-5" />
+            </button>
+          </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { setSelectedTask(null); setIsModalOpen(true); }} className="flex items-center gap-2 h-8 px-5 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-200">
             <Plus className="w-4 h-4" /> <span>Tạo mới</span>
@@ -275,10 +273,10 @@ const TaskManager: React.FC = () => {
                     <span className="font-bold text-slate-700 group-hover:text-indigo-600 transition-colors text-[13px] tracking-tight truncate" title={task.task_name}>{task.task_name}</span>
                   </div>
                 </td>
-                <td className="px-6 py-2 overflow-hidden">
-                  <p className="font-bold text-slate-700 truncate text-[13px] tracking-tight" title={task.projects?.name || 'General'}>
+                <td className="px-6 py-2">
+                  <div className="text-indigo-600 font-bold text-[10px] uppercase tracking-wide truncate" title={task.projects?.name || 'General'}>
                     {task.projects?.name || 'General'}
-                  </p>
+                  </div>
                 </td>
                 <td className="px-6 py-2">
                    <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200 tracking-wider">

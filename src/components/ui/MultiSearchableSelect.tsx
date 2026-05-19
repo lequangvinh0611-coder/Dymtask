@@ -59,45 +59,52 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
   };
 
   return (
-    <div className={cn("relative", isOpen ? "z-[100]" : "z-[50]", className)} ref={containerRef}>
+    <div className={cn("relative", className)} ref={containerRef}>
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          "flex items-center justify-between px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 font-black text-slate-600 cursor-pointer hover:border-indigo-300 transition-all uppercase tracking-widest relative select-none",
-          isOpen && "border-indigo-500 ring-4 ring-indigo-500/10 bg-white"
-        )}
+        className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm cursor-pointer hover:border-indigo-300 transition-colors min-h-[40px]"
       >
-        <div className="flex-1 flex items-center overflow-hidden pr-6">
-          {selectedOptions.length > 0 ? (
-            <span className="truncate">
-              {selectedOptions[0].name}
+        {selectedOptions.length > 0 ? (
+          condensed ? (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium max-w-[120px]">
+                <span className="truncate">{selectedOptions[0].name}</span>
+                <X className="w-3 h-3 cursor-pointer hover:text-indigo-900 shrink-0" onClick={(e) => removeOption(e, selectedOptions[0].id)} />
+              </span>
               {selectedOptions.length > 1 && (
-                <span className="ml-1 text-indigo-500 text-[9px] font-black">+{selectedOptions.length - 1}</span>
+                <span className="text-[10px] font-bold text-slate-400">+{selectedOptions.length - 1}</span>
               )}
-            </span>
+            </div>
           ) : (
-            <span className="text-slate-400 truncate">{placeholder}</span>
-          )}
-        </div>
-        <ChevronDown className={cn("w-3.5 h-3.5 text-slate-400 transition-transform flex-shrink-0 absolute right-2.5", isOpen && "rotate-180")} />
+            selectedOptions.map(option => (
+              <span key={option.id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
+                {option.name}
+                <X className="w-3 h-3 cursor-pointer hover:text-indigo-900" onClick={(e) => removeOption(e, option.id)} />
+              </span>
+            ))
+          )
+        ) : (
+          <span className="text-slate-400">{placeholder}</span>
+        )}
+        <ChevronDown className={cn("ml-auto w-4 h-4 text-slate-400 transition-transform", isOpen && "rotate-180")} />
       </div>
 
       {isOpen && (
-        <div className="absolute top-[calc(100%+6px)] left-0 z-[110] w-[300px] bg-white border border-slate-200 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 origin-top">
-          <div className="p-3 border-b border-slate-100 bg-slate-50/80 backdrop-blur-md">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-100">
+          <div className="p-2 border-b border-slate-100">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
                 autoFocus
                 type="text"
-                className="w-full pl-9 pr-3 py-2 text-[12px] font-bold bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-slate-700 placeholder:text-slate-300 shadow-sm"
-                placeholder="Tìm kiếm danh sách..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border-none rounded-md focus:ring-0"
+                placeholder="Search..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </div>
-          <div className="max-h-72 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent bg-white">
+          <div className="max-h-60 overflow-auto p-1">
             {filteredOptions.length > 0 ? (
               filteredOptions.map(option => {
                 const isSelected = value.includes(option.id);
@@ -106,22 +113,17 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
                     key={option.id}
                     onClick={() => toggleOption(option.id)}
                     className={cn(
-                      "flex items-center justify-between px-4 py-3 text-[11px] font-black uppercase tracking-widest rounded-xl cursor-pointer transition-all mb-1 last:mb-0 select-none group",
-                      isSelected 
-                        ? "bg-indigo-600 text-white shadow-xl shadow-indigo-200/50" 
-                        : "hover:bg-slate-50 text-slate-500 hover:text-indigo-600"
+                      "flex items-center justify-between px-3 py-2 text-sm rounded-md cursor-pointer transition-colors",
+                      isSelected ? "bg-indigo-50 text-indigo-700" : "hover:bg-slate-50 text-slate-600"
                     )}
                   >
-                    <span className="truncate pr-4 group-hover:translate-x-1 transition-transform">{option.name}</span>
-                    {isSelected && <Check className="w-4 h-4 shrink-0" />}
+                    <span className="truncate">{option.name}</span>
+                    {isSelected && <Check className="w-4 h-4" />}
                   </div>
                 );
               })
             ) : (
-              <div className="px-3 py-10 text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center italic flex flex-col items-center gap-2">
-                <Search className="w-6 h-6 opacity-20" />
-                <span>Không tìm thấy kết quả</span>
-              </div>
+              <div className="px-3 py-2 text-xs text-slate-400 italic text-center">No options found</div>
             )}
           </div>
         </div>
