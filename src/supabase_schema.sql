@@ -110,6 +110,7 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 -- Chỉ những user có role = 'master' hoặc email nằm trong danh sách assignees của task đó mới được quyền xem/sửa.
 
 -- Helper function to get current user role
+DROP FUNCTION IF EXISTS public.get_current_user_role();
 CREATE OR REPLACE FUNCTION public.get_current_user_role()
 RETURNS text AS $$
   SELECT role::text FROM public.users WHERE id = auth.uid();
@@ -140,6 +141,7 @@ CREATE POLICY "Users can edit their own profile" ON public.users
 FOR UPDATE USING (auth.uid() = id);
 
 -- Helper function to check if master safely
+DROP FUNCTION IF EXISTS public.check_is_master();
 CREATE OR REPLACE FUNCTION public.check_is_master()
 RETURNS boolean AS $$
 BEGIN
