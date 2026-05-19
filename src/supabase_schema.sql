@@ -1,66 +1,55 @@
 -- 1. Create Custom Types
-CREATE TYPE user_role AS ENUM ('master', 'admin', 'user');
-CREATE TYPE task_status AS ENUM ('NEW', 'IN_PROGRESS', 'DONE', 'SUBMITTED');
-CREATE TYPE task_type AS ENUM ('DAILY', 'WEEKLY', 'MONTHLY', 'ONETIME');
+DO $$ BEGIN
+    CREATE TYPE user_role AS ENUM ('master', 'admin', 'user');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
--- 2. Create Users Table
--- Note: In Supabase, usually users are managed via auth.users, 
--- but we create a public.users table to store profile info and custom roles.
-CREATE TABLE public.users (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    email TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
-    role user_role DEFAULT 'user' NOT NULL,
-    teams TEXT[] DEFAULT '{}',
-    status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
+DO $$ BEGIN
+    CREATE TYPE task_status AS ENUM ('NEW', 'IN_PROGRESS', 'DONE', 'SUBMITTED', 'SKIPPED');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
--- 3. Create Projects Table
-CREATE TABLE public.projects (
+DO $$ BEGIN
+    CREATE TYPE task_type AS ENUM ('DAILY', 'WEEKLY', 'MONTHLY', 'ONETIME');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Enable status 'SKIPPED' if it was missing in ENUM (for existing DBs)
+ALTER TYPE task_status ADD VALUE IF NOT EXISTS 'SKIPPED';
+
+-- 2. Create Tasks Table (Simplified and Robust)
+-- Note: Adjusted to include all missing columns seen in code
+CREATE TABLE IF NOT EXISTS public.tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL UNIQUE,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 4. Create Teams Table
-CREATE TABLE public.teams (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL UNIQUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 5. Create Tags Table
-CREATE TABLE public.tags (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL UNIQUE,
-    color TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 6. Create Tasks Table
-CREATE TABLE public.tasks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    display_id SERIAL UNIQUE, -- Auto-incrementing readable ID
     task_name TEXT NOT NULL,
-    user_id UUID REFERENCES public.users(id), -- Creator
+    user_id UUID REFERENCES public.users(id),
     tag_id UUID REFERENCES public.tags(id),
     project_id UUID REFERENCES public.projects(id),
     team_id UUID REFERENCES public.teams(id),
+    team_ids TEXT[] DEFAULT '{}', -- Multi-team support
     type task_type DEFAULT 'ONETIME' NOT NULL,
-    deadline_time TIME, -- Changed from TEXT to TIME
-    deadline_days TEXT[], -- For WEEKLY: ['Mon', 'Tue']
-    deadline_date DATE, -- For ONETIME
-    deadline_day_num INTEGER, -- For MONTHLY
+    deadline_time TIME,
+    deadline_days TEXT[],
+    deadline_date DATE,
+    deadline_day_num INTEGER,
     estimated_minutes INTEGER DEFAULT 0,
     actual_minutes INTEGER DEFAULT 0,
     status task_status DEFAULT 'NEW' NOT NULL,
-    subtasks JSONB DEFAULT '[]'::jsonb, -- Integrated steps/subtasks
-    assignees TEXT[] DEFAULT '{}', -- Array of user emails for easy filtering
+    subtasks JSONB DEFAULT '[]'::jsonb,
+    assignees TEXT[] DEFAULT '{}',
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- If table already exists, ensure columns are present
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS team_ids TEXT[] DEFAULT '{}';
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS display_id SERIAL; -- Note: Adding SERIAL to existing column is tricky, usually better to create with it.
+ALTER TABLE public.tasks ADD CONSTRAINT tasks_display_id_unique UNIQUE (display_id);
 
 -- 7. Create Audit Logs Table
 CREATE TABLE public.audit_logs (

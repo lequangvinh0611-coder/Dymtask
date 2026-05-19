@@ -68,6 +68,7 @@ export interface Task {
 
   status: TaskStatus;
   display_id?: number; // ✅ ADDED: Auto-incrementing sequential ID
+  team_ids?: string[]; // ✅ ADDED: Multi-team support
   subtasks: Subtask[]; // Ánh xạ JSONB
   assignees: string[]; // List of user emails
   created_at: string;

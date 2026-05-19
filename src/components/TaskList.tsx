@@ -257,7 +257,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
     const csvContent = [
       headers.join(','),
       ...tasks.map(task => [
-        task.id,
+        task.display_id || task.id,
         `"${task.task_name.replace(/"/g, '""')}"`,
         `"${(task.projects?.name || 'General').replace(/"/g, '""')}"`,
         `"${(task.tags?.name || 'No Tag').replace(/"/g, '""')}"`,
@@ -448,21 +448,10 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                 <div className="space-y-1 bg-slate-50/50 p-2 rounded-xl border border-slate-100">
                   {selectedTask.subtasks?.map((sub: any) => (
                     <div key={sub.id} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100/50 shadow-sm transition-all group">
-                      <button 
-                        onClick={() => handleUpdateSubtask(selectedTask, sub.id, { is_completed: !sub.is_completed, status: !sub.is_completed ? 'DONE' : 'NEW' })}
-                        className="shrink-0"
-                      >
-                        {sub.is_completed ? (
-                          <CheckSquare className="w-4 h-4 text-emerald-500" />
-                        ) : (
-                          <Square className="w-4 h-4 text-slate-300" />
-                        )}
-                      </button>
-
                       <div className="flex-1 flex items-center gap-1.5 text-[11px] min-w-0">
                         <span className={cn(
                           "font-bold text-slate-700 truncate min-w-0 flex-1",
-                          sub.is_completed && "line-through text-slate-400 font-medium"
+                          (sub.status === 'DONE' || sub.status === 'SKIPPED') && "line-through text-slate-400 font-medium"
                         )}>
                           {sub.name}
                         </span>
@@ -471,20 +460,23 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                           {sub.assignee?.split('@')[0] || 'Unassigned'}
                         </span>
                         <span className="text-slate-300 font-light">-</span>
-                        <div className="flex items-center gap-1 shrink-0 font-black">
-                          <span className="text-slate-400">{sub.estimated_minutes || 0}m</span>
-                          <span className="text-slate-300 font-light">/</span>
+                        <div className="flex items-center gap-1 shrink-0 font-black relative group/time">
                           <input 
                             type="number"
-                            className="w-10 bg-indigo-50 text-primary border-none rounded px-1 focus:ring-0 text-center font-black"
-                            value={sub.actual_minutes || 0}
+                            className="w-12 bg-indigo-50/50 text-indigo-600 border border-indigo-100 rounded px-1.5 py-0.5 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none text-center font-black placeholder:text-slate-300 transition-all"
+                            placeholder={`${sub.estimated_minutes || 0}m`}
+                            value={sub.actual_minutes || ''}
                             onChange={(e) => handleUpdateSubtask(selectedTask, sub.id, { actual_minutes: parseInt(e.target.value) || 0 })}
                           />
+                          <span className="text-[9px] text-slate-300 absolute -top-3 left-1/2 -translate-x-1/2 opacity-0 group-hover/time:opacity-100 transition-opacity">MINS</span>
                         </div>
                         <span className="text-slate-300 font-light">-</span>
                         <select 
-                          value={sub.status || (sub.is_completed ? 'DONE' : 'NEW')}
-                          onChange={(e) => handleUpdateSubtask(selectedTask, sub.id, { status: e.target.value })}
+                          value={sub.status || 'NEW'}
+                          onChange={(e) => handleUpdateSubtask(selectedTask, sub.id, { 
+                            status: e.target.value,
+                            is_completed: e.target.value === 'DONE'
+                          })}
                           className="bg-transparent text-[9px] font-black text-indigo-500 uppercase tracking-tighter focus:outline-none cursor-pointer hover:text-indigo-700 transition-colors"
                         >
                           <option value="NEW">New</option>
@@ -516,27 +508,53 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
               ) : (
                 <>
                   <button 
-                    onClick={() => {
+                    onClick={async () => {
                       const subtasks = selectedTask.subtasks || [];
                       const hasNew = subtasks.some((s: any) => (s.status || 'NEW') === 'NEW');
                       if (hasNew) {
-                        alert('Không thể submit khi còn subtask ở trạng thái New');
+                        alert('Không thể submit khi còn subtask ở trạng thái New. Vui lòng chuyển trạng thái sang Done hoặc Skip.');
                         return;
                       }
                       
+                      setUpdatingTask(selectedTask.id);
+                      
+                      // 1. Finalize actual minutes: if 0 or empty, use estimated minutes
+                      const finalizedSubtasks = subtasks.map((s: any) => ({
+                        ...s,
+                        actual_minutes: (s.actual_minutes === 0 || !s.actual_minutes) ? (s.estimated_minutes || 0) : s.actual_minutes
+                      }));
+
+                      // 2. Calculate final status
                       let newStatus: string = 'DONE';
-                      const hasDone = subtasks.some((s: any) => s.status === 'DONE');
-                      const allSkipped = subtasks.length > 0 && subtasks.every((s: any) => s.status === 'SKIPPED');
+                      const hasDone = finalizedSubtasks.some((s: any) => s.status === 'DONE');
+                      const allSkipped = finalizedSubtasks.length > 0 && finalizedSubtasks.every((s: any) => s.status === 'SKIPPED');
                       
                       if (hasDone) newStatus = 'DONE';
                       else if (allSkipped) newStatus = 'SKIPPED';
-                      else if (subtasks.length === 0) newStatus = 'DONE';
+                      else if (finalizedSubtasks.length === 0) newStatus = 'DONE';
 
-                      handleUpdateStatus(selectedTask.id, newStatus);
-                      setIsDrawerOpen(false);
+                      // 3. Calculate total actual minutes
+                      const totalActual = finalizedSubtasks.reduce((sum: number, s: any) => sum + (parseInt(s.actual_minutes) || 0), 0);
+
+                      try {
+                        await supabase.from('tasks').update({ 
+                          status: newStatus, 
+                          subtasks: finalizedSubtasks,
+                          actual_minutes: totalActual,
+                          is_active: false // Mark as completed
+                        }).eq('id', selectedTask.id);
+                        
+                        await logger.log('SUBMIT_TASK', `Submitted task as ${newStatus}`, { taskId: selectedTask.id });
+                        refetch();
+                        setIsDrawerOpen(false);
+                      } catch (err) {
+                        console.error('Error submitting task:', err);
+                      } finally {
+                        setUpdatingTask(null);
+                      }
                     }}
-                    disabled={updatingTask === selectedTask.id || (selectedTask.subtasks || []).some((s: any) => (s.status || 'NEW') === 'NEW')}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={updatingTask === selectedTask.id}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 uppercase tracking-widest disabled:opacity-50"
                   >
                     <CheckCircle2 size={14} />
                     <span>Submit</span>
