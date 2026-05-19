@@ -16,6 +16,7 @@ import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { DateRangePicker } from './ui/DateRangePicker';
+import { MultiSearchableSelect } from './ui/MultiSearchableSelect';
 
 interface DashboardStats {
   totalTasks: number;
@@ -121,22 +122,40 @@ const Dashboard = () => {
   const { profile } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const today = new Date().toISOString().split('T')[0];
-  const [filters, setFilters] = useState<any>({
-    assignee_email: profile?.email || undefined,
-    team_ids: undefined,
+  const defaultFilters = {
+    assignee_email: profile?.email ? [profile.email] : [],
+    team_ids: [],
+    project_id: [],
+    tag_id: [],
     startDate: today,
     endDate: today
-  });
+  };
+  const [filters, setFilters] = useState<any>(defaultFilters);
+
+  const resetFilters = () => {
+    setFilters(defaultFilters);
+  };
+
+  const isFilterChanged = 
+    (filters.assignee_email?.length > 0 && filters.assignee_email?.[0] !== profile?.email) ||
+    filters.assignee_email?.length > 1 ||
+    filters.team_ids?.length > 0 ||
+    filters.project_id?.length > 0 ||
+    filters.tag_id?.length > 0 ||
+    filters.startDate !== today ||
+    filters.endDate !== today;
 
   useEffect(() => {
-    if (profile?.email && !filters.assignee_email && filters.assignee_email !== undefined) {
-      setFilters((prev: any) => ({ ...prev, assignee_email: profile.email }));
+    if (profile?.email && filters.assignee_email?.length === 0) {
+      setFilters((prev: any) => ({ ...prev, assignee_email: [profile.email] }));
     }
   }, [profile]);
 
   const [meta, setMeta] = useState({
     teams: [] as any[],
-    users: [] as any[]
+    users: [] as any[],
+    projects: [] as any[],
+    tags: [] as any[]
   });
 
   const [stats, setStats] = useState<DashboardStats>({
@@ -174,10 +193,23 @@ const Dashboard = () => {
       const end = new Date(filters.endDate);
       
       let query = supabase.from('tasks').select('*');
-      if (filters.assignee_email) query = query.contains('assignees', [filters.assignee_email]);
-      if (filters.team_ids) query = query.contains('team_ids', [filters.team_ids.toUpperCase()]);
-      if (filters.project_id) query = query.eq('project_id', filters.project_id);
-      if (filters.tag_id) query = query.eq('tag_id', filters.tag_id);
+      
+      if (filters.assignee_email?.length > 0) {
+        const orFilters = filters.assignee_email.map((email: string) => `assignees.cs.{"${email}"}`).join(',');
+        query = query.or(orFilters);
+      }
+      
+      if (filters.team_ids?.length > 0) {
+        query = query.in('team_id', filters.team_ids);
+      }
+      
+      if (filters.project_id?.length > 0) {
+        query = query.in('project_id', filters.project_id);
+      }
+      
+      if (filters.tag_id?.length > 0) {
+        query = query.in('tag_id', filters.tag_id);
+      }
 
       const { data: allTasks } = await query;
       const tasks = allTasks || [];
@@ -259,39 +291,35 @@ const Dashboard = () => {
     <div className="flex-1 flex flex-col min-h-0 bg-slate-50 overflow-hidden">
       {/* Header Bar */}
       <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100">
-        <div className="flex items-center gap-1.5 flex-1">
-          <select 
-            value={filters.assignee_email || ""}
-            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-            onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
-          >
-            <option value="">PERSONNEL</option>
-            {meta.users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
-          </select>
-          <select 
-            value={filters.project_id || ""}
-            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-            onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
-          >
-            <option value="">PROJECTS</option>
-            {(meta as any).projects?.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <select 
-            value={filters.tag_id || ""}
-            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-            onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
-          >
-            <option value="">TAGS</option>
-            {(meta as any).tags?.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-          <select 
-            value={filters.team_ids || ""}
-            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-            onChange={(e) => setFilters({...filters, team_ids: e.target.value || undefined})}
-          >
-            <option value="">TEAMS</option>
-            {meta.teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-          </select>
+        <div className="flex items-center gap-1.5 flex-1 overflow-x-auto no-scrollbar py-0.5">
+          <MultiSearchableSelect 
+            options={meta.users.map(u => ({ id: u.email, name: u.name || u.email }))}
+            value={filters.assignee_email || []}
+            onChange={(val) => setFilters({...filters, assignee_email: val})}
+            placeholder="PERSONNEL"
+            className="min-w-[140px]"
+          />
+          <MultiSearchableSelect 
+            options={meta.projects}
+            value={filters.project_id || []}
+            onChange={(val) => setFilters({...filters, project_id: val})}
+            placeholder="PROJECTS"
+            className="min-w-[140px]"
+          />
+          <MultiSearchableSelect 
+            options={meta.tags}
+            value={filters.tag_id || []}
+            onChange={(val) => setFilters({...filters, tag_id: val})}
+            placeholder="TAGS"
+            className="min-w-[140px]"
+          />
+          <MultiSearchableSelect 
+            options={meta.teams}
+            value={filters.team_ids || []}
+            onChange={(val) => setFilters({...filters, team_ids: val})}
+            placeholder="TEAMS"
+            className="min-w-[140px]"
+          />
 
           <DateRangePicker 
             startDate={filters.startDate} 
@@ -299,9 +327,11 @@ const Dashboard = () => {
             onChange={(start, end) => setFilters({...filters, startDate: start, endDate: end})} 
           />
 
-          <button onClick={() => fetchDashboardData()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
-             <RotateCw className="w-5 h-5" />
-          </button>
+          {isFilterChanged && (
+            <button onClick={resetFilters} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors flex-shrink-0", loading && "animate-spin text-indigo-600")}>
+              <RotateCw className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 

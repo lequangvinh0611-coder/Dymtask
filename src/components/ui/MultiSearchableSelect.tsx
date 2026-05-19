@@ -62,31 +62,24 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
     <div className={cn("relative", className)} ref={containerRef}>
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm cursor-pointer hover:border-indigo-300 transition-colors min-h-[40px]"
+        className={cn(
+          "flex flex-wrap items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 cursor-pointer hover:border-indigo-300 transition-colors min-h-[32px]",
+        )}
       >
         {selectedOptions.length > 0 ? (
-          condensed ? (
-            <div className="flex items-center gap-1.5">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium max-w-[120px]">
-                <span className="truncate">{selectedOptions[0].name}</span>
-                <X className="w-3 h-3 cursor-pointer hover:text-indigo-900 shrink-0" onClick={(e) => removeOption(e, selectedOptions[0].id)} />
-              </span>
-              {selectedOptions.length > 1 && (
-                <span className="text-[10px] font-bold text-slate-400">+{selectedOptions.length - 1}</span>
-              )}
-            </div>
-          ) : (
-            selectedOptions.map(option => (
-              <span key={option.id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
-                {option.name}
-                <X className="w-3 h-3 cursor-pointer hover:text-indigo-900" onClick={(e) => removeOption(e, option.id)} />
-              </span>
-            ))
-          )
+          <div className="flex items-center gap-1 overflow-hidden">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[9px] font-bold uppercase tracking-tight max-w-[80px]">
+              <span className="truncate">{selectedOptions[0].name}</span>
+              <X className="w-2.5 h-2.5 cursor-pointer hover:text-indigo-900 shrink-0" onClick={(e) => removeOption(e, selectedOptions[0].id)} />
+            </span>
+            {selectedOptions.length > 1 && (
+              <span className="text-[9px] font-bold text-slate-400">+{selectedOptions.length - 1}</span>
+            )}
+          </div>
         ) : (
-          <span className="text-slate-400">{placeholder}</span>
+          <span className="text-slate-400 uppercase tracking-widest text-[10px] w-full text-center pr-2">{placeholder}</span>
         )}
-        <ChevronDown className={cn("ml-auto w-4 h-4 text-slate-400 transition-transform", isOpen && "rotate-180")} />
+        <ChevronDown className={cn("ml-auto w-3 h-3 text-slate-400 transition-transform flex-shrink-0", isOpen && "rotate-180")} />
       </div>
 
       {isOpen && (

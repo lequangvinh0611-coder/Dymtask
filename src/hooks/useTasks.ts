@@ -11,10 +11,10 @@ export interface TaskWithDetails extends Task {
 export interface TaskFilters {
   search?: string;
   status?: string;
-  project_id?: string;
+  project_id?: string | string[];
   team_id?: string | string[];
-  tag_id?: string;
-  assignee_email?: string;
+  tag_id?: string | string[];
+  assignee_email?: string | string[];
   startDate?: string;
   endDate?: string;
   is_active?: boolean;
@@ -33,7 +33,14 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
         .select(`*, tags(name, color), projects(name), teams(name)`, { count: (filters.startDate || filters.endDate) ? undefined : 'exact' });
 
       if (filters.search) query = query.ilike('task_name', `%${filters.search}%`);
-      if (filters.project_id) query = query.eq('project_id', filters.project_id);
+      
+      if (filters.project_id) {
+        if (Array.isArray(filters.project_id)) {
+          if (filters.project_id.length > 0) query = query.in('project_id', filters.project_id);
+        } else {
+          query = query.eq('project_id', filters.project_id);
+        }
+      }
       
       if (filters.team_id) {
         if (Array.isArray(filters.team_id)) {
@@ -43,8 +50,26 @@ export const useTasks = (page = 1, pageSize = 20, filters: TaskFilters = {}) => 
         }
       }
       
-      if (filters.tag_id) query = query.eq('tag_id', filters.tag_id);
-      if (filters.assignee_email) query = query.contains('assignees', [filters.assignee_email]);
+      if (filters.tag_id) {
+        if (Array.isArray(filters.tag_id)) {
+          if (filters.tag_id.length > 0) query = query.in('tag_id', filters.tag_id);
+        } else {
+          query = query.eq('tag_id', filters.tag_id);
+        }
+      }
+
+      if (filters.assignee_email) {
+        if (Array.isArray(filters.assignee_email)) {
+          if (filters.assignee_email.length > 0) {
+            // Support multiple assignees using .or with jsonb contains
+            const orFilters = filters.assignee_email.map(email => `assignees.cs.{"${email}"}`).join(',');
+            query = query.or(orFilters);
+          }
+        } else {
+          query = query.contains('assignees', [filters.assignee_email]);
+        }
+      }
+      
       if (filters.is_active !== undefined) query = query.eq('is_active', filters.is_active);
 
       if (filters.startDate || filters.endDate) {

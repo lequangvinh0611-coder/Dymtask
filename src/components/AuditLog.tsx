@@ -11,11 +11,18 @@ const AuditLog = () => {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
-  });
+  const today = new Date().toISOString().split('T')[0];
+  const defaultDateRange = { startDate: today, endDate: today };
+  const [dateRange, setDateRange] = useState(defaultDateRange);
   const pageSize = 15;
+
+  const isFilterChanged = searchTerm !== '' || dateRange.startDate !== defaultDateRange.startDate || dateRange.endDate !== defaultDateRange.endDate;
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setDateRange(defaultDateRange);
+    setPage(1);
+  };
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -103,9 +110,9 @@ const AuditLog = () => {
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
       {/* Header Bar */}
       <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100">
-        <div className="flex items-center gap-1.5">
-           <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+           <div className="relative group flex-shrink-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 font-bold" />
             <input 
               type="text" 
               placeholder="Tìm kiếm..." 
@@ -114,7 +121,7 @@ const AuditLog = () => {
                 setSearchTerm(e.target.value);
                 setPage(1);
               }}
-              className="pl-10 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 focus:outline-none focus:border-indigo-600 transition-all font-medium w-64"
+              className="pl-10 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 focus:outline-none focus:border-indigo-600 transition-all font-bold w-64 text-slate-600"
             />
           </div>
           <DateRangePicker 
@@ -125,9 +132,11 @@ const AuditLog = () => {
               setPage(1);
             }}
           />
-          <button onClick={() => fetchLogs()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
-             <RotateCw className="w-5 h-5" />
-          </button>
+          {isFilterChanged && (
+            <button onClick={resetFilters} className={cn("p-2 text-slate-400 hover:text-indigo-600 transition-colors flex-shrink-0", loading && "animate-spin text-indigo-600")}>
+              <RotateCw className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 
