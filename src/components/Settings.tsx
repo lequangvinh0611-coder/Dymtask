@@ -51,6 +51,18 @@ export default function Settings() {
 
   useEffect(() => {
     fetchData();
+
+    // Set up real-time subscriptions
+    const channel = supabase.channel('settings_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tags' }, () => fetchData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleAdd = () => {

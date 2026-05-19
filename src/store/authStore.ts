@@ -58,6 +58,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
               role: isMaster ? 'master' : 'user',
               teams: [],
+              team_ids: [],
               status: 'ACTIVE',
               created_at: new Date().toISOString(),
             };

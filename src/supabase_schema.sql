@@ -20,7 +20,22 @@ END $$;
 -- Enable status 'SKIPPED' if it was missing in ENUM (for existing DBs)
 ALTER TYPE task_status ADD VALUE IF NOT EXISTS 'SKIPPED';
 
--- 2. Create Tasks Table (Simplified and Robust)
+-- 2. Create Users Table (Essential for Profile & Roles)
+CREATE TABLE IF NOT EXISTS public.users (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    role user_role DEFAULT 'user' NOT NULL,
+    teams TEXT[] DEFAULT '{}', -- Legacy
+    team_ids TEXT[] DEFAULT '{}', -- New standard
+    status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Ensure team_ids exists if table was created previously
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS team_ids TEXT[] DEFAULT '{}';
+
+-- 3. Create Tasks Table (Simplified and Robust)
 -- Note: Adjusted to include all missing columns seen in code
 CREATE TABLE IF NOT EXISTS public.tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -114,4 +129,9 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
-CREATE TRIGGER update_tasks_modtime BEFORE UPDATE ON public.tasks FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+-- 11. Enable Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.teams;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.projects;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.tags;

@@ -262,6 +262,17 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Real-time subscription for Dashboard
+    const channel = supabase.channel('dashboard_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => fetchDashboardData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => fetchDashboardData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchDashboardData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [filters, refreshKey]);
 
   const roadmapDates = useMemo(() => {

@@ -34,6 +34,16 @@ export default function App() {
         if (event !== 'TOKEN_REFRESHED') {
           await fetchProfile(session.user.id);
         }
+
+        // Add real-time listener for the profile itself
+        supabase.channel(`profile_${session.user.id}`)
+          .on('postgres_changes', 
+            { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${session.user.id}` }, 
+            (payload) => {
+              console.log('[App] Profile Realtime Update:', payload.new);
+              setProfile(payload.new as any);
+            }
+          ).subscribe();
       } else {
         setSession(null);
         setProfile(null);
