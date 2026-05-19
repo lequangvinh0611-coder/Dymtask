@@ -98,8 +98,8 @@ export default function Settings() {
       const { error } = await supabase
         .from('users')
         .update({
-          role: data.role.toUpperCase(),
-          status: data.status.toUpperCase(),
+          role: data.role.toLowerCase(),
+          status: data.status.toLowerCase(),
           team_ids: data.teams
         })
         .eq('id', userId);
