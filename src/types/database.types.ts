@@ -67,6 +67,7 @@ export interface Task {
   actual_minutes: number;           // Ánh xạ cột INTEGER
 
   status: TaskStatus;
+  display_id?: number; // ✅ ADDED: Auto-incrementing sequential ID
   subtasks: Subtask[]; // Ánh xạ JSONB
   assignees: string[]; // List of user emails
   created_at: string;
