@@ -246,13 +246,13 @@ const TaskManager: React.FC = () => {
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
               <th className="w-[5%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
-              <th className="w-[25%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="w-[12%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-10">Project</th>
+              <th className="w-[22%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
+              <th className="w-[18%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-10">Project</th>
               <th className="w-[9%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
               <th className="w-[9%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-              <th className="w-[9%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
-              <th className="w-[10%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-              <th className="w-[10%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
+              <th className="w-[8%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
+              <th className="w-[9%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
+              <th className="w-[9%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
               <th className="w-[6%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
               <th className="w-[5%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-10">Actions</th>
             </tr>
@@ -351,7 +351,7 @@ const TaskManager: React.FC = () => {
           </tbody>
         </table>
       </div>
-      <div className="px-4 py-1 border-t border-slate-100 bg-white flex items-center justify-between">
+      <div className="px-4 py-0.5 border-t border-slate-100 bg-white flex items-center justify-between">
          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">Total: {totalCount} Entities</span>
          <div className="flex-1 flex items-center justify-center gap-1">
             <button 

@@ -217,7 +217,7 @@ export default function Settings() {
                   </td>
                   <td className="px-8 py-3">
                     <div className="flex gap-1 flex-wrap">
-                      {(user.team_ids || user.teams || []).map((t: string) => (
+                      {(Array.isArray(user.team_ids) ? user.team_ids : Array.isArray(user.teams) ? user.teams : []).map((t: string) => (
                         <span key={t} className="px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 rounded text-[8px] font-bold uppercase">
                           {t}
                         </span>
