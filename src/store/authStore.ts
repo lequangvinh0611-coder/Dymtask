@@ -32,7 +32,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Bọc query trong timeout 8 giây để tránh treo vĩnh viễn
       const queryPromise = supabase
         .from('users')
-        .select('*')
+        .select('id, email, name, role, team_ids, status, created_at')
         .eq('id', uid)
         .single();
 
@@ -57,7 +57,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               email: user.email!,
               name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
               role: isMaster ? 'master' : 'user',
-              teams: [],
               team_ids: [],
               status: 'ACTIVE',
               created_at: new Date().toISOString(),

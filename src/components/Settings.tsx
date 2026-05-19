@@ -32,7 +32,7 @@ export default function Settings() {
         { data: teamsData },
         { data: tagsData }
       ] = await Promise.all([
-        supabase.from('users').select('*').order('created_at', { ascending: false }),
+        supabase.from('users').select('id, email, name, role, team_ids, status, created_at').order('created_at', { ascending: false }),
         supabase.from('projects').select('*').order('created_at', { ascending: false }),
         supabase.from('teams').select('*').order('created_at', { ascending: false }),
         supabase.from('tags').select('*').order('created_at', { ascending: false })
@@ -113,8 +113,7 @@ export default function Settings() {
         .update({
           role: data.role.toLowerCase(),
           status: data.status.toUpperCase(),
-          team_ids: data.teams,
-          teams: data.teams // Sync both for safety
+          team_ids: data.teams
         })
         .eq('id', userId);
 
