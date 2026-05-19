@@ -63,10 +63,10 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
       <div 
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex items-center justify-between px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 font-black text-slate-600 cursor-pointer hover:border-indigo-300 transition-colors min-w-[100px] uppercase tracking-widest relative",
+          "flex items-center justify-between px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 font-black text-slate-600 cursor-pointer hover:border-indigo-300 transition-colors min-w-[120px] uppercase tracking-widest relative",
         )}
       >
-        <div className="flex-1 flex justify-center overflow-hidden pr-2">
+        <div className="flex-1 flex justify-center overflow-hidden pr-4">
           {selectedOptions.length > 0 ? (
             <span className="truncate text-center">
               {selectedOptions[0].name}
@@ -82,21 +82,21 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-100">
-          <div className="p-2 border-b border-slate-100">
+        <div className="absolute z-50 min-w-[200px] w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-100">
+          <div className="p-2 border-b border-slate-100 bg-slate-50/50">
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input 
                 autoFocus
                 type="text"
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border-none rounded-md focus:ring-0"
-                placeholder="Search..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-500 transition-colors"
+                placeholder="Tìm kiếm..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </div>
-          <div className="max-h-60 overflow-auto p-1">
+          <div className="max-h-60 overflow-auto p-1 custom-scrollbar">
             {filteredOptions.length > 0 ? (
               filteredOptions.map(option => {
                 const isSelected = value.includes(option.id);
@@ -105,17 +105,17 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
                     key={option.id}
                     onClick={() => toggleOption(option.id)}
                     className={cn(
-                      "flex items-center justify-between px-3 py-2 text-sm rounded-md cursor-pointer transition-colors",
+                      "flex items-center justify-between px-3 py-2 text-[11px] font-bold uppercase tracking-wide rounded-md cursor-pointer transition-colors mb-0.5 last:mb-0",
                       isSelected ? "bg-indigo-50 text-indigo-700" : "hover:bg-slate-50 text-slate-600"
                     )}
                   >
                     <span className="truncate">{option.name}</span>
-                    {isSelected && <Check className="w-4 h-4" />}
+                    {isSelected && <Check className="w-3.5 h-3.5" />}
                   </div>
                 );
               })
             ) : (
-              <div className="px-3 py-2 text-xs text-slate-400 italic text-center">No options found</div>
+              <div className="px-3 py-4 text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center">Không tìm thấy kết quả</div>
             )}
           </div>
         </div>
