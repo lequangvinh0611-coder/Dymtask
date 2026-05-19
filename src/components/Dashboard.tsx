@@ -67,34 +67,34 @@ const RoadmapColumn = ({ day, date, tasks, isToday }: any) => {
   }, [tasks]);
 
   const Row = ({ label, count, time }: any) => (
-    <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
-      <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{label}</span>
+    <div className="flex items-center justify-between py-2.5 border-b border-slate-50 last:border-0">
+      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
       <div className="flex items-center gap-4">
-        <span className="text-sm font-black text-slate-700">{count}</span>
-        <span className="text-[8px] font-bold text-slate-300 w-12 text-right">{Math.floor(time/60)}h {time%60}m</span>
+        <span className="text-base font-black text-slate-800">{count}</span>
+        <span className="text-[9px] font-bold text-slate-400 w-14 text-right">{Math.floor(time/60)}h {time%60}m</span>
       </div>
     </div>
   );
 
   return (
     <div className={cn(
-      "flex-1 min-w-[200px] bg-white rounded-2xl border p-4 flex flex-col relative",
+      "flex-1 min-w-[220px] bg-white rounded-2xl border p-5 flex flex-col relative",
       isToday ? "border-indigo-600 shadow-xl shadow-indigo-100/50 ring-1 ring-indigo-600/10" : "border-slate-100"
     )}>
       {isToday && (
-        <span className="absolute top-4 right-4 bg-indigo-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest shadow-lg shadow-indigo-200">Today</span>
+        <span className="absolute top-5 right-5 bg-indigo-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest shadow-lg shadow-indigo-200">Today</span>
       )}
-      <div className="mb-6">
-        <h4 className="text-[14px] font-black text-indigo-600 uppercase tracking-tighter">{day}</h4>
-        <p className="text-[9px] font-bold text-slate-400 mt-0.5">{date}</p>
+      <div className="mb-8">
+        <h4 className="text-[16px] font-black text-indigo-600 uppercase tracking-tighter">{day}</h4>
+        <p className="text-[10px] font-bold text-slate-400 mt-1">{date}</p>
       </div>
 
-      <div className="flex-1 space-y-1">
-        <div className="bg-indigo-50/50 p-3 rounded-xl mb-4 flex items-center justify-between border border-indigo-100/50">
-          <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Total</span>
+      <div className="flex-1 space-y-1.5">
+        <div className="bg-indigo-50/50 p-4 rounded-xl mb-6 flex items-center justify-between border border-indigo-100/50">
+          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Total</span>
           <div className="flex items-center gap-4">
-            <span className="text-base font-black text-indigo-600 tracking-tight">{stats.total}</span>
-            <span className="text-[8px] font-bold text-indigo-400 w-12 text-right">{Math.floor(stats.est/60)}h {stats.est%60}m</span>
+            <span className="text-xl font-black text-indigo-600 tracking-tight">{stats.total}</span>
+            <span className="text-[9px] font-bold text-indigo-400 w-14 text-right">{Math.floor(stats.est/60)}h {stats.est%60}m</span>
           </div>
         </div>
 
@@ -143,11 +143,18 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchMeta = async () => {
-      const [t, u] = await Promise.all([
+      const [t, u, p, tg] = await Promise.all([
         supabase.from('teams').select('id, name'),
         supabase.from('users').select('id, name, email'),
+        supabase.from('projects').select('id, name'),
+        supabase.from('tags').select('id, name'),
       ]);
-      setMeta({ teams: t.data || [], users: u.data || [] });
+      setMeta({ 
+        teams: t.data || [], 
+        users: u.data || [],
+        projects: p.data || [],
+        tags: tg.data || []
+      } as any);
     };
     fetchMeta();
   }, []);
@@ -161,6 +168,8 @@ const Dashboard = () => {
       let query = supabase.from('tasks').select('*');
       if (filters.assignee_email) query = query.contains('assignees', [filters.assignee_email]);
       if (filters.team_ids) query = query.contains('team_ids', [filters.team_ids.toUpperCase()]);
+      if (filters.project_id) query = query.eq('project_id', filters.project_id);
+      if (filters.tag_id) query = query.eq('tag_id', filters.tag_id);
 
       const { data: allTasks } = await query;
       const tasks = allTasks || [];
@@ -241,9 +250,9 @@ const Dashboard = () => {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-50 overflow-hidden">
       {/* Header Bar */}
-      <div className="px-6 py-4 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
+      <div className="px-6 py-1 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
         <h2 className="text-xl font-black text-slate-800 tracking-tight">Dashboard</h2>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5">
           <DateRangePicker 
             startDate={filters.startDate} 
             endDate={filters.endDate} 
@@ -251,20 +260,39 @@ const Dashboard = () => {
           />
           <select 
             value={filters.assignee_email || ""}
-            className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-bold h-7 min-w-[120px] text-slate-500" 
+            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
             onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
           >
-            <option value="">All Personnel</option>
+            <option value="">PERSONNEL</option>
             {meta.users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
           </select>
           <select 
+            value={filters.project_id || ""}
+            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+            onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
+          >
+            <option value="">PROJECTS</option>
+            {(meta as any).projects?.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select 
+            value={filters.tag_id || ""}
+            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[120px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+            onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
+          >
+            <option value="">TAGS</option>
+            {(meta as any).tags?.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <select 
             value={filters.team_ids || ""}
-            className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-bold h-7 min-w-[120px] text-slate-500" 
+            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[120px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
             onChange={(e) => setFilters({...filters, team_ids: e.target.value || undefined})}
           >
-            <option value="">All Teams</option>
+            <option value="">TEAMS</option>
             {meta.teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
           </select>
+          <button onClick={() => fetchDashboardData()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
+             <RotateCw className="w-5 h-5" />
+          </button>
         </div>
       </div>
 

@@ -324,44 +324,44 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
             <select 
               value={filters.assignee_email || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[120px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
             >
-              <option value="">Assignees</option>
+              <option value="">PERSONNEL</option>
               {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
             </select>
             <select 
               value={filters.project_id || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[100px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
             >
-              <option value="">Projects</option>
+              <option value="">PROJECTS</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <select 
               value={filters.tag_id || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[90px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[120px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
             >
-              <option value="">Tags</option>
+              <option value="">TAGS</option>
               {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
 
             <select 
               value={filters.team_id as string || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[100px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[120px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}
             >
-              <option value="">Teams</option>
+              <option value="">TEAMS</option>
               {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
             </select>
 
             <select 
               value={filters.status || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[100px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[100px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
             >
-              <option value="">Status</option>
+              <option value="">STATUS</option>
               <option value="NEW">New</option>
               <option value="DONE">Done</option>
               <option value="SKIPPED">Skipped</option>
@@ -532,13 +532,13 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
         )}
       </SideDrawer>
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto bg-white min-h-[500px]">
         <table className="w-full text-left border-collapse table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
               <th className="w-[8%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
               <th className="w-[20%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-              <th className="w-[20%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 text-right pr-10">Project</th>
+              <th className="w-[20%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
               <th className="w-[10%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
               <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
               <th className="w-[7%] px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
@@ -552,7 +552,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             {tasks.map((task) => (
               <tr 
                 key={task.id} 
-                className="hover:bg-indigo-50/30 transition-all group cursor-pointer"
+                className="hover:bg-indigo-50/30 transition-all group cursor-pointer h-[41px]"
                 onClick={() => handleOpenDrawer(task)}
               >
                 <td className="px-6 py-2">
@@ -563,7 +563,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                 <td className="px-6 py-2 overflow-hidden">
                   <p className="font-bold text-slate-800 truncate text-sm tracking-tight" title={task.task_name}>{task.task_name}</p>
                 </td>
-                <td className="px-6 py-2 text-right pr-10">
+                <td className="px-6 py-2">
                   <div className="text-indigo-600 font-bold text-[10px] uppercase tracking-wide truncate" title={task.projects?.name || 'General'}>
                     {task.projects?.name || 'General'}
                   </div>

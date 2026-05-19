@@ -102,20 +102,20 @@ const AuditLog = () => {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
       {/* Header Bar */}
-      <div className="px-6 py-4 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
+      <div className="px-6 py-1 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
         <h2 className="text-xl font-black text-slate-800 tracking-tight">Audit Log</h2>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5">
            <div className="relative group">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search history..." 
+              placeholder="Tìm kiếm..." 
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setPage(1);
               }}
-              className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-600 transition-all font-medium w-64 h-8"
+              className="pl-10 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 focus:outline-none focus:border-indigo-600 transition-all font-medium w-64"
             />
           </div>
           <DateRangePicker 
@@ -126,24 +126,27 @@ const AuditLog = () => {
               setPage(1);
             }}
           />
+          <button onClick={() => fetchLogs()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
+             <RotateCw className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto bg-white min-h-[500px]">
         <table className="w-full text-left border-collapse min-w-[900px] table-fixed">
           <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-2 w-[15%] text-[9px] font-bold text-slate-400 uppercase tracking-widest">Action</th>
-              <th className="px-6 py-2 w-[35%] text-[9px] font-bold text-slate-400 uppercase tracking-widest">Description</th>
-              <th className="px-6 py-2 w-[20%] text-[9px] font-bold text-slate-400 uppercase tracking-widest">User</th>
-              <th className="px-6 py-2 w-[15%] text-[9px] font-bold text-slate-400 uppercase tracking-widest">Time</th>
-              <th className="px-6 py-2 w-[10%] text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right pr-10">Detail</th>
+              <th className="px-6 py-2 w-[15%] text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Action</th>
+              <th className="px-6 py-2 w-[35%] text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Description</th>
+              <th className="px-6 py-2 w-[20%] text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">User</th>
+              <th className="px-6 py-2 w-[15%] text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
+              <th className="px-6 py-2 w-[10%] text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right pr-10 bg-slate-50/50">Detail</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {logs.length > 0 ? (
               logs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/50 transition-all group">
+                <tr key={log.id} className="hover:bg-slate-50/50 transition-all group h-[41px]">
                   <td className="px-6 py-3">
                     <span className={cn(
                       "px-2 py-0.5 rounded-md text-[8px] font-black border uppercase tracking-widest",

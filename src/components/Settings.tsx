@@ -142,7 +142,7 @@ export default function Settings() {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
       {/* Header Bar */}
-      <div className="px-6 py-4 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
+      <div className="px-6 py-1 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
         <div className="flex items-center gap-6">
           <h2 className="text-xl font-black text-slate-800 tracking-tight">Settings</h2>
           <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
@@ -217,13 +217,14 @@ export default function Settings() {
                   </td>
                   <td className="px-8 py-3">
                     <div className="flex gap-1 flex-wrap">
-                      {(Array.isArray(user.team_ids) ? user.team_ids : Array.isArray(user.teams) ? user.teams : []).map((t: string) => {
-                        const cleanT = t.toString().replace(/[\[\]"]/g, '').trim();
-                        return (
-                        <span key={t} className="px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 rounded text-[8px] font-bold uppercase">
+                      {(Array.isArray(user.team_ids) ? user.team_ids : Array.isArray(user.teams) ? user.teams : [])
+                        .map((t: string) => t.toString().replace(/[\[\]"]/g, '').trim())
+                        .filter((t: string) => t !== "")
+                        .map((cleanT: string) => (
+                        <span key={cleanT} className="px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 rounded text-[8px] font-bold uppercase">
                           {cleanT}
                         </span>
-                      )})}
+                      ))}
                     </div>
                   </td>
                   <td className="px-8 py-3">
