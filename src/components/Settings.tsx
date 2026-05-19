@@ -144,7 +144,6 @@ export default function Settings() {
       {/* Header Bar */}
       <div className="px-6 py-1 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
         <div className="flex items-center gap-6">
-          <h2 className="text-xl font-black text-slate-800 tracking-tight">Settings</h2>
           <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
             {tabs.map((tab) => (
               <button
@@ -275,11 +274,7 @@ export default function Settings() {
           ))}
           <button className="px-2 py-1 text-slate-300"><ChevronRight size={16} /></button>
       </div>
-
-      <div className="px-4 py-2 border-t border-slate-100 bg-white">
-        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Metadata Registry Module</p>
-      </div>
-
+ 
       {/* Modals */}
       <MasterDataModal
         isOpen={isMasterModalOpen}

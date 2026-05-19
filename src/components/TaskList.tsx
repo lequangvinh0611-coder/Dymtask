@@ -340,7 +340,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
             </select>
             <select 
               value={filters.tag_id || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[120px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
             >
               <option value="">TAGS</option>
@@ -349,7 +349,7 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
 
             <select 
               value={filters.team_id as string || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[120px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
               onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}
             >
               <option value="">TEAMS</option>

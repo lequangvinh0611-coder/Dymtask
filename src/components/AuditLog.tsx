@@ -102,8 +102,7 @@ const AuditLog = () => {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
       {/* Header Bar */}
-      <div className="px-6 py-1 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
-        <h2 className="text-xl font-black text-slate-800 tracking-tight">Audit Log</h2>
+      <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100">
         <div className="flex items-center gap-1.5">
            <div className="relative group">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

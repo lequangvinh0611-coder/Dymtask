@@ -250,14 +250,8 @@ const Dashboard = () => {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-50 overflow-hidden">
       {/* Header Bar */}
-      <div className="px-6 py-1 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
-        <h2 className="text-xl font-black text-slate-800 tracking-tight">Dashboard</h2>
-        <div className="flex items-center gap-1.5">
-          <DateRangePicker 
-            startDate={filters.startDate} 
-            endDate={filters.endDate} 
-            onChange={(start, end) => setFilters({...filters, startDate: start, endDate: end})} 
-          />
+      <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100">
+        <div className="flex items-center gap-1.5 flex-1">
           <select 
             value={filters.assignee_email || ""}
             className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
@@ -276,7 +270,7 @@ const Dashboard = () => {
           </select>
           <select 
             value={filters.tag_id || ""}
-            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[120px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
             onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
           >
             <option value="">TAGS</option>
@@ -284,12 +278,19 @@ const Dashboard = () => {
           </select>
           <select 
             value={filters.team_ids || ""}
-            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[120px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
+            className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
             onChange={(e) => setFilters({...filters, team_ids: e.target.value || undefined})}
           >
             <option value="">TEAMS</option>
             {meta.teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
           </select>
+
+          <DateRangePicker 
+            startDate={filters.startDate} 
+            endDate={filters.endDate} 
+            onChange={(start, end) => setFilters({...filters, startDate: start, endDate: end})} 
+          />
+
           <button onClick={() => fetchDashboardData()} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors", loading && "animate-spin text-indigo-600")}>
              <RotateCw className="w-5 h-5" />
           </button>
