@@ -207,7 +207,7 @@ export default function Settings() {
           <tbody className="divide-y divide-slate-100 text-[11px]">
             {activeTab === 'USERS' ? (
               users.map((user) => (
-                <tr key={user.id} className="hover:bg-slate-50/50 group transition-all">
+                <tr key={user.id} className="hover:bg-slate-50/50 group transition-all h-[41px]">
                   <td className="px-8 py-3">
                     <div className="flex flex-col truncate">
                       <span className="font-black text-slate-800 uppercase tracking-tight truncate">{user.name}</span>
@@ -249,12 +249,14 @@ export default function Settings() {
                 (() => {
                     const list = activeTab === 'PROJECTS' ? projects : activeTab === 'TEAMS' ? teams : tags;
                     return list.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50/50 group transition-all">
+                        <tr key={item.id} className="hover:bg-slate-50/50 group transition-all h-[41px]">
                           <td className="px-8 py-3 font-black text-slate-800 uppercase tracking-widest">{item.name}</td>
                           <td className="px-8 py-3 text-slate-400 font-bold uppercase text-[9px]">{new Date(item.created_at).toLocaleDateString()}</td>
-                          <td className="px-8 py-3 text-right pr-12 flex items-center justify-end gap-3 h-full">
-                            <button onClick={() => handleEdit(item)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
-                            <button onClick={() => handleDelete(item.id)} className="text-slate-200 hover:text-rose-600 transition-all"><Trash2 size={14} /></button>
+                          <td className="px-8 py-3 text-right pr-12">
+                            <div className="flex items-center justify-end gap-3">
+                              <button onClick={() => handleEdit(item)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
+                              <button onClick={() => handleDelete(item.id)} className="text-slate-200 hover:text-rose-600 transition-all"><Trash2 size={14} /></button>
+                            </div>
                           </td>
                         </tr>
                     ));
@@ -264,15 +266,23 @@ export default function Settings() {
         </table>
       </div>
 
-      <div className="px-6 py-3 border-t border-slate-100 bg-white flex items-center justify-center gap-1.5">
-          <button className="px-2 py-1 text-slate-300"><ChevronLeft size={16} /></button>
-          {[1, 2, 3, 4, 5].map(p => (
-            <button key={p} className={cn(
-                "w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all",
-                p === 1 ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" : "text-slate-400 hover:bg-slate-50"
-            )}>{p}</button>
-          ))}
-          <button className="px-2 py-1 text-slate-300"><ChevronRight size={16} /></button>
+      <div className="px-4 py-0 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">
+            TỔNG: {activeTab === 'USERS' ? users.length : (activeTab === 'PROJECTS' ? projects.length : (activeTab === 'TEAMS' ? teams.length : tags.length))} ENTITIES
+          </span>
+          <div className="flex-1 flex items-center justify-center gap-1">
+            <button className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"><ChevronLeft size={14} /></button>
+            <div className="flex gap-1 mx-2">
+              {[1].map(p => (
+                <button key={p} className={cn(
+                    "w-7 h-7 flex items-center justify-center rounded text-xs font-bold transition-all",
+                    p === 1 ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:bg-slate-100"
+                )}>{p}</button>
+              ))}
+            </div>
+            <button className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"><ChevronRight size={14} /></button>
+          </div>
+          <div className="min-w-[100px]"></div>
       </div>
  
       {/* Modals */}

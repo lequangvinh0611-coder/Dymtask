@@ -191,13 +191,13 @@ const AuditLog = () => {
         </table>
       </div>
       
-      <div className="px-4 py-2 border-t border-slate-100 bg-white flex items-center justify-between">
-         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">Total: {totalCount} logs</span>
+      <div className="px-4 py-0 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
+         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">TỔNG: {totalCount} ENTITIES</span>
          <div className="flex-1 flex items-center justify-center gap-1">
             <button 
               disabled={page === 1} 
               onClick={() => setPage(p => p - 1)} 
-              className="px-2 py-1 text-[10px] font-bold text-slate-400 hover:bg-slate-50 rounded disabled:opacity-30"
+              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
             >
               <ChevronLeft size={14} />
             </button>
@@ -208,7 +208,7 @@ const AuditLog = () => {
                   onClick={() => typeof item === 'number' && setPage(item)}
                   disabled={typeof item !== 'number'}
                   className={cn(
-                    "w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold transition-all",
+                    "w-7 h-7 flex items-center justify-center rounded text-xs font-bold transition-all",
                     page === item ? "bg-indigo-600 text-white shadow-sm" : 
                     typeof item === 'number' ? "text-slate-400 hover:bg-slate-100" : 
                     "text-slate-300 cursor-default"
@@ -221,7 +221,7 @@ const AuditLog = () => {
             <button 
               disabled={page === totalPages} 
               onClick={() => setPage(p => p + 1)} 
-              className="px-2 py-1 text-[10px] font-bold text-slate-400 hover:bg-slate-50 rounded disabled:opacity-30"
+              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
             >
               <ChevronRight size={14} />
             </button>
