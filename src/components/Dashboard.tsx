@@ -290,35 +290,35 @@ const Dashboard = () => {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-50 overflow-hidden">
       {/* Header Bar */}
-      <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100">
-        <div className="flex items-center gap-1.5 flex-1 overflow-x-auto no-scrollbar py-0.5">
+      <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100 h-10">
+        <div className="flex items-center gap-1.5 flex-1 py-0.5">
           <MultiSearchableSelect 
             options={meta.users.map(u => ({ id: u.email, name: u.name || u.email }))}
             value={filters.assignee_email || []}
             onChange={(val) => setFilters({...filters, assignee_email: val})}
             placeholder="PERSONNEL"
-            className="min-w-[140px]"
+            className="min-w-[120px]"
           />
           <MultiSearchableSelect 
             options={meta.projects}
             value={filters.project_id || []}
             onChange={(val) => setFilters({...filters, project_id: val})}
             placeholder="PROJECTS"
-            className="min-w-[140px]"
+            className="min-w-[110px]"
           />
           <MultiSearchableSelect 
             options={meta.tags}
             value={filters.tag_id || []}
             onChange={(val) => setFilters({...filters, tag_id: val})}
             placeholder="TAGS"
-            className="min-w-[140px]"
+            className="min-w-[100px]"
           />
           <MultiSearchableSelect 
             options={meta.teams}
             value={filters.team_ids || []}
             onChange={(val) => setFilters({...filters, team_ids: val})}
             placeholder="TEAMS"
-            className="min-w-[140px]"
+            className="min-w-[100px]"
           />
 
           <DateRangePicker 
@@ -328,8 +328,8 @@ const Dashboard = () => {
           />
 
           {isFilterChanged && (
-            <button onClick={resetFilters} className={cn("p-2 ml-1 text-slate-400 hover:text-indigo-600 transition-colors flex-shrink-0", loading && "animate-spin text-indigo-600")}>
-              <RotateCw className="w-5 h-5" />
+            <button onClick={resetFilters} className={cn("p-1.5 ml-1 text-slate-400 hover:text-indigo-600 transition-colors flex-shrink-0", loading && "animate-spin text-indigo-600")}>
+              <RotateCw className="w-4 h-4" />
             </button>
           )}
         </div>
