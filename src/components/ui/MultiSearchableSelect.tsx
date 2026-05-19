@@ -63,23 +63,22 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
       <div 
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex flex-wrap items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 cursor-pointer hover:border-indigo-300 transition-colors min-h-[32px]",
+          "flex items-center justify-between px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] h-8 font-black text-slate-600 cursor-pointer hover:border-indigo-300 transition-colors min-w-[100px] uppercase tracking-widest relative",
         )}
       >
-        {selectedOptions.length > 0 ? (
-          <div className="flex items-center gap-1 overflow-hidden">
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[9px] font-bold uppercase tracking-tight max-w-[80px]">
-              <span className="truncate">{selectedOptions[0].name}</span>
-              <X className="w-2.5 h-2.5 cursor-pointer hover:text-indigo-900 shrink-0" onClick={(e) => removeOption(e, selectedOptions[0].id)} />
+        <div className="flex-1 flex justify-center overflow-hidden pr-2">
+          {selectedOptions.length > 0 ? (
+            <span className="truncate text-center">
+              {selectedOptions[0].name}
+              {selectedOptions.length > 1 && (
+                <span className="ml-1 text-indigo-500">+{selectedOptions.length - 1}</span>
+              )}
             </span>
-            {selectedOptions.length > 1 && (
-              <span className="text-[9px] font-bold text-slate-400">+{selectedOptions.length - 1}</span>
-            )}
-          </div>
-        ) : (
-          <span className="text-slate-400 uppercase tracking-widest text-[10px] w-full text-center pr-2">{placeholder}</span>
-        )}
-        <ChevronDown className={cn("ml-auto w-3 h-3 text-slate-400 transition-transform flex-shrink-0", isOpen && "rotate-180")} />
+          ) : (
+            <span className="text-slate-400">{placeholder}</span>
+          )}
+        </div>
+        <ChevronDown className={cn("w-3 h-3 text-slate-400 transition-transform flex-shrink-0 absolute right-2", isOpen && "rotate-180")} />
       </div>
 
       {isOpen && (
