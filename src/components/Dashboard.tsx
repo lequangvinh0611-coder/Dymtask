@@ -288,37 +288,37 @@ const Dashboard = () => {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-slate-50 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 bg-slate-50">
       {/* Header Bar */}
-      <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100 z-30 relative min-h-[44px]">
-        <div className="flex items-center gap-1.5 flex-1 py-0.5">
+      <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100 z-40 relative min-h-[48px]">
+        <div className="flex items-center gap-2 flex-1 py-0.5 overflow-visible">
           <MultiSearchableSelect 
             options={meta.users.map(u => ({ id: u.email, name: u.name || u.email }))}
             value={filters.assignee_email || []}
             onChange={(val) => setFilters({...filters, assignee_email: val})}
             placeholder="PERSONNEL"
-            className="min-w-[180px]"
+            className="min-w-[220px] shrink-0"
           />
           <MultiSearchableSelect 
             options={meta.projects}
             value={filters.project_id || []}
             onChange={(val) => setFilters({...filters, project_id: val})}
             placeholder="PROJECTS"
-            className="min-w-[110px]"
+            className="min-w-[140px] shrink-0"
           />
           <MultiSearchableSelect 
             options={meta.tags}
             value={filters.tag_id || []}
             onChange={(val) => setFilters({...filters, tag_id: val})}
             placeholder="TAGS"
-            className="min-w-[100px]"
+            className="min-w-[120px] shrink-0"
           />
           <MultiSearchableSelect 
             options={meta.teams}
             value={filters.team_ids || []}
             onChange={(val) => setFilters({...filters, team_ids: val})}
             placeholder="TEAMS"
-            className="min-w-[100px]"
+            className="min-w-[120px] shrink-0"
           />
 
           <DateRangePicker 
