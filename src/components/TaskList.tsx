@@ -59,20 +59,31 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   const [tags, setTags] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
 
+  const fetchMeta = async () => {
+    const [p, t, tg, u] = await Promise.all([
+      supabase.from('projects').select('id, name'),
+      supabase.from('teams').select('id, name'),
+      supabase.from('tags').select('id, name'),
+      supabase.from('users').select('id, name, email'),
+    ]);
+    setProjects(p.data || []);
+    setTeams(t.data || []);
+    setTags(tg.data || []);
+    setUsers(u.data || []);
+  };
+
   useEffect(() => {
-    const fetchMeta = async () => {
-      const [p, t, tg, u] = await Promise.all([
-        supabase.from('projects').select('id, name'),
-        supabase.from('teams').select('id, name'),
-        supabase.from('tags').select('id, name'),
-        supabase.from('users').select('id, name, email'),
-      ]);
-      setProjects(p.data || []);
-      setTeams(t.data || []);
-      setTags(tg.data || []);
-      setUsers(u.data || []);
-    };
     fetchMeta();
+
+    const channel = supabase.channel('task_list_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+        refetch();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const totalPages = Math.ceil(totalCount / 15) || 1;

@@ -107,20 +107,28 @@ export default function Settings() {
     }
 
     try {
+      console.log('[Settings] Updating user:', userId, data);
       const { error } = await supabase
         .from('users')
         .update({
           role: data.role.toLowerCase(),
           status: data.status.toUpperCase(),
-          team_ids: data.teams
+          team_ids: data.teams,
+          teams: data.teams // Sync both for safety
         })
         .eq('id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Settings] Supabase Update Error:', error);
+        throw error;
+      }
+      
       await logger.log('UPDATE_USER', `Updated user settings for ${userToUpdate?.email}`, { userId, updates: data });
-      await fetchData();
+      alert('User updated successfully!');
+      fetchData();
     } catch (err: any) {
-      alert(`Error updating user: ${err.message}`);
+      console.error('[Settings] Full Error Object:', err);
+      alert(`Error updating user: ${err.message || 'Unknown error'}`);
     }
   };
 

@@ -35,6 +35,25 @@ CREATE TABLE IF NOT EXISTS public.users (
 -- Ensure team_ids exists if table was created previously
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS team_ids TEXT[] DEFAULT '{}';
 
+-- 2.1 Master Data Tables
+CREATE TABLE IF NOT EXISTS public.projects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.teams (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.tags (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- 3. Create Tasks Table (Simplified and Robust)
 -- Note: Adjusted to include all missing columns seen in code
 CREATE TABLE IF NOT EXISTS public.tasks (
@@ -67,7 +86,7 @@ ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS display_id SERIAL; -- Note: Ad
 ALTER TABLE public.tasks ADD CONSTRAINT tasks_display_id_unique UNIQUE (display_id);
 
 -- 7. Create Audit Logs Table
-CREATE TABLE public.audit_logs (
+CREATE TABLE IF NOT EXISTS public.audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     action TEXT NOT NULL,
     description TEXT,
@@ -106,11 +125,8 @@ USING (
 );
 
 -- 10. Policies for users table
-CREATE POLICY "Master/Admin manage all users" ON public.users
-FOR ALL USING (
-  (SELECT public.get_current_user_role()) IN ('master', 'admin')
-);
-
+-- Use a more direct check for roles to avoid recursion if possible, 
+-- or ensure the helper function is robust.
 CREATE POLICY "Users can see all other users" ON public.users
 FOR SELECT USING (true);
 
@@ -119,6 +135,16 @@ FOR INSERT WITH CHECK (auth.uid() = id);
 
 CREATE POLICY "Users can edit their own profile" ON public.users
 FOR UPDATE USING (auth.uid() = id);
+
+-- Master/Admin policy for managing other users
+CREATE POLICY "Admins manage all users" ON public.users
+FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.users 
+    WHERE id = auth.uid() 
+    AND role IN ('master', 'admin')
+  )
+);
 
 -- Functions & Triggers for updated_at
 CREATE OR REPLACE FUNCTION update_modified_column()
@@ -129,9 +155,33 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- 11. Enable Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.teams;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.projects;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.tags;
+-- 11. Enable Realtime (Idempotent)
+DO $$
+BEGIN
+    -- This section ensures the publication exists and tables are added.
+    -- Note: This is an example approach, some Supabase environments handle this differently.
+    IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        CREATE PUBLICATION supabase_realtime;
+    END IF;
+
+    -- Add tables safely
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.teams;
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.projects;
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.tags;
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
