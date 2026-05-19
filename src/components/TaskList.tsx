@@ -311,11 +311,8 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
       <div className="px-6 py-2 flex items-center bg-white shrink-0 border-b border-slate-100 justify-between">
-        <div className="flex items-center gap-6">
-          <h2 className="text-xl font-black text-slate-800 tracking-tight">{title}</h2>
-          
-          <div className="flex items-center gap-1.5">
-            <div className="relative">
+        <div className="flex items-center gap-1.5">
+          <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input 
                 type="text" placeholder="Tìm kiếm..." 
@@ -389,8 +386,6 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
                <RotateCw className="w-5 h-5" />
             </button>
           </div>
-        </div>
-
         <div className="flex items-center gap-2">
           {showCreate && (
              <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 h-8 px-5 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-200">
