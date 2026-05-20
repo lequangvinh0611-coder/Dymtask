@@ -48,38 +48,14 @@ export interface Subtask {
 
 export interface Task {
   id: string;
-  user_id: string | null;           // ✅ ADDED: User who created the task
-  task_name: string;
-  tag_id: string | null;
-  tag?: string | null;              // Text representation of tag
-  project_id: string | null;
-  project?: string | null;          // Text representation of project
-  team_id: string | null;
-  team?: string | null;             // Text representation of team
-  type: TaskType;
-  deadline_date: string | null;
-  deadline_day_num: number | null;
-  
-  // --- MIGRATION 1: CẬP NHẬT KIỂU THỜI GIAN ---
-  deadline_time: string | null;     // Ánh xạ cột TIME (VD: "08:30:00")
-  deadline_days: string[] | null;   // Ánh xạ cột TEXT[] (VD: ["Mon", "Tue"])
-  estimated_minutes: number;        // Ánh xạ cột INTEGER
-  actual_minutes: number;           // Ánh xạ cột INTEGER
-
-  status: TaskStatus;
-  display_id?: number; // ✅ ADDED: Auto-incrementing sequential ID
-  team_ids?: string[]; // ✅ ADDED: Multi-team support
-  subtasks: Subtask[]; // Ánh xạ JSONB
-  assignees: string[]; // List of user emails
-  created_at: string;
-  updated_at: string;
+  title: string;
+  description: string | null;
+  task_type: string;
+  status: string;
   is_active: boolean;
-
-  // --- QUAN HỆ (RELATIONS) ---
-  // Khai báo thêm để hứng data khi dùng Supabase JOIN
-  projects?: Project;
-  teams?: Team;
-  tags?: Tag;
+  est_time: number;
+  actual_time: number;
+  created_at: string;
 }
 
 export interface AuditLog {

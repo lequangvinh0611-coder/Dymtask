@@ -1,298 +1,70 @@
-import React, { useState, useEffect } from 'react';
-import { Search, RotateCw, RotateCcw, Plus, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckSquare, Square, MoreVertical, CheckCircle2, Clock, Download, Calendar as CalendarIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, RotateCcw, Clock, Check, AlertCircle, ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { useTasks, TaskFilters, TaskWithDetails } from '../hooks/useTasks';
+import { useTasks, TaskFilters } from '../hooks/useTasks';
 import { supabase } from '../lib/supabase';
-import CreateTaskModal from './CreateTaskModal';
-import { SideDrawer } from './ui/SideDrawer';
-import { logger } from '../lib/logger';
 import { Task } from '../types/database.types';
-import { useAuthStore } from '../store/authStore';
-import { MultiSearchableSelect } from './ui/MultiSearchableSelect';
-import { DateRangePicker } from './ui/DateRangePicker';
 
 interface TaskListProps {
   title: string;
-  showCreate?: boolean;
 }
 
-const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
-  const { profile } = useAuthStore();
+const TaskList: React.FC<TaskListProps> = ({ title }) => {
   const [page, setPage] = useState(1);
-  const today = new Date().toISOString().split('T')[0];
-  
-  const defaultFilters: TaskFilters = {
-    assignee_email: profile?.email || undefined,
+  const [search, setSearch] = useState('');
+  const [actualTimes, setActualTimes] = useState<Record<string, number>>({});
+  const [submittingTaskId, setSubmittingTaskId] = useState<string | null>(null);
+
+  // Strictly filter by is_active = true and status = 'NEW'
+  const filters: TaskFilters = {
+    search: search.trim() || undefined,
     status: 'NEW',
-    startDate: today,
-    endDate: today
+    is_active: true,
   };
 
-  const [filters, setFilters] = useState<TaskFilters>(defaultFilters);
-
-  const isFilterChanged = 
-    (filters.search && filters.search !== "") || 
-    filters.assignee_email !== defaultFilters.assignee_email || 
-    filters.project_id !== undefined || 
-    filters.tag_id !== undefined || 
-    filters.status !== defaultFilters.status || 
-    (filters.startDate && filters.startDate !== defaultFilters.startDate) ||
-    (filters.endDate && filters.endDate !== defaultFilters.endDate) ||
-    (Array.isArray(filters.team_id) && filters.team_id.length > 0) ||
-    (typeof filters.team_id === 'string' && filters.team_id !== "");
-
-  useEffect(() => {
-    if (profile?.email && !filters.assignee_email && filters.assignee_email !== undefined) {
-      setFilters(prev => ({ ...prev, assignee_email: profile.email }));
-    }
-  }, [profile]);
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [updatingTask, setUpdatingTask] = useState<string | null>(null);
-  
-  const { tasks, totalCount, loading, refetch } = useTasks(page, 15, { ...filters, todoListMode: true });
-  
-  const [projects, setProjects] = useState<any[]>([]);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [tags, setTags] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
-
-  const fetchMeta = async () => {
-    const [p, t, tg, u] = await Promise.all([
-      supabase.from('projects').select('id, name'),
-      supabase.from('teams').select('id, name'),
-      supabase.from('tags').select('id, name'),
-      supabase.from('users').select('id, name, email'),
-    ]);
-    setProjects(p.data || []);
-    setTeams(t.data || []);
-    setTags(tg.data || []);
-    setUsers(u.data || []);
-  };
-
-  useEffect(() => {
-    fetchMeta();
-
-    const channel = supabase.channel('task_list_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-        refetch();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
+  const { tasks, totalCount, loading, refetch } = useTasks(page, 15, filters);
   const totalPages = Math.ceil(totalCount / 15) || 1;
 
-  const handleOpenDrawer = (task: Task) => {
-    setSelectedTask(task);
-    setIsDrawerOpen(true);
-  };
-
-  const handleUpdateStatus = async (taskId: string, status: string) => {
-    setUpdatingTask(taskId);
+  const handleSubmit = async (taskId: string, estTime: number) => {
+    const finalMinutes = actualTimes[taskId] !== undefined ? actualTimes[taskId] : estTime;
+    setSubmittingTaskId(taskId);
     try {
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) return;
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          status: 'DONE',
+          actual_time: finalMinutes
+        })
+        .eq('id', taskId);
 
-      // Logic for SPOT tasks (ONETIME)
-      if (task.type === 'ONETIME' || task.type === 'ONCE') {
-        const isTerminal = ['DONE', 'SKIPPED'].includes(status);
-        await supabase.from('tasks').update({ 
-          status, 
-          is_active: !isTerminal // Backwards logic: if Done/Skipped, it becomes "Off" in Task Manager
-        }).eq('id', taskId);
-      } 
-      // Logic for Recurring Tasks (DAILY, WEEKLY, MONTHLY)
-      else if (['DAILY', 'WEEKLY', 'MONTHLY'].includes(task.type)) {
-        // We create a CLONE of the template for this specific date
-        // ⚠️ SCRUB PAYLOAD: Must remove virtual fields and read-only columns to avoid 400 Bad Request
-        const isTerminal = ['DONE', 'SKIPPED'].includes(status);
-        const instancePayload = {
-          ...task,
-          task_name: `${task.task_name} (Instance)`, // Mark as hidden history
-          status: status,
-          deadline_date: task.deadline_date || today,
-          type: 'ONETIME' as const,
-          is_active: !isTerminal, // Deactivate if terminal to hide from Master Data
-        };
-
-        // These fields are either read-only, generated by the DB, or virtual joined objects
-        const fieldsToDelete = [
-          'id', 
-          'created_at', 
-          'updated_at', 
-          'display_id', 
-          'tags', 
-          'projects', 
-          'teams',
-          'parent_tpl_id'
-        ];
-        
-        fieldsToDelete.forEach(field => delete (instancePayload as any)[field]);
-
-        // Inject parent relationship into subtasks
-        instancePayload.subtasks = (task.subtasks || []).map(st => ({ ...st, parent_tpl_id: task.id }));
-
-        await supabase.from('tasks').insert(instancePayload);
-      } else {
-        // Fallback for other cases
-        await supabase.from('tasks').update({ status }).eq('id', taskId);
-      }
-
-      await logger.log('UPDATE_TASK_STATUS', `Updated task status to ${status}`, { taskId });
+      if (error) throw error;
       refetch();
-      if (selectedTask?.id === taskId) {
-        setSelectedTask(prev => prev ? { ...prev, status: status as any } : null);
-      }
     } catch (error) {
-      console.error('Error updating task:', error);
+      console.error('Error submitting task:', error);
+      alert('Không thể lưu kết quả nhiệm vụ. Vui lòng thử lại.');
     } finally {
-      setUpdatingTask(null);
+      setSubmittingTaskId(null);
     }
   };
 
-  const handleBatchSkip = async (taskIds: string[]) => {
+  const handleSkip = async (taskId: string) => {
+    setSubmittingTaskId(taskId);
     try {
-      await supabase.from('tasks').update({ status: 'SKIPPED', actual_minutes: 0 }).in('id', taskIds);
-      await logger.log('BATCH_SKIP_TASKS', `Skipped ${taskIds.length} tasks`, { taskIds });
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          status: 'SKIPPED'
+        })
+        .eq('id', taskId);
+
+      if (error) throw error;
       refetch();
-      if (selectedTask && taskIds.includes(selectedTask.id)) {
-        setSelectedTask(prev => prev ? { ...prev, status: 'SKIPPED', actual_minutes: 0 } : null);
-      }
     } catch (error) {
-      console.error('Error skipping tasks:', error);
+      console.error('Error skipping task:', error);
+      alert('Không thể bỏ qua nhiệm vụ. Vui lòng thử lại.');
+    } finally {
+      setSubmittingTaskId(null);
     }
-  };
-
-  const handleResetTask = async (task: Task) => {
-    try {
-      // 1. Check if it's an instance of a recurring task
-      const parentId = (task.subtasks as any[])?.find(st => st.parent_tpl_id)?.parent_tpl_id;
-      
-      if (parentId) {
-        // Verify parent is still active
-        const { data: parent } = await supabase.from('tasks').select('is_active').eq('id', parentId).single();
-        if (!parent || !parent.is_active) {
-          alert("Task Template đã bị Off hoặc xóa. Không thể Reset.");
-          return;
-        }
-      }
-
-      const resetSubtasks = task.subtasks?.map((sub: any) => ({
-        ...sub,
-        status: 'NEW',
-        is_completed: false,
-        actual_minutes: 0
-      })) || [];
-      
-      // If it has a parentId, resetting means DELETING the instance 
-      // so the virtual task appears as NEW again.
-      if (parentId) {
-        await supabase.from('tasks').delete().eq('id', task.id);
-      } else {
-        // If it's a SPOT task, reset its status and turn it back "ON" in Task Manager
-        await supabase.from('tasks').update({ 
-          status: 'NEW', 
-          actual_minutes: 0,
-          subtasks: resetSubtasks,
-          is_active: true
-        }).eq('id', task.id);
-      }
-      
-      await logger.log('RESET_TASK', `Reset task and subtasks to NEW`, { taskId: task.id });
-      refetch();
-      setIsDrawerOpen(false);
-      setSelectedTask(null);
-    } catch (error) {
-      console.error('Error resetting task:', error);
-    }
-  };
-
-  const handleUpdateActualTime = async (taskId: string, minutes: number) => {
-    try {
-      await supabase.from('tasks').update({ actual_minutes: minutes }).eq('id', taskId);
-      refetch();
-      if (selectedTask?.id === taskId) {
-        setSelectedTask(prev => prev ? { ...prev, actual_minutes: minutes } : null);
-      }
-    } catch (error) {
-      console.error('Error updating actual time:', error);
-    }
-  };
-
-  const handleUpdateSubtask = async (task: Task, subtaskId: string, updates: Partial<any>) => {
-    try {
-      const currentSubtasks = task.subtasks || [];
-      const newSubtasks = currentSubtasks.map((sub: any) => 
-        sub.id === subtaskId ? { ...sub, ...updates } : sub
-      );
-      
-      // Tự động cập nhật is_completed dựa trên status
-      if (updates.status) {
-        const target = newSubtasks.find((s: any) => s.id === subtaskId);
-        if (target) target.is_completed = updates.status === 'DONE';
-      }
-
-      await supabase.from('tasks').update({ subtasks: newSubtasks }).eq('id', task.id);
-      
-      // Tính toán lại tổng actual_minutes của task chính từ các subtasks
-      const totalActual = newSubtasks.reduce((sum: number, s: any) => sum + (parseInt(s.actual_minutes) || 0), 0);
-      await supabase.from('tasks').update({ actual_minutes: totalActual }).eq('id', task.id);
-
-      refetch();
-      if (selectedTask?.id === task.id) {
-        setSelectedTask(prev => prev ? { ...prev, subtasks: newSubtasks, actual_minutes: totalActual } : null);
-      }
-    } catch (error) {
-      console.error('Error updating subtask:', error);
-    }
-  };
-
-  const renderDeadlineContext = (task: any) => {
-    switch(task.type) {
-      case 'DAILY': return 'Hàng ngày';
-      case 'WEEKLY': return task.deadline_days?.join(', ');
-      case 'MONTHLY': return `Ngày ${task.deadline_day_num}`;
-      case 'ONETIME': return task.deadline_date;
-      default: return task.type;
-    }
-  };
-
-  const handleExportCsv = () => {
-    if (!tasks || tasks.length === 0) return;
-    
-    const headers = ['ID', 'Task Name', 'Project', 'Tag', 'Team', 'Type', 'Deadline Date', 'Deadline Time', 'Estimated Minutes', 'Actual Minutes', 'Status'];
-    const csvContent = [
-      headers.join(','),
-      ...tasks.map(task => [
-        task.display_id || task.id,
-        `"${task.task_name.replace(/"/g, '""')}"`,
-        `"${(task.projects?.name || 'General').replace(/"/g, '""')}"`,
-        `"${(task.tags?.name || 'No Tag').replace(/"/g, '""')}"`,
-        `"${(task.teams?.name || 'Internal').replace(/"/g, '""')}"`,
-        task.type,
-        task.deadline_date || '',
-        task.deadline_time || '',
-        task.estimated_minutes,
-        task.actual_minutes,
-        task.status
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `tasks_export_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const getPaginationItems = () => {
@@ -321,437 +93,177 @@ const TaskList: React.FC<TaskListProps> = ({ title, showCreate = false }) => {
     return pages;
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, string> = {
-      'NEW': 'bg-[#EBF1FF] text-[#4A7CE1] border-[#D6E4FF]',
-      'IN_PROGRESS': 'bg-[#FFF9EB] text-[#D97706] border-[#FEF3C7]',
-      'DONE': 'bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]',
-      'SKIPPED': 'bg-slate-50 text-slate-500 border-slate-200'
-    };
-    return statusMap[status] || 'bg-slate-50 text-slate-500 border-slate-200';
-  };
-
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
-      <div className="px-6 py-1 flex items-center bg-white shrink-0 border-b border-slate-100 justify-between">
-        <div className="flex items-center gap-1.5">
-          <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-              <input 
-                type="text" placeholder="Tìm kiếm..." 
-                value={filters.search || ""}
-                className="pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-sm w-44 h-8 focus:outline-none focus:border-indigo-600 transition-all"
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-              />
-            </div>
-
-            <select 
-              value={filters.assignee_email || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[220px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-              onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
-            >
-              <option value="">PERSONNEL</option>
-              {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
-            </select>
-            <select 
-              value={filters.project_id || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-              onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
-            >
-              <option value="">PROJECTS</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <select 
-              value={filters.tag_id || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-              onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
-            >
-              <option value="">TAGS</option>
-              {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-
-            <select 
-              value={filters.team_id as string || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-              onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}
-            >
-              <option value="">TEAMS</option>
-              {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-            </select>
-
-            <select 
-              value={filters.status || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[100px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-              onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
-            >
-              <option value="">STATUS</option>
-              <option value="NEW">New</option>
-              <option value="DONE">Done</option>
-              <option value="SKIPPED">Skipped</option>
-            </select>
-
-            <DateRangePicker 
-              startDate={filters.startDate || ""}
-              endDate={filters.endDate || ""}
-              onChange={(start, end) => setFilters({...filters, startDate: start, endDate: end})}
-            />
-
-            <button 
-              onClick={handleExportCsv}
-              className="p-1 px-4 h-8 text-xs font-black text-slate-500 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all flex items-center gap-2 group uppercase tracking-widest"
-              title="Export CSV"
-            >
-              <Download className="w-4 h-4 group-hover:text-indigo-600" />
-              <span className="group-hover:text-indigo-600">CSV</span>
-            </button>
-            
-            {isFilterChanged && (
-              <button 
-                onClick={() => setFilters(defaultFilters)} 
-                className="p-2 ml-1 text-indigo-600 hover:text-indigo-800 transition-colors"
-                title="Reset Filters"
-              >
-                 <RotateCcw className="w-5 h-5" />
-              </button>
-            )}
-          </div>
+    <div className="flex-1 flex flex-col min-h-0 bg-slate-50 overflow-hidden">
+      {/* Upper header action controls */}
+      <div className="px-6 py-4 flex items-center bg-white shrink-0 border-b border-slate-100 justify-between gap-4 flex-wrap shadow-sm">
         <div className="flex items-center gap-2">
-          {showCreate && (
-             <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 h-8 px-5 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-200">
-                <Plus className="w-4 h-4" /> <span>Create Task</span>
-             </button>
+          <div className="w-2.5 h-6 bg-indigo-600 rounded-full"></div>
+          <h2 className="text-base font-black text-slate-800 uppercase tracking-widest">{title}</h2>
+          <span className="ml-2 bg-indigo-50 text-indigo-600 text-[10px] font-black px-2.5 py-0.5 rounded-full tracking-widest">
+            {totalCount} PENDING
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Tìm kiếm nhiệm vụ..." 
+              value={search}
+              className="pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm w-56 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/10 transition-all font-medium text-slate-700"
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+
+          {search && (
+            <button 
+              onClick={() => { setSearch(''); setPage(1); }} 
+              className="p-2 text-indigo-600 hover:text-indigo-800 transition-colors"
+              title="Đặt lại công cụ tìm kiếm"
+            >
+               <RotateCcw className="w-5 h-5" />
+            </button>
           )}
         </div>
       </div>
 
-      <CreateTaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={() => refetch()} />
-
-      <SideDrawer 
-        isOpen={isDrawerOpen} 
-        onClose={() => setIsDrawerOpen(false)} 
-        title={selectedTask ? (
-          <div className="flex flex-col gap-1.5">
-            <h2 className="text-xl font-black text-slate-900 tracking-tight leading-tight">{selectedTask.task_name}</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded border border-slate-100 font-mono">
-                ID: {String(selectedTask.display_id || 0).padStart(6, '0')}
-              </span>
-              <span className={cn(
-                "px-2 py-0.5 rounded text-[10px] font-bold uppercase border tracking-wider",
-                getStatusBadge(selectedTask.status)
-              )}>
-                {selectedTask.status}
-              </span>
-            </div>
+      {/* Main card grid container */}
+      <div className="flex-1 overflow-auto p-6 min-h-[400px]">
+        {loading ? (
+          <div className="h-full w-full flex flex-col items-center justify-center gap-3">
+            <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-slate-400 font-mono text-[10px] uppercase tracking-widest animate-pulse">Đang tải nhiệm vụ...</p>
           </div>
-        ) : "Task Detail"}
-      >
-        {selectedTask && (
-          <div className="flex flex-col h-full">
-            <div className="flex-1 space-y-8">
-              {/* SUB-TASKS MANAGEMENT SECTION */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">SUB-TASKS</h3>
-                  <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">
-                    {selectedTask.subtasks?.filter((s:any) => s.is_completed).length || 0}/{selectedTask.subtasks?.length || 0}
-                  </span>
-                </div>
-                
-                <div className="space-y-1 bg-slate-50/50 p-2 rounded-xl border border-slate-100">
-                  {selectedTask.subtasks?.map((sub: any) => (
-                    <div key={sub.id} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100/50 shadow-sm transition-all group">
-                      <div className="flex-1 flex items-center gap-1.5 text-[11px] min-w-0">
-                        <span className={cn(
-                          "font-bold text-slate-700 truncate min-w-0 flex-1",
-                          (sub.status === 'DONE' || sub.status === 'SKIPPED') && "line-through text-slate-400 font-medium"
-                        )}>
-                          {sub.name}
-                        </span>
-                        <span className="text-slate-300 font-light">-</span>
-                        <span className="shrink-0 text-slate-400 font-bold uppercase tracking-tighter truncate max-w-[80px]">
-                          {sub.assignee?.split('@')[0] || 'Unassigned'}
-                        </span>
-                        <span className="text-slate-300 font-light">-</span>
-                        <div className="flex items-center gap-1 shrink-0 font-black relative group/time">
-                          <input 
-                            type="number"
-                            className="w-12 bg-indigo-50/50 text-indigo-600 border border-indigo-100 rounded px-1.5 py-0.5 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none text-center font-black placeholder:text-slate-300 transition-all"
-                            placeholder={`${sub.estimated_minutes || 0}m`}
-                            value={sub.actual_minutes || ''}
-                            onChange={(e) => handleUpdateSubtask(selectedTask, sub.id, { actual_minutes: parseInt(e.target.value) || 0 })}
-                          />
-                          <span className="text-[9px] text-slate-300 absolute -top-3 left-1/2 -translate-x-1/2 opacity-0 group-hover/time:opacity-100 transition-opacity">MINS</span>
-                        </div>
-                        <span className="text-slate-300 font-light">-</span>
-                        <select 
-                          value={sub.status || 'NEW'}
-                          onChange={(e) => handleUpdateSubtask(selectedTask, sub.id, { 
-                            status: e.target.value,
-                            is_completed: e.target.value === 'DONE'
-                          })}
-                          className="bg-transparent text-[9px] font-black text-indigo-500 uppercase tracking-tighter focus:outline-none cursor-pointer hover:text-indigo-700 transition-colors"
-                        >
-                          <option value="NEW">New</option>
-                          <option value="DONE">Done</option>
-                          <option value="SKIPPED">Skip</option>
-                        </select>
+        ) : tasks && tasks.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {tasks.map((task) => {
+              const currentInputVal = actualTimes[task.id] !== undefined ? actualTimes[task.id] : task.est_time;
+              return (
+                <div 
+                  key={task.id} 
+                  className="bg-white border border-slate-100 rounded-2xl p-5 hover:border-indigo-200 hover:shadow-xl hover:shadow-slate-100/80 transition-all duration-300 flex flex-col justify-between gap-5 relative group"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200">
+                        {task.task_type || 'ONETIME'}
+                      </span>
+                      <div className="flex items-center gap-1 text-slate-400 text-[11px] font-bold font-mono">
+                        <Clock className="w-3.5 h-3.5 text-slate-300" />
+                        <span>EST: {task.est_time || 0}m</span>
                       </div>
                     </div>
-                  ))}
 
-                  {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && (
-                    <div className="text-center py-6 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">No subtasks defined</p>
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-slate-800 text-base leading-snug tracking-tight">
+                        {task.title}
+                      </h3>
+                      <p className="text-slate-500 text-xs line-clamp-3 leading-relaxed" title={task.description || ''}>
+                        {task.description || <span className="italic text-slate-300">Không có mô tả chi tiết</span>}
+                      </p>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="space-y-4 pt-3 border-t border-slate-100">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest font-mono">
+                        Thời gian thực tế (Phút)
+                      </label>
+                      <input 
+                        type="number"
+                        min={0}
+                        disabled={submittingTaskId === task.id}
+                        value={currentInputVal}
+                        onChange={(e) => setActualTimes({
+                          ...actualTimes,
+                          [task.id]: Math.max(0, parseInt(e.target.value) || 0)
+                        })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-indigo-600 focus:bg-white focus:ring-1 focus:ring-indigo-600/10 transition-all font-mono"
+                        placeholder="Số phút thực hiện..."
+                      />
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <button
+                        type="button"
+                        disabled={submittingTaskId === task.id}
+                        onClick={() => handleSkip(task.id)}
+                        className="flex-1 py-2.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 text-slate-500 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:scale-102"
+                      >
+                        Bỏ qua
+                      </button>
+                      <button
+                        type="button"
+                        disabled={submittingTaskId === task.id}
+                        onClick={() => handleSubmit(task.id, task.est_time || 0)}
+                        className="flex-[1.5] py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:scale-102 flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-100"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>Xong</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="h-full w-full flex flex-col items-center justify-center py-20 text-center">
+            <div className="p-4 bg-white border border-slate-100 rounded-full shadow-md mb-3">
+              <AlertCircle className="w-8 h-8 text-indigo-500" />
             </div>
-
-            <div className="pt-6 border-t border-slate-100 flex gap-3 mt-auto">
-              {['DONE', 'SKIPPED'].includes(selectedTask.status) ? (
-                <button 
-                  onClick={() => handleResetTask(selectedTask)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-lg shadow-slate-200 uppercase tracking-widest"
-                >
-                  <RotateCw size={14} />
-                  <span>Reset Task</span>
-                </button>
-              ) : (
-                <>
-                  <button 
-                    onClick={async () => {
-                      const subtasks = selectedTask.subtasks || [];
-                      const hasNew = subtasks.some((s: any) => (s.status || 'NEW') === 'NEW');
-                      if (hasNew) {
-                        alert('Không thể submit khi còn subtask ở trạng thái New. Vui lòng chuyển trạng thái sang Done hoặc Skip.');
-                        return;
-                      }
-                      
-                      setUpdatingTask(selectedTask.id);
-                      
-                      // 1. Finalize actual minutes: if 0 or empty, use estimated minutes
-                      const finalizedSubtasks = subtasks.map((s: any) => ({
-                        ...s,
-                        actual_minutes: (s.actual_minutes === 0 || !s.actual_minutes) ? (s.estimated_minutes || 0) : s.actual_minutes
-                      }));
-
-                      // 2. Calculate final status
-                      let newStatus: string = 'DONE';
-                      const hasDone = finalizedSubtasks.some((s: any) => s.status === 'DONE');
-                      const allSkipped = finalizedSubtasks.length > 0 && finalizedSubtasks.every((s: any) => s.status === 'SKIPPED');
-                      
-                      if (hasDone) newStatus = 'DONE';
-                      else if (allSkipped) newStatus = 'SKIPPED';
-                      else if (finalizedSubtasks.length === 0) newStatus = 'DONE';
-
-                      // 3. Calculate total actual minutes
-                      const totalActual = finalizedSubtasks.reduce((sum: number, s: any) => sum + (parseInt(s.actual_minutes) || 0), 0);
-
-                      try {
-                        const isTemplate = ['DAILY', 'WEEKLY', 'MONTHLY'].includes(selectedTask.type);
-                        
-                        // If it's a template, we MUST create an instance instead of updating the template
-                        if (isTemplate) {
-                          const instancePayload = {
-                            ...selectedTask,
-                            task_name: `${selectedTask.task_name} (Instance)`, // Mark as instance
-                            status: newStatus,
-                            subtasks: finalizedSubtasks,
-                            actual_minutes: totalActual,
-                            deadline_date: selectedTask.deadline_date || today,
-                            type: 'ONETIME' as const,
-                            is_active: false, // History instances are always inactive
-                          };
-
-                          // Scrub fields before insert
-                          const fieldsToDelete = ['id', 'created_at', 'updated_at', 'display_id', 'tags', 'projects', 'teams'];
-                          fieldsToDelete.forEach(field => delete (instancePayload as any)[field]);
-                          
-                          // Tag subtasks with parent link
-                          instancePayload.subtasks = finalizedSubtasks.map((st: any) => ({ ...st, parent_tpl_id: selectedTask.id }));
-
-                          // Insert as history record
-                          await supabase.from('tasks').insert(instancePayload);
-                          
-                          // IMPORTANT: We DO NOT update the template's is_active. 
-                          // It stays "ON" in Task Manager.
-                        } else {
-                          // Standard ONETIME task or already an Instance
-                          await supabase.from('tasks').update({ 
-                            status: newStatus, 
-                            subtasks: finalizedSubtasks,
-                            actual_minutes: totalActual,
-                            is_active: false // Mark as completed (this hides it from Task Manager default view)
-                          }).eq('id', selectedTask.id);
-                        }
-                        
-                        await logger.log('SUBMIT_TASK', `Submitted task as ${newStatus}`, { taskId: selectedTask.id });
-                        refetch();
-                        setIsDrawerOpen(false);
-                      } catch (err) {
-                        console.error('Error submitting task:', err);
-                      } finally {
-                        setUpdatingTask(null);
-                      }
-                    }}
-                    disabled={updatingTask === selectedTask.id}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 uppercase tracking-widest disabled:opacity-50"
-                  >
-                    <CheckCircle2 size={14} />
-                    <span>Submit</span>
-                  </button>
-                </>
-              )}
-            </div>
+            <h4 className="text-slate-800 font-bold text-base">Không tìm thấy nhiệm vụ khả dụng</h4>
+            <p className="text-slate-400 text-xs mt-1 max-w-sm leading-relaxed">
+              Tất cả các nhiệm vụ đã được hoàn thành hoặc bỏ qua, hoặc hiện không có nhiệm vụ nào được đặt ở chế độ Kích hoạt (Active ON).
+            </p>
           </div>
         )}
-      </SideDrawer>
-
-      <div className="flex-1 overflow-auto bg-white min-h-[500px]">
-        <table className="w-full text-left border-collapse table-fixed">
-          <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
-            <tr>
-                <th className="w-[8%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
-                <th className="w-[20%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-                <th className="w-[20%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
-                <th className="w-[10%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 italic-none">
-            {tasks.map((task) => (
-              <tr 
-                key={task.id} 
-                className="hover:bg-indigo-50/30 transition-all group cursor-pointer h-[41px]"
-                onClick={() => handleOpenDrawer(task)}
-              >
-                <td className="px-6 py-2">
-                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">
-                    {String(task.display_id || 0).padStart(6, '0')}
-                  </p>
-                </td>
-                <td className="px-6 py-2 overflow-hidden">
-                  <p className="font-bold text-slate-700 truncate text-[13px] tracking-tight" title={task.task_name}>{task.task_name}</p>
-                </td>
-                <td className="px-6 py-2 overflow-hidden">
-                  <p className="font-bold text-slate-700 truncate text-[13px] tracking-tight" title={task.projects?.name || 'General'}>
-                    {task.projects?.name || 'General'}
-                  </p>
-                </td>
-                <td className="px-6 py-2">
-                  <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200 tracking-wider">
-                    {task.tags?.name || 'No Tag'}
-                  </span>
-                </td>
-                <td className="px-6 py-2 overflow-hidden">
-                  <div className="text-[10px] font-bold text-slate-500 truncate uppercase tracking-tight" title={(task as any).team_ids?.join(', ') || task.teams?.name || 'Internal'}>
-                    {(task as any).team_ids && (task as any).team_ids.length > 0 ? (
-                      (task as any).team_ids.length > 1 
-                        ? `${(task as any).team_ids[0]} +${(task as any).team_ids.length - 1}`
-                        : (task as any).team_ids[0]
-                    ) : (task.teams?.name || 'Internal')}
-                  </div>
-                </td>
-                <td className="px-6 py-2">
-                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">
-                    {task.type}
-                  </span>
-                </td>
-                <td className="px-6 py-2">
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-bold text-slate-700 font-mono tracking-tight">{task.deadline_time || '--:--'}</span>
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                      {task.deadline_date || '--/--/--'}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-2 text-[9px] font-black uppercase tracking-widest">
-                  <div className="text-indigo-600">Est: {task.estimated_minutes}m</div>
-                  <div className="text-emerald-600">Act: {task.actual_minutes}m</div>
-                </td>
-                <td className="px-6 py-2 text-center">
-                   <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-widest", getStatusBadge(task.status))}>
-                     {task.status || 'NEW'}
-                   </span>
-                </td>
-                <td className="px-6 py-2 text-center">
-                  <div className="flex items-center justify-center">
-                    {['DONE', 'SKIPPED'].includes(task.status) ? (
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleResetTask(task); }}
-                        className="p-1.5 text-slate-600 hover:bg-slate-200 rounded-lg transition-all"
-                      >
-                        <RotateCw size={16} />
-                      </button>
-                    ) : (
-                      <button 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          const subtasks = task.subtasks || [];
-                          let newStatus: string = 'DONE';
-                          const hasDone = subtasks.some((s: any) => s.status === 'DONE');
-                          const allSkipped = subtasks.length > 0 && subtasks.every((s: any) => s.status === 'SKIPPED');
-                          if (hasDone) newStatus = 'DONE';
-                          else if (allSkipped) newStatus = 'SKIPPED';
-                          else if (subtasks.length === 0) newStatus = 'DONE';
-                          handleUpdateStatus(task.id, newStatus); 
-                        }}
-                        disabled={['DONE', 'SKIPPED'].includes(task.status) || updatingTask === task.id || (task.subtasks || []).some((s: any) => (s.status || 'NEW') === 'NEW')}
-                        className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-all disabled:opacity-30"
-                      >
-                        <CheckCircle2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
-      <div className="px-4 py-0 flex items-center justify-between border-t border-slate-100 bg-white shrink-0">
-         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">Tổng: {totalCount} Entities</span>
-         <div className="flex-1 flex items-center justify-center gap-1">
-            <button 
-              disabled={page === 1} 
-              onClick={() => setPage(p => p - 1)} 
-              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <div className="flex gap-1 mx-2">
-              {getPaginationItems().map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => typeof item === 'number' && setPage(item)}
-                  disabled={typeof item !== 'number'}
-                  className={cn(
-                    "w-7 h-7 flex items-center justify-center rounded text-xs font-bold transition-all",
-                    page === item ? "bg-indigo-600 text-white shadow-sm" : 
-                    typeof item === 'number' ? "text-slate-500 hover:bg-slate-100 hover:text-slate-700" : 
-                    "text-slate-300 cursor-default"
-                  )}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            <button 
-              disabled={page === totalPages} 
-              onClick={() => setPage(p => p + 1)} 
-              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
-            >
-              <ChevronRight size={14} />
-            </button>
-         </div>
-         <div className="min-w-[100px]"></div>
+
+      {/* Footer statistics and pagination wrapper */}
+      <div className="px-6 py-4 flex items-center justify-between border-t border-slate-100 bg-white shrink-0 shadow-sm">
+        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest font-mono">
+          Tổng cộng: {totalCount} nhiệm vụ
+        </span>
+        <div className="flex items-center justify-center gap-1">
+          <button 
+            disabled={page === 1} 
+            onClick={() => setPage(p => p - 1)} 
+            className="px-2.5 py-1.5 text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-all"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <div className="flex gap-1 mx-2">
+            {getPaginationItems().map((item, idx) => (
+              <button
+                key={idx}
+                onClick={() => typeof item === 'number' && setPage(item)}
+                disabled={typeof item !== 'number'}
+                className={cn(
+                  "w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all",
+                  page === item ? "bg-indigo-600 text-white shadow-sm" : 
+                  typeof item === 'number' ? "text-slate-500 hover:bg-slate-50 hover:text-slate-700 border border-slate-100" : 
+                  "text-slate-300 cursor-default"
+                )}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <button 
+            disabled={page === totalPages} 
+            onClick={() => setPage(p => p + 1)} 
+            className="px-2.5 py-1.5 text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-all"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+        <div className="w-24"></div>
       </div>
     </div>
   );

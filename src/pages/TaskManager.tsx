@@ -1,80 +1,45 @@
-import React, { useState, useEffect } from 'react';
-import { Search, RotateCw, RotateCcw, Plus, Edit2, Trash2, Power, Eye, EyeOff, Filter, Clock, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, RotateCcw, Plus, Edit2, Trash2, Power, Clock, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { useTasks, TaskFilters, TaskWithDetails } from '../hooks/useTasks';
-import { useAuthStore } from '../store/authStore';
+import { useTasks, TaskFilters } from '../hooks/useTasks';
 import { supabase } from '../lib/supabase';
 import CreateTaskModal from '../components/CreateTaskModal';
 import { Task } from '../types/database.types';
-import { SearchableSelect } from '../components/ui/SearchableSelect';
-import { MultiSearchableSelect } from '../components/ui/MultiSearchableSelect';
-import { logger } from '../lib/logger';
 
 const TaskManager: React.FC = () => {
-  const { profile } = useAuthStore();
   const [page, setPage] = useState(1);
-  const today = new Date().toISOString().split('T')[0];
-  const defaultFilters: TaskFilters & { showInactiveOnly?: boolean } = {
-    assignee_email: profile?.email || undefined,
+  const defaultFilters: TaskFilters = {
+    search: '',
     status: undefined,
-    startDate: '',
-    endDate: ''
+    is_active: undefined,
   };
-  const [filters, setFilters] = useState<TaskFilters & { showInactiveOnly?: boolean }>(defaultFilters);
+  const [filters, setFilters] = useState<TaskFilters>(defaultFilters);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const isFilterChanged = 
-    (filters.search && filters.search !== "") || 
-    filters.assignee_email !== defaultFilters.assignee_email || 
-    filters.project_id !== undefined || 
-    filters.tag_id !== undefined || 
-    filters.status !== defaultFilters.status || 
-    (filters.showInactiveOnly !== undefined && filters.showInactiveOnly !== false) ||
-    (filters.startDate && filters.startDate !== defaultFilters.startDate) ||
-    (filters.endDate && filters.endDate !== defaultFilters.endDate) ||
-    (Array.isArray(filters.team_id) && filters.team_id.length > 0) ||
-    (typeof filters.team_id === 'string' && filters.team_id !== "");
-  
-  useEffect(() => {
-    if (profile?.email && !filters.assignee_email && filters.assignee_email !== undefined) {
-      setFilters(prev => ({ ...prev, assignee_email: profile.email }));
-    }
-  }, [profile]);
+    (filters.search && filters.search !== '') || 
+    filters.status !== undefined || 
+    filters.is_active !== undefined;
 
-  const [projects, setProjects] = useState<any[]>([]);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [tags, setTags] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
-
-  const isUser = profile?.role === 'user';
-
-  const { tasks, totalCount, loading, refetch } = useTasks(page, 15, {
-    ...filters,
-    is_active: filters.showInactiveOnly ? false : true,
-    masterDataMode: !filters.showInactiveOnly // Enable filtering in standard "ON" view
-  });
+  const { tasks, totalCount, loading, refetch } = useTasks(page, 15, filters);
 
   const totalPages = Math.ceil(totalCount / 15) || 1;
 
   const handleExportCsv = () => {
     if (!tasks || tasks.length === 0) return;
     
-    const headers = ['ID', 'Task Name', 'Project', 'Tag', 'Team', 'Type', 'Deadline Date', 'Deadline Time', 'Estimated Minutes', 'Actual Minutes', 'Status', 'Active'];
+    const headers = ['ID', 'Title', 'Description', 'Task Type', 'Est Time', 'Actual Time', 'Status', 'Active'];
     const csvContent = [
       headers.join(','),
       ...tasks.map(task => [
-        task.id,
-        `"${task.task_name.replace(/"/g, '""')}"`,
-        `"${(task.projects?.name || 'General').replace(/"/g, '""')}"`,
-        `"${(task.tags?.name || 'No Tag').replace(/"/g, '""')}"`,
-        `"${(task.teams?.name || 'Internal').replace(/"/g, '""')}"`,
-        task.type,
-        task.deadline_date || '',
-        task.deadline_time || '',
-        task.estimated_minutes,
-        task.actual_minutes,
-        task.status,
+        `"${task.id}"`,
+        `"${(task.title || '').replace(/"/g, '""')}"`,
+        `"${(task.description || '').replace(/"/g, '""')}"`,
+        task.task_type || '',
+        task.est_time || 0,
+        task.actual_time || 0,
+        task.status || '',
         task.is_active
       ].join(','))
     ].join('\n');
@@ -116,27 +81,10 @@ const TaskManager: React.FC = () => {
     return pages;
   };
 
-  useEffect(() => {
-    const fetchMeta = async () => {
-      const [p, t, tg, u] = await Promise.all([
-        supabase.from('projects').select('id, name'),
-        supabase.from('teams').select('id, name'),
-        supabase.from('tags').select('id, name'),
-        supabase.from('users').select('id, name, email'),
-      ]);
-      setProjects(p.data || []);
-      setTeams(t.data || []);
-      setTags(tg.data || []);
-      setUsers(u.data || []);
-    };
-    fetchMeta();
-  }, []);
-
   const toggleTaskActive = async (id: string, currentStatus: boolean) => {
-    if (isUser) return;
     try {
-      await supabase.from('tasks').update({ is_active: !currentStatus }).eq('id', id);
-      await logger.log('TOGGLE_TASK_ACTIVE', `${!currentStatus ? 'Activated' : 'Deactivated'} task`, { taskId: id });
+      const { error } = await supabase.from('tasks').update({ is_active: !currentStatus }).eq('id', id);
+      if (error) throw error;
       refetch();
     } catch (error) {
        console.error('Error toggling active state:', error);
@@ -144,105 +92,83 @@ const TaskManager: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (isUser) return;
-    if (!window.confirm('This action will permanently delete the task. Continue?')) return;
+    if (!window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn task này không?')) return;
     try {
-      await supabase.from('tasks').delete().eq('id', id);
-      await logger.log('DELETE_TASK', `Permanently deleted task`, { taskId: id });
+      const { error } = await supabase.from('tasks').delete().eq('id', id);
+      if (error) throw error;
       refetch();
     } catch (error) {
       console.error('Error deleting task:', error);
     }
   };
 
-  const renderDeadlineContext = (task: any) => {
-    switch(task.type) {
-      case 'DAILY': return 'Hàng ngày';
-      case 'WEEKLY': return task.deadline_days?.join(', ');
-      case 'MONTHLY': return `Ngày ${task.deadline_day_num}`;
-      case 'ONETIME': return task.deadline_date;
-      default: return task.type;
-    }
-  };
-
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
-      <div className="px-6 py-1 flex items-center bg-white shrink-0 border-b border-slate-100 justify-between">
-        <div className="flex items-center gap-1.5">
+      <div className="px-6 py-4 flex items-center bg-white shrink-0 border-b border-slate-100 justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-              <input 
-                type="text" placeholder="Tìm kiếm..." 
-                value={filters.search || ""}
-                className="pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-sm w-44 h-8 focus:outline-none focus:border-indigo-600 transition-all"
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-              />
-            </div>
-
-            <select 
-              value={filters.assignee_email || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[220px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-              onChange={(e) => setFilters({...filters, assignee_email: e.target.value || undefined})}
-            >
-              <option value="">PERSONNEL</option>
-              {users.map(u => <option key={u.id} value={u.email}>{u.name || u.email}</option>)}
-            </select>
-            <select 
-              value={filters.project_id || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-              onChange={(e) => setFilters({...filters, project_id: e.target.value || undefined})}
-            >
-              <option value="">PROJECTS</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <select 
-              value={filters.tag_id || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-              onChange={(e) => setFilters({...filters, tag_id: e.target.value || undefined})}
-            >
-              <option value="">TAGS</option>
-              {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-
-            <select 
-              value={filters.team_id as string || ""}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-              onChange={(e) => setFilters({...filters, team_id: e.target.value || undefined})}
-            >
-              <option value="">TEAMS</option>
-              {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-            </select>
-
-            <select 
-              value={filters.showInactiveOnly ? "OFF" : "ON"}
-              className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[100px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center" 
-              onChange={(e) => setFilters({...filters, showInactiveOnly: e.target.value === "OFF"})}
-            >
-              <option value="ON">ON</option>
-              <option value="OFF">OFF</option>
-            </select>
-
-            <button 
-              onClick={handleExportCsv}
-              className="p-1 px-4 h-8 text-xs font-black text-slate-500 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all flex items-center gap-2 group uppercase tracking-widest"
-              title="Export CSV"
-            >
-              <Download className="w-4 h-4 group-hover:text-indigo-600" />
-              <span className="group-hover:text-indigo-600">CSV</span>
-            </button>
-            
-            {isFilterChanged && (
-              <button 
-                onClick={() => setFilters(defaultFilters)} 
-                className="p-2 ml-1 text-indigo-600 hover:text-indigo-800 transition-colors"
-                title="Reset Filters"
-              >
-                 <RotateCcw className="w-5 h-5" />
-              </button>
-            )}
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Tìm kiếm theo tiêu đề..." 
+              value={filters.search || ""}
+              className="pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm w-56 focus:outline-none focus:border-indigo-600 transition-all font-medium text-slate-700"
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            />
           </div>
+
+          <select 
+            value={filters.status || ""}
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer h-9 text-center" 
+            onChange={(e) => setFilters({...filters, status: e.target.value || undefined})}
+          >
+            <option value="">TRẠNG THÁI</option>
+            <option value="NEW">MỚI</option>
+            <option value="IN_PROGRESS">ĐANG LÀM</option>
+            <option value="DONE">HOÀN THÀNH</option>
+            <option value="SKIPPED">BỎ QUA</option>
+          </select>
+
+          <select 
+            value={filters.is_active === undefined ? "" : filters.is_active ? "ON" : "OFF"}
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer h-9 text-center" 
+            onChange={(e) => {
+              const val = e.target.value;
+              setFilters({
+                ...filters, 
+                is_active: val === '' ? undefined : val === 'ON'
+              });
+            }}
+          >
+            <option value="">HOẠT ĐỘNG</option>
+            <option value="ON">ON (BẬT)</option>
+            <option value="OFF">OFF (TẮT)</option>
+          </select>
+
+          <button 
+            onClick={handleExportCsv}
+            className="px-4 py-1.5 text-xs font-black text-slate-500 bg-slate-50 border border-slate-200 rounded-lg h-9 hover:bg-slate-100 transition-all flex items-center gap-2 group uppercase tracking-widest"
+            title="Xuất file CSV"
+          >
+            <Download className="w-4 h-4 group-hover:text-indigo-600" />
+            <span className="group-hover:text-indigo-600">CSV</span>
+          </button>
+          
+          {isFilterChanged && (
+            <button 
+              onClick={() => setFilters(defaultFilters)} 
+              className="p-2 text-indigo-600 hover:text-indigo-800 transition-colors"
+              title="Đặt lại bộ lọc"
+            >
+               <RotateCcw className="w-5 h-5" />
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => { setSelectedTask(null); setIsModalOpen(true); }} className="flex items-center gap-2 h-8 px-5 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-200">
+          <button 
+            onClick={() => { setSelectedTask(null); setIsModalOpen(true); }} 
+            className="flex items-center gap-2 h-9 px-5 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-200"
+          >
             <Plus className="w-4 h-4" /> <span>Tạo mới</span>
           </button>
         </div>
@@ -252,156 +178,158 @@ const TaskManager: React.FC = () => {
         isOpen={isModalOpen} 
         onClose={() => { setIsModalOpen(false); setSelectedTask(null); }} 
         onSuccess={refetch} 
-        taskToEdit={selectedTask || undefined} 
+        taskToEdit={selectedTask} 
       />
-      <div className="flex-1 overflow-auto bg-white min-h-[500px]">
+
+      <div className="flex-1 overflow-auto bg-white min-h-[400px]">
         <table className="w-full text-left border-collapse table-fixed">
           <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
             <tr>
-                <th className="w-[8%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">ID</th>
-                <th className="w-[20%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Task Name</th>
-                <th className="w-[20%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Project</th>
-                <th className="w-[10%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tag</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Team</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Type</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Deadline</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Status</th>
-                <th className="w-[7%] px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Actions</th>
+              <th className="w-[8%] px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">STT / ID</th>
+              <th className="w-[30%] px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Tiêu đề (Title)</th>
+              <th className="w-[25%] px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Mô tả (Description)</th>
+              <th className="w-[12%] px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Loại (Type)</th>
+              <th className="w-[10%] px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Thời gian (Time)</th>
+              <th className="w-[8%] px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Trạng thái</th>
+              <th className="w-[7%] px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Active</th>
+              <th className="w-[10%] px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 text-center">Hành động</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {tasks.map((task) => (
-              <tr key={task.id} className={cn("hover:bg-indigo-50/30 transition-all group h-[41px]", !task.is_active && "bg-slate-50/80")}>
-                <td className="px-6 py-2">
-                  <span className="font-mono text-[10px] text-slate-400 uppercase font-bold">{String(task.display_id || 0).padStart(6, '0')}</span>
-                </td>
-                <td className="px-6 py-2 overflow-hidden">
-                  <div className="flex flex-col">
-                    <span className="font-bold text-slate-700 group-hover:text-indigo-600 transition-colors text-[13px] tracking-tight truncate" title={task.task_name}>{task.task_name}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-2 overflow-hidden">
-                  <div className="flex flex-col">
-                    <span className="font-bold text-slate-700 truncate text-[13px] tracking-tight" title={task.projects?.name || 'General'}>
-                      {task.projects?.name || 'General'}
+            {tasks && tasks.length > 0 ? (
+              tasks.map((task, index) => (
+                <tr key={task.id} className={cn("hover:bg-indigo-50/10 transition-all group", !task.is_active && "bg-slate-50/70")}>
+                  <td className="px-6 py-3">
+                    <span className="font-mono text-xs text-slate-400 font-bold">
+                      {String((page - 1) * 15 + index + 1).padStart(3, '0')}
                     </span>
-                  </div>
-                </td>
-                <td className="px-6 py-2">
-                   <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200 tracking-wider">
-                     {task.tags?.name || 'No Tag'}
-                   </span>
-                </td>
-                <td className="px-6 py-2 overflow-hidden">
-                   <div className="text-[10px] font-bold text-slate-500 truncate uppercase tracking-tight" title={(task as any).team_ids?.join(', ') || task.teams?.name || 'Internal'}>
-                     {(task as any).team_ids && (task as any).team_ids.length > 0 ? (
-                       (task as any).team_ids.length > 1 
-                         ? `${(task as any).team_ids[0]} +${(task as any).team_ids.length - 1}`
-                         : (task as any).team_ids[0]
-                     ) : (task.teams?.name || 'Internal')}
-                   </div>
-                </td>
-                <td className="px-6 py-2">
-                   <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">
-                     {task.type}
-                   </span>
-                </td>
-                <td className="px-6 py-2">
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-bold text-slate-700 font-mono tracking-tight">{task.deadline_time || '--:--'}</span>
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{task.deadline_date || '--/--/--'}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-2 text-[9px] font-black uppercase tracking-tight">
-                    <div className="text-indigo-600">Est: {task.estimated_minutes}m</div>
-                    <div className="text-emerald-600">Act: {task.actual_minutes}m</div>
-                </td>
-                <td className="px-4 py-1.5 text-center">
-                   <span className={cn(
-                     "inline-flex px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-widest",
-                     task.is_active ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-100 text-slate-400 border-slate-200"
-                   )}>
-                     {task.is_active ? 'ON' : 'OFF'}
-                   </span>
-                </td>
-                <td className="px-4 py-1.5 text-center">
-                  <div className="flex items-center justify-center">
-                    <div className="flex items-center gap-0.5 bg-slate-50 border border-slate-200 p-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm">
-                      {task.type !== 'ONETIME' && task.type !== 'ONCE' ? (
-                        <button 
-                          onClick={() => toggleTaskActive(task.id, task.is_active)} 
-                          title={task.is_active ? "Tạm ẩn" : "Hiện thị"}
-                          className={cn(
-                            "p-1.5 rounded hover:scale-110 transition-all", 
-                            task.is_active ? "text-emerald-500 hover:bg-emerald-50" : "text-slate-300 hover:text-emerald-500 hover:bg-emerald-50"
-                          )}
-                        >
-                          <Power size={13} />
-                        </button>
-                      ) : (
-                        <div className="w-7 h-7" /> // Placeholder for Spot tasks which don't have toggle
-                      )}
+                  </td>
+                  <td className="px-6 py-3 overflow-hidden">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-800 text-sm tracking-tight truncate" title={task.title}>
+                        {task.title}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-3 overflow-hidden">
+                    <span className="text-slate-500 text-xs truncate block" title={task.description || ''}>
+                      {task.description || <span className="italic text-slate-300">Không có mô tả</span>}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3">
+                    <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-indigo-50 text-indigo-600 border border-indigo-100 tracking-wider">
+                      {task.task_type || 'ONETIME'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3 text-center">
+                    <div className="flex flex-col items-center justify-center text-[11px] font-bold font-mono">
+                      <span className="text-indigo-600">Ước lượng: {task.est_time || 0}m</span>
+                      <span className="text-emerald-600">Thực tế: {task.actual_time || 0}m</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-3 text-center">
+                    <span className={cn(
+                      "inline-flex px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-widest",
+                      task.status === 'DONE' && "bg-emerald-50 text-emerald-600 border-emerald-100",
+                      task.status === 'NEW' && "bg-blue-50 text-blue-600 border-blue-100",
+                      task.status === 'IN_PROGRESS' && "bg-amber-50 text-amber-600 border-amber-100",
+                      task.status === 'SKIPPED' && "bg-slate-100 text-slate-500 border-slate-200"
+                    )}>
+                      {task.status || 'NEW'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3 text-center">
+                    <span className={cn(
+                      "inline-flex px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-widest",
+                      task.is_active ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-100 text-slate-400 border-slate-200"
+                    )}>
+                      {task.is_active ? 'ON' : 'OFF'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3 text-center">
+                    <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => toggleTaskActive(task.id, task.is_active)} 
+                        title={task.is_active ? "Ẩn hoạt động (OFF)" : "Kích hoạt (ON)"}
+                        className={cn(
+                          "p-1.5 rounded transition-all hover:scale-115", 
+                          task.is_active ? "text-emerald-500 hover:bg-emerald-50" : "text-slate-400 hover:text-emerald-500 hover:bg-emerald-50"
+                        )}
+                      >
+                        <Power size={14} />
+                      </button>
                       <button 
                         onClick={() => { setSelectedTask(task); setIsModalOpen(true); }} 
                         title="Sửa Task"
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 transition-all hover:scale-110"
+                        className="p-1.5 text-slate-600 hover:text-indigo-600 rounded hover:bg-indigo-50 transition-all hover:scale-115"
                       >
-                        <Edit2 size={13} />
+                        <Edit2 size={14} />
                       </button>
-                      {!isUser && (
-                        <button 
-                          onClick={() => handleDelete(task.id)} 
-                          title="Xóa vĩnh viễn"
-                          className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded transition-all hover:scale-110"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
+                      <button 
+                        onClick={() => handleDelete(task.id)} 
+                        title="Xóa vĩnh viễn"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all hover:scale-115"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-                  </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={8} className="py-12 text-center text-slate-400 font-medium font-sans">
+                  {loading ? (
+                    <div className="flex flex-col items-center gap-2 justify-center">
+                      <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-xs uppercase tracking-widest">Đang tải danh sách...</span>
+                    </div>
+                  ) : (
+                    "Không tìm thấy nhiệm vụ nào."
+                  )}
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
-      <div className="px-4 py-0 flex items-center justify-between border-t border-slate-100 bg-white shrink-0">
-         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">Total: {totalCount} Entities</span>
-         <div className="flex-1 flex items-center justify-center gap-1">
-            <button 
-              disabled={page === 1} 
-              onClick={() => setPage(p => p - 1)} 
-              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <div className="flex gap-1 mx-2">
-              {getPaginationItems().map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => typeof item === 'number' && setPage(item)}
-                  disabled={typeof item !== 'number'}
-                  className={cn(
-                    "w-7 h-7 flex items-center justify-center rounded text-xs font-bold transition-all",
-                    page === item ? "bg-indigo-600 text-white shadow-sm" : 
-                    typeof item === 'number' ? "text-slate-500 hover:bg-slate-100 hover:text-slate-700" : 
-                    "text-slate-300 cursor-default"
-                  )}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            <button 
-              disabled={page === totalPages} 
-              onClick={() => setPage(p => p + 1)} 
-              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
-            >
-              <ChevronRight size={14} />
-            </button>
-         </div>
-         <div className="min-w-[100px]"></div>
+
+      <div className="px-6 py-3 flex items-center justify-between border-t border-slate-100 bg-white shrink-0">
+        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest"> Tổng số: {totalCount} nhiệm vụ</span>
+        <div className="flex items-center justify-center gap-1">
+          <button 
+            disabled={page === 1} 
+            onClick={() => setPage(p => p - 1)} 
+            className="px-2.5 py-1 text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-all"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <div className="flex gap-1 mx-2">
+            {getPaginationItems().map((item, idx) => (
+              <button
+                key={idx}
+                onClick={() => typeof item === 'number' && setPage(item)}
+                disabled={typeof item !== 'number'}
+                className={cn(
+                  "w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all",
+                  page === item ? "bg-indigo-600 text-white shadow-sm" : 
+                  typeof item === 'number' ? "text-slate-500 hover:bg-slate-50 hover:text-slate-700 border border-slate-100" : 
+                  "text-slate-300 cursor-default"
+                )}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <button 
+            disabled={page === totalPages} 
+            onClick={() => setPage(p => p + 1)} 
+            className="px-2.5 py-1 text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-all"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+        <div className="w-20"></div>
       </div>
     </div>
   );

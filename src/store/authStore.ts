@@ -15,9 +15,31 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  session: null,
-  profile: null,
-  loading: true,
+  session: {
+    access_token: 'mock-token',
+    refresh_token: 'mock-refresh-token',
+    expires_in: 3600,
+    token_type: 'bearer',
+    user: {
+      id: 'mock-user-id',
+      email: 'lequangvinh0611@gmail.com',
+      aud: 'authenticated',
+      role: 'authenticated',
+      app_metadata: {},
+      user_metadata: { full_name: 'Developer' },
+      created_at: new Date().toISOString(),
+    }
+  } as any,
+  profile: {
+    id: 'mock-user-id',
+    email: 'lequangvinh0611@gmail.com',
+    name: 'Developer',
+    role: 'master',
+    team_ids: [],
+    status: 'ACTIVE',
+    created_at: new Date().toISOString()
+  } as any,
+  loading: false,
   setSession: (session) => set({ session }),
   setProfile: (profile) => set({ profile }),
   setLoading: (loading) => set({ loading }),

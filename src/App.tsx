@@ -21,44 +21,8 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[App] Auth Event: ${event}`);
-      if (!mounted) return;
-
-      if (session) {
-        setSession(session);
-        // ✅ FIX: Bỏ qua TOKEN_REFRESHED để tránh ghi đè role từ DB bằng fallback
-        if (event !== 'TOKEN_REFRESHED') {
-          await fetchProfile(session.user.id);
-        }
-
-        // Add real-time listener for the profile itself
-        supabase.channel(`profile_${session.user.id}`)
-          .on('postgres_changes', 
-            { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${session.user.id}` }, 
-            (payload) => {
-              console.log('[App] Profile Realtime Update:', payload.new);
-              setProfile(payload.new as any);
-            }
-          ).subscribe();
-      } else {
-        setSession(null);
-        setProfile(null);
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
   const renderContent = () => {
-    const role = (profile?.role || 'USER').toString().toUpperCase().trim();
+    const role = (profile?.role || 'master').toString().toUpperCase().trim();
     const isUser = role === 'USER';
 
     const normalizedActiveTab = activeTab.toString().toUpperCase().trim();
@@ -71,32 +35,15 @@ export default function App() {
       case 'DASHBOARD':
         return <Dashboard key="dashboard" />;
       case 'AUDIT LOG':
-        if (isUser) return <TaskList key="todo" title="To-do List" />;
         return <AuditLog key="audit" />;
       case 'SETTINGS':
-        if (isUser) return <TaskList key="todo" title="To-do List" />;
         return <Settings key="settings" />;
       default:
         return <div>Select a tab</div>;
     }
   };
 
-  if (loading) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-[#0F172A]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-400 font-mono text-[10px] uppercase tracking-widest animate-pulse">Initializing System...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Login />;
-  }
-
-  const userRole = (profile?.role || 'GUEST').toString().toUpperCase().trim();
+  const userRole = (profile?.role || 'master').toString().toUpperCase().trim();
 
   return (
     <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans">
