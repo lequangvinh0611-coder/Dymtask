@@ -180,7 +180,7 @@ const AuditLog = () => {
                   </td>
                   <td className="px-6 py-3">
                        <span className="text-[10px] font-bold text-slate-400 font-mono">
-                         {new Date(log.created_at).toLocaleDateString()} - {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                         {(() => { const d = new Date(log.created_at); if (isNaN(d.getTime())) return ''; const day = String(d.getDate()).padStart(2, '0'); const month = String(d.getMonth() + 1).padStart(2, '0'); const year = d.getFullYear(); return `${day}/${month}/${year}`; })()} - {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                        </span>
                   </td>
                   <td className="px-6 py-3 text-right pr-10">

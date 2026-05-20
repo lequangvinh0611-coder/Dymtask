@@ -138,6 +138,115 @@ export default function Settings() {
       return;
     }
 
+    try {
+      // 1. Fetch all tasks to validate relationship rules
+      const { data: activeTasks, error: taskErr } = await supabase
+        .from('tasks')
+        .select('*');
+
+      if (taskErr) {
+        alert(`Error checking validation rules: ${taskErr.message}`);
+        return;
+      }
+
+      // Filter tasks where is_active is true or status is 'ON'
+      const filteredActiveTasks = (activeTasks || []).filter(
+        t => t.is_active === true || (t.status || '').toUpperCase() === 'ON'
+      );
+
+      // Validation Checks based on Tab Type
+      if (activeTab === 'USERS') {
+        const userObj = users.find(u => u.id === id);
+        if (userObj) {
+          const userName = userObj.name;
+          const isAssigned = filteredActiveTasks.some(task => {
+            const hasInAssigneesField = Array.isArray(task.assignees) && task.assignees.includes(userName);
+            let hasInSubtasks = false;
+            if (task.description) {
+              try {
+                const parsed = JSON.parse(task.description);
+                const subs = Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : [];
+                hasInSubtasks = subs.some((s: any) => s.assignee === userName);
+              } catch (_) {}
+            }
+            return hasInAssigneesField || hasInSubtasks;
+          });
+
+          if (isAssigned) {
+            alert("Không thể xóa nhân sự này vì đang phụ trách công việc đang hoạt động!");
+            return;
+          }
+        }
+      }
+
+      if (activeTab === 'PROJECTS') {
+        const projObj = projects.find(p => p.id === id);
+        if (projObj) {
+          const isLinked = filteredActiveTasks.some(task => {
+            const matchId = task.project_id === id;
+            let matchName = false;
+            if (task.description) {
+              try {
+                const parsed = JSON.parse(task.description);
+                matchName = parsed.project_name === projObj.name;
+              } catch (_) {}
+            }
+            return matchId || matchName;
+          });
+
+          if (isLinked) {
+            alert("Không thể xóa dự án này vì chứa công việc đang hoạt động!");
+            return;
+          }
+        }
+      }
+
+      if (activeTab === 'TAGS') {
+        const tagObj = tags.find(t => t.id === id);
+        if (tagObj) {
+          const isLinked = filteredActiveTasks.some(task => {
+            const matchId = task.tag_id === id;
+            let matchName = false;
+            if (task.description) {
+              try {
+                const parsed = JSON.parse(task.description);
+                matchName = parsed.tag_name === tagObj.name;
+              } catch (_) {}
+            }
+            return matchId || matchName;
+          });
+
+          if (isLinked) {
+            alert("Không thể xóa nhãn này vì có công việc đang hoạt động sử dụng nó!");
+            return;
+          }
+        }
+      }
+
+      if (activeTab === 'TEAMS') {
+        const teamObj = teams.find(t => t.id === id);
+        if (teamObj) {
+          const hasActiveMembers = users.some(u => {
+            const isActiveUser = u.status === 'ACTIVE';
+            if (!isActiveUser) return false;
+
+            const userTeams = Array.isArray(u.team_ids) ? u.team_ids : Array.isArray(u.teams) ? u.teams : [];
+            const cleanTeams = userTeams.map((t: any) => t.toString().replace(/[\[\]"]/g, '').trim());
+            return cleanTeams.includes(teamObj.name) || cleanTeams.includes(teamObj.id);
+          });
+
+          if (hasActiveMembers) {
+            alert("Không thể xóa phòng ban này vì đang có nhân sự hoạt động thuộc nhóm!");
+            return;
+          }
+        }
+      }
+
+    } catch (err: any) {
+      alert(`Validation process failed: ${err.message}`);
+      return;
+    }
+
     if (!window.confirm('Are you sure you want to delete this item?')) return;
     
     const tableName = activeTab.toLowerCase();
@@ -148,6 +257,63 @@ export default function Settings() {
       fetchData();
     } catch (error: any) {
       alert(`Error deleting: ${error.message}`);
+    }
+  };
+
+  const handleToggleActive = async (item: any) => {
+    const tableName = activeTab.toLowerCase();
+
+    if (activeTab === 'USERS') {
+      const nextStatus = item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+      
+      if (item.email === 'lequangvinh0611@gmail.com' && nextStatus === 'INACTIVE') {
+        alert('Cannot deactivate the Master account.');
+        return;
+      }
+
+      setUsers(prev => prev.map(u => u.id === item.id ? { ...u, status: nextStatus } : u));
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({ status: nextStatus })
+          .eq('id', item.id);
+        if (error) throw error;
+        await logger.log('TOGGLE_ACTIVE', `Toggled user status to ${nextStatus} for ID: ${item.id}`);
+      } catch (err: any) {
+        setUsers(prev => prev.map(u => u.id === item.id ? { ...u, status: item.status } : u));
+        alert(`Error toggling status: ${err.message}`);
+      }
+      return;
+    }
+
+    const nextActive = !item.is_active;
+
+    if (activeTab === 'PROJECTS') {
+      setProjects(prev => prev.map(p => p.id === item.id ? { ...p, is_active: nextActive } : p));
+    } else if (activeTab === 'TAGS') {
+      setTags(prev => prev.map(t => t.id === item.id ? { ...t, is_active: nextActive } : t));
+    } else if (activeTab === 'TEAMS') {
+      setTeams(prev => prev.map(t => t.id === item.id ? { ...t, is_active: nextActive } : t));
+    }
+
+    try {
+      const { error } = await supabase
+        .from(tableName)
+        .update({ is_active: nextActive })
+        .eq('id', item.id);
+
+      if (error) throw error;
+
+      await logger.log('TOGGLE_ACTIVE', `Toggled is_active to ${nextActive} in ${tableName} for ID: ${item.id}`);
+    } catch (error: any) {
+      if (activeTab === 'PROJECTS') {
+        setProjects(prev => prev.map(p => p.id === item.id ? { ...p, is_active: !nextActive } : p));
+      } else if (activeTab === 'TAGS') {
+        setTags(prev => prev.map(t => t.id === item.id ? { ...t, is_active: !nextActive } : t));
+      } else if (activeTab === 'TEAMS') {
+        setTeams(prev => prev.map(t => t.id === item.id ? { ...t, is_active: !nextActive } : t));
+      }
+      alert(`Error toggling active status: ${error.message}`);
     }
   };
 
@@ -250,7 +416,7 @@ export default function Settings() {
               ) : (
                 <th className="px-8 py-2 w-[55%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Date Created</th>
               )}
-              <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest text-right pr-12">Actions</th>
+              <th className="px-8 py-2 w-[20%] text-[9px] font-black text-slate-400 uppercase tracking-widest text-right pr-12">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-[11px]">
@@ -290,7 +456,25 @@ export default function Settings() {
                     )}>{user.status || 'ACTIVE'}</span>
                   </td>
                   <td className="px-8 py-3 text-right pr-12">
-                    <button onClick={() => handleEdit(user)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
+                    <div className="flex items-center justify-end gap-3">
+                      <button 
+                        onClick={() => handleToggleActive(user)}
+                        className={cn(
+                          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
+                          user.status === 'ACTIVE' ? "bg-emerald-500" : "bg-slate-200"
+                        )}
+                        title={user.status === 'ACTIVE' ? "Click to deactivate" : "Click to activate"}
+                      >
+                        <span
+                          className={cn(
+                            "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                            user.status === 'ACTIVE' ? "translate-x-4" : "translate-x-0"
+                          )}
+                        />
+                      </button>
+                      <button onClick={() => handleEdit(user)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
+                      <button onClick={() => handleDelete(user.id, user.email)} className="text-slate-200 hover:text-rose-600 transition-all"><Trash2 size={14} /></button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -300,9 +484,25 @@ export default function Settings() {
                     return getSortedList(list).map((item) => (
                         <tr key={item.id} className="hover:bg-slate-50/50 group transition-all h-[41px]">
                           <td className="px-8 py-3 font-black text-slate-800 uppercase tracking-widest">{item.name}</td>
-                          <td className="px-8 py-3 text-slate-400 font-bold uppercase text-[9px]">{new Date(item.created_at).toLocaleDateString()}</td>
+                          <td className="px-8 py-3 text-slate-400 font-bold uppercase text-[9px]">{(() => { const d = new Date(item.created_at); if (isNaN(d.getTime())) return ''; const day = String(d.getDate()).padStart(2, '0'); const month = String(d.getMonth() + 1).padStart(2, '0'); const year = d.getFullYear(); return `${day}/${month}/${year}`; })()}</td>
+                          
                           <td className="px-8 py-3 text-right pr-12">
                             <div className="flex items-center justify-end gap-3">
+                              <button 
+                                onClick={() => handleToggleActive(item)}
+                                className={cn(
+                                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
+                                  item.is_active !== false ? "bg-emerald-500" : "bg-slate-200"
+                                )}
+                                title={item.is_active !== false ? "Click to deactivate" : "Click to activate"}
+                              >
+                                <span
+                                  className={cn(
+                                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                                    item.is_active !== false ? "translate-x-4" : "translate-x-0"
+                                  )}
+                                />
+                              </button>
                               <button onClick={() => handleEdit(item)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
                               <button onClick={() => handleDelete(item.id)} className="text-slate-200 hover:text-rose-600 transition-all"><Trash2 size={14} /></button>
                             </div>

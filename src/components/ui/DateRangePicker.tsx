@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface DateRangePickerProps {
@@ -17,6 +17,11 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setTempStart(startDate || null);
+    setTempEnd(endDate || null);
+  }, [startDate, endDate]);
+
+  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -26,23 +31,45 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const formatDate = (date: Date) => date.toISOString().split('T')[0];
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatDateToDisplay = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
 
   const handleDateClick = (dateStr: string) => {
     if (!tempStart || (tempStart && tempEnd)) {
       setTempStart(dateStr);
       setTempEnd(null);
     } else {
-      const start = new Date(tempStart);
-      const end = new Date(dateStr);
+      const startParts = tempStart.split('-').map(Number);
+      const endParts = dateStr.split('-').map(Number);
+      const start = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+      const end = new Date(endParts[0], endParts[1] - 1, endParts[2]);
       
       if (end < start) {
         setTempStart(dateStr);
         setTempEnd(null);
       } else {
-        const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         if (diffDays > 62) {
-          alert("Lựa chọn tối đa là 62 ngày");
+          alert("Khoảng thời gian chọn không được vượt quá 62 ngày!");
+          const adjustedEndDate = new Date(start.getTime() + 62 * 24 * 60 * 60 * 1000);
+          const adjustedEndDateStr = formatDate(adjustedEndDate);
+          setTempEnd(adjustedEndDateStr);
+          onChange(tempStart, adjustedEndDateStr);
+          setIsOpen(false);
           return;
         }
         setTempEnd(dateStr);
@@ -75,7 +102,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
       >
         <CalendarIcon size={14} className="text-slate-400" />
         <span>
-          {startDate ? `${new Date(startDate).toLocaleDateString()} - ${new Date(endDate || startDate).toLocaleDateString()}` : "Chọn ngày"}
+          {startDate ? `${formatDateToDisplay(startDate)} - ${formatDateToDisplay(endDate || startDate)}` : "Chọn ngày"}
         </span>
       </button>
 
@@ -83,6 +110,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
         <div className="absolute right-0 top-full mt-2 bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 z-50 w-[280px] animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center justify-between mb-4">
             <button 
+              type="button"
               onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
               className="p-1 hover:bg-slate-100 rounded-lg text-slate-400"
             >
@@ -92,6 +120,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
               {currentMonth.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' })}
             </h4>
             <button 
+              type="button"
               onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
               className="p-1 hover:bg-slate-100 rounded-lg text-slate-400"
             >
@@ -113,9 +142,10 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
               return (
                 <button
                   key={dStr}
+                  type="button"
                   onClick={() => handleDateClick(dStr)}
                   className={cn(
-                    "text-[10px] font-bold py-1.5 rounded-lg transition-all",
+                    "text-[10px] font-bold py-1.5 rounded-lg transition-all z-10",
                     isStart || isEnd ? "bg-indigo-600 text-white" :
                     isInRange ? "bg-indigo-50 text-indigo-600" :
                     "text-slate-600 hover:bg-slate-100"
@@ -130,6 +160,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
           <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
             <p className="text-[9px] font-bold text-slate-400 italic">Tối đa 62 ngày</p>
             <button 
+              type="button"
               onClick={() => { setTempStart(null); setTempEnd(null); onChange('', ''); setIsOpen(false); }}
               className="text-[9px] font-black uppercase text-rose-500 hover:text-rose-600"
             >

@@ -5,6 +5,8 @@ import {
   Building, Briefcase, Tag, Users, Check, AlertCircle, FileSpreadsheet
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import CreateTaskModal from '../components/CreateTaskModal';
+import { FilterSelect } from '../components/ui/FilterSelect';
 
 // Definition of SubTask interface matching mockup
 interface SubTask {
@@ -123,16 +125,51 @@ const TaskManager: React.FC = () => {
   // Action Menu dropdown state for specific task action buttons
   const [activeMenuTaskId, setActiveMenuTaskId] = useState<string | null>(null);
 
-  // Modal custom states (Form fields representation)
-  const [modal_title, setModalTitle] = useState('');
-  const [modal_project, setModalProject] = useState(AVAILABLE_PROJECTS[0]);
-  const [modal_team, setModalTeam] = useState(AVAILABLE_TEAMS[0]);
-  const [modal_tag, setModalTag] = useState(AVAILABLE_TAGS[0]);
-  const [modal_task_type, setModalTaskType] = useState('DAILY');
-  const [modal_deadline_time, setModalDeadlineTime] = useState('09:00 AM');
-  const [modal_deadline_days, setModalDeadlineDays] = useState('Mon - Fri');
-  const [modal_description, setModalDescription] = useState('');
-  const [modal_sub_tasks, setModalSubTasks] = useState<SubTask[]>([]);
+  // Metadata states
+  const [projectsList, setProjectsList] = useState<string[]>([]);
+  const [teamsList, setTeamsList] = useState<string[]>([]);
+  const [tagsList, setTagsList] = useState<string[]>([]);
+  const [assigneesList, setAssigneesList] = useState<string[]>([]);
+
+  // Fetch metadata dynamically and filter only active ones
+  const fetchMetadata = async () => {
+    try {
+      const [
+        { data: usersData },
+        { data: projectsData },
+        { data: teamsData },
+        { data: tagsData }
+      ] = await Promise.all([
+        supabase.from('users').select('name, status'),
+        supabase.from('projects').select('name, is_active'),
+        supabase.from('teams').select('name, is_active'),
+        supabase.from('tags').select('name, is_active')
+      ]);
+
+      const activeUsers = (usersData || [])
+        .filter((u: any) => u.status !== 'INACTIVE' && u.name)
+        .map((u: any) => u.name);
+
+      const activeProj = (projectsData || [])
+        .filter((p: any) => p.is_active !== false && p.name)
+        .map((p: any) => p.name);
+
+      const activeTms = (teamsData || [])
+        .filter((t: any) => t.is_active !== false && t.name)
+        .map((t: any) => t.name);
+
+      const activeTgs = (tagsData || [])
+        .filter((tg: any) => tg.is_active !== false && tg.name)
+        .map((tg: any) => tg.name);
+
+      setAssigneesList(activeUsers);
+      setProjectsList(activeProj);
+      setTeamsList(activeTms);
+      setTagsList(activeTgs);
+    } catch (err) {
+      console.error('Error fetching metadata in TaskManager:', err);
+    }
+  };
 
   // Fetch all tasks directly from database
   const loadTasks = async () => {
@@ -154,14 +191,16 @@ const TaskManager: React.FC = () => {
 
   useEffect(() => {
     loadTasks();
-  }, []);
+    fetchMetadata();
 
-  // Sync real-time database events
-  useEffect(() => {
-    const channel = supabase.channel('task_manager_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-        loadTasks();
-      }).subscribe();
+    const channel = supabase.channel('task_manager_realtime_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadTasks())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => fetchMetadata())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => fetchMetadata())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchMetadata())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tags' }, () => fetchMetadata())
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
     };
@@ -186,37 +225,32 @@ const TaskManager: React.FC = () => {
 
   // Extract option lists for filters dynamically based on existing records
   const dynamicPersonnel = useMemo(() => {
-    const set = new Set<string>();
-    parsedTasks.forEach(t => {
-      t.sub_tasks.forEach(sub => {
-        if (sub.assignee) set.add(sub.assignee);
-      });
-    });
-    // Add standard defaults
-    AVAILABLE_PLES.forEach(p => set.add(p));
-    return Array.from(set);
-  }, [parsedTasks]);
+    if (assigneesList.length > 0) {
+      return assigneesList;
+    }
+    return AVAILABLE_PLES;
+  }, [assigneesList]);
 
   const dynamicTags = useMemo(() => {
-    const set = new Set<string>();
-    parsedTasks.forEach(t => { if (t.tag_name) set.add(t.tag_name); });
-    AVAILABLE_TAGS.forEach(t => set.add(t));
-    return Array.from(set);
-  }, [parsedTasks]);
+    if (tagsList.length > 0) {
+      return tagsList;
+    }
+    return AVAILABLE_TAGS;
+  }, [tagsList]);
 
   const dynamicProjects = useMemo(() => {
-    const set = new Set<string>();
-    parsedTasks.forEach(t => { if (t.project_name) set.add(t.project_name); });
-    AVAILABLE_PROJECTS.forEach(p => set.add(p));
-    return Array.from(set);
-  }, [parsedTasks]);
+    if (projectsList.length > 0) {
+      return projectsList;
+    }
+    return AVAILABLE_PROJECTS;
+  }, [projectsList]);
 
   const dynamicTeams = useMemo(() => {
-    const set = new Set<string>();
-    parsedTasks.forEach(t => { if (t.team_name) set.add(t.team_name); });
-    AVAILABLE_TEAMS.forEach(tm => set.add(tm));
-    return Array.from(set);
-  }, [parsedTasks]);
+    if (teamsList.length > 0) {
+      return teamsList;
+    }
+    return AVAILABLE_TEAMS;
+  }, [teamsList]);
 
   // Filter the parsed tasks based on current UI filtration values
   const filteredTasks = useMemo(() => {
@@ -325,18 +359,7 @@ const TaskManager: React.FC = () => {
 
   // Open Modal in Edit Mode
   const handleOpenEditModal = (task: DbTask) => {
-    const parsed = parseTaskDescription(task.description);
     setModalTask(task);
-    setModalTitle(task.title);
-    setModalProject(parsed.project_name);
-    setModalTeam(parsed.team_name);
-    setModalTag(parsed.tag_name);
-    setModalTaskType(task.task_type || 'DAILY');
-    setModalDeadlineTime(parsed.deadline_time);
-    setModalDeadlineDays(parsed.deadline_days);
-    setModalDescription(parsed.description);
-    setModalSubTasks(parsed.sub_tasks);
-    
     setIsModalOpen(true);
     setOpenedDrawerTask(null); // Close sidebar drawer when editing
     setActiveMenuTaskId(null);
@@ -345,102 +368,8 @@ const TaskManager: React.FC = () => {
   // Open Modal in Create Mode
   const handleOpenCreateModal = () => {
     setModalTask(null);
-    setModalTitle('');
-    setModalProject(AVAILABLE_PROJECTS[0]);
-    setModalTeam(AVAILABLE_TEAMS[0]);
-    setModalTag(AVAILABLE_TAGS[0]);
-    setModalTaskType('DAILY');
-    setModalDeadlineTime('09:00 AM');
-    setModalDeadlineDays('Mon - Fri');
-    setModalDescription('');
-    setModalSubTasks([]);
-    
     setIsModalOpen(true);
     setActiveMenuTaskId(null);
-  };
-
-  // Save changes or create new task in supabase
-  const handleSaveTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!modal_title.trim()) {
-      alert('Vui lòng nhập tên Task.');
-      return;
-    }
-
-    // Est duration is sum of estimated_minutes of subtasks
-    const calculated_est_time = modal_sub_tasks.reduce((sum, sub) => sum + (Number(sub.estimated_minutes) || 0), 0);
-
-    const metadata: TaskMetadata = {
-      description: modal_description.trim(),
-      project_name: modal_project,
-      team_name: modal_team,
-      tag_name: modal_tag,
-      deadline_time: modal_deadline_time,
-      deadline_days: modal_deadline_days,
-      sub_tasks: modal_sub_tasks
-    };
-
-    const payload = {
-      title: modal_title.trim(),
-      description: serializeTaskDescription(metadata),
-      task_type: modal_task_type,
-      est_time: calculated_est_time,
-      status: modalTask ? modalTask.status : 'ON', // Set default to 'ON'
-      is_active: modalTask ? modalTask.is_active : true,
-      actual_time: modalTask ? modalTask.actual_time : 0
-    };
-
-    try {
-      if (modalTask) {
-        // Edit Mode
-        const { error } = await supabase
-          .from('tasks')
-          .update(payload)
-          .eq('id', modalTask.id);
-
-        if (error) throw error;
-      } else {
-        // Create Mode
-        const { error } = await supabase
-          .from('tasks')
-          .insert([payload]);
-
-        if (error) throw error;
-      }
-
-      setIsModalOpen(false);
-      loadTasks();
-    } catch (err: any) {
-      console.error('Error saving task:', err);
-      alert(`Không thể lưu: ${err.message}`);
-    }
-  };
-
-  // Add sub-task row helper function
-  const handleAddSubTaskRow = () => {
-    const newRow: SubTask = {
-      id: Math.random().toString(36).substring(2, 9),
-      content: '',
-      assignee: AVAILABLE_PLES[0],
-      estimated_minutes: 0
-    };
-    setModalSubTasks([...modal_sub_tasks, newRow]);
-  };
-
-  // Delete sub-task row helper function
-  const handleDeleteSubTaskRow = (id: string) => {
-    setModalSubTasks(modal_sub_tasks.filter(sub => sub.id !== id));
-  };
-
-  // Update specific sub-task row field
-  const handleUpdateSubTask = (id: string, field: keyof SubTask, value: any) => {
-    setModalSubTasks(modal_sub_tasks.map(sub => {
-      if (sub.id === id) {
-        return { ...sub, [field]: value };
-      }
-      return sub;
-    }));
   };
 
   // Export current list to CSV
@@ -506,78 +435,62 @@ const TaskManager: React.FC = () => {
           </div>
 
           {/* Filter Personnel */}
-          <select 
+          <FilterSelect 
             value={filterPersonnel}
-            className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer text-left shrink-0 min-w-[130px]"
-            onChange={(e) => {
-              setFilterPersonnel(e.target.value);
+            onChange={(val) => {
+              setFilterPersonnel(val);
               setPage(1);
             }}
-          >
-            <option value="">Personnel</option>
-            {dynamicPersonnel.map(person => (
-              <option key={person} value={person}>{person}</option>
-            ))}
-          </select>
+            defaultOptionLabel="PERSONNEL"
+            options={dynamicPersonnel.map(person => ({ value: person, label: person }))}
+          />
 
           {/* Filter All Tags */}
-          <select 
+          <FilterSelect 
             value={filterTag}
-            className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer text-left shrink-0 min-w-[110px]"
-            onChange={(e) => {
-              setFilterTag(e.target.value);
+            onChange={(val) => {
+              setFilterTag(val);
               setPage(1);
             }}
-          >
-            <option value="">All Tags</option>
-            {dynamicTags.map(tag => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
-          </select>
+            defaultOptionLabel="ALL TAGS"
+            options={dynamicTags.map(tag => ({ value: tag, label: tag }))}
+          />
 
           {/* Filter All Projects */}
-          <select 
+          <FilterSelect 
             value={filterProject}
-            className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer text-left shrink-0 min-w-[110px]"
-            onChange={(e) => {
-              setFilterProject(e.target.value);
+            onChange={(val) => {
+              setFilterProject(val);
               setPage(1);
             }}
-          >
-            <option value="">All Projects</option>
-            {dynamicProjects.map(proj => (
-              <option key={proj} value={proj}>{proj}</option>
-            ))}
-          </select>
+            defaultOptionLabel="ALL PROJECTS"
+            options={dynamicProjects.map(proj => ({ value: proj, label: proj }))}
+          />
 
           {/* Filter All Teams */}
-          <select 
+          <FilterSelect 
             value={filterTeam}
-            className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer text-left shrink-0 min-w-[110px]"
-            onChange={(e) => {
-              setFilterTeam(e.target.value);
+            onChange={(val) => {
+              setFilterTeam(val);
               setPage(1);
             }}
-          >
-            <option value="">All Teams</option>
-            {dynamicTeams.map(tm => (
-              <option key={tm} value={tm}>{tm}</option>
-            ))}
-          </select>
+            defaultOptionLabel="ALL TEAMS"
+            options={dynamicTeams.map(tm => ({ value: tm, label: tm }))}
+          />
 
           {/* Filter Status (ON/OFF) */}
-          <select 
+          <FilterSelect 
             value={filterStatus}
-            className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer text-left shrink-0 min-w-[80px]"
-            onChange={(e) => {
-              setFilterStatus(e.target.value);
+            onChange={(val) => {
+              setFilterStatus(val);
               setPage(1);
             }}
-          >
-            <option value="">Status (All)</option>
-            <option value="ON">ON</option>
-            <option value="OFF">OFF</option>
-          </select>
+            defaultOptionLabel="STATUS (ALL)"
+            options={[
+              { value: 'ON', label: 'ON' },
+              { value: 'OFF', label: 'OFF' }
+            ]}
+          />
 
           {/* Reset Filters button */}
           {(searchQuery || filterPersonnel || filterTag || filterProject || filterTeam || filterStatus !== 'ON') && (
@@ -939,235 +852,17 @@ const TaskManager: React.FC = () => {
       )}
 
       {/* 5. MODAL OVERLAY: Create & Edit Template Task Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
-                {modalTask ? 'EDIT TASK' : 'CREATE NEW TASK'}
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Form scroll container */}
-            <form onSubmit={handleSaveTask} className="flex-1 overflow-y-auto p-6 space-y-4">
-              {/* TASK NAME Input */}
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">TASK NAME</label>
-                <input 
-                  required 
-                  type="text"
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all font-semibold text-slate-700 leading-normal"
-                  placeholder="Nhập những gì cần hoàn thành..." 
-                  value={modal_title} 
-                  onChange={(e) => setModalTitle(e.target.value)} 
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* PROJECT Select */}
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">PROJECT</label>
-                  <select 
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 focus:bg-white cursor-pointer text-slate-700"
-                    value={modal_project} 
-                    onChange={(e) => setModalProject(e.target.value)}
-                  >
-                    {AVAILABLE_PROJECTS.map(proj => (
-                      <option key={proj} value={proj}>{proj}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* TASK TYPE Select */}
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">TASK TYPE</label>
-                  <select 
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 focus:bg-white cursor-pointer text-slate-700"
-                    value={modal_task_type} 
-                    onChange={(e) => setModalTaskType(e.target.value)}
-                  >
-                    <option value="DAILY">Daily Task</option>
-                    <option value="WEEKLY">Weekly Task</option>
-                    <option value="MONTHLY">Monthly Task</option>
-                    <option value="ONETIME">One-time Task</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* DEADLINE TIME Input */}
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono flex items-center gap-1">
-                    <span>DEADLINE TIME</span>
-                  </label>
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700"
-                      placeholder="e.g. 09:00 AM"
-                      value={modal_deadline_time} 
-                      onChange={(e) => setModalDeadlineTime(e.target.value)} 
-                    />
-                    <Clock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  </div>
-                </div>
-
-                {/* DEADLINE DAYS Input */}
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">DEADLINE DAYS</label>
-                  <input 
-                    type="text" 
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700"
-                    placeholder="e.g. Mon - Fri, Mon, Thu"
-                    value={modal_deadline_days} 
-                    onChange={(e) => setModalDeadlineDays(e.target.value)} 
-                  />
-                </div>
-              </div>
-
-              {/* Extras Grid for editing descriptions tags and teams */}
-              <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-3">
-                {/* TEAM Select option */}
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">TEAM</label>
-                  <select 
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 focus:bg-white cursor-pointer text-slate-700"
-                    value={modal_team} 
-                    onChange={(e) => setModalTeam(e.target.value)}
-                  >
-                    {AVAILABLE_TEAMS.map(tm => (
-                      <option key={tm} value={tm}>{tm}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* TAG Select option */}
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">TAG</label>
-                  <select 
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 focus:bg-white cursor-pointer text-slate-700"
-                    value={modal_tag} 
-                    onChange={(e) => setModalTag(e.target.value)}
-                  >
-                    {AVAILABLE_TAGS.map(tg => (
-                      <option key={tg} value={tg}>{tg}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Raw description */}
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">DESCRIPTION / GHI CHÚ (Mẫu)</label>
-                <textarea 
-                  rows={2}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500 focus:bg-white transition-all text-slate-700 resize-none"
-                  placeholder="Ghi chú chi tiết cho template..." 
-                  value={modal_description} 
-                  onChange={(e) => setModalDescription(e.target.value)} 
-                />
-              </div>
-
-              {/* Sub-tasks section with dynamic rows creation */}
-              <div className="space-y-2 border-t border-slate-100 pt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-mono">SUB-TASKS</span>
-                  <button 
-                    type="button" 
-                    onClick={handleAddSubTaskRow}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                  >
-                    <span>+ Add Row</span>
-                  </button>
-                </div>
-
-                {/* Subtasks items rows container */}
-                <div className="space-y-3 max-h-56 overflow-y-auto p-1 bg-slate-50/50 border border-slate-100 rounded-xl">
-                  {modal_sub_tasks.length > 0 ? (
-                    modal_sub_tasks.map((sub, idx) => (
-                      <div key={sub.id} className="bg-white border border-slate-200/80 rounded-xl p-3 relative space-y-2 group shadow-xs">
-                        {/* Row Trash Delete button top right */}
-                        <button 
-                          type="button"
-                          onClick={() => handleDeleteSubTaskRow(sub.id)}
-                          className="absolute right-2.5 top-2.5 text-slate-300 hover:text-red-500 transition-colors p-1"
-                          title="Xóa dòng"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-
-                        <div className="space-y-1.5 pr-6">
-                          <label className="block text-[9px] font-bold text-slate-400 tracking-wider">Content</label>
-                          <input 
-                            required
-                            type="text" 
-                            className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                            placeholder="Tên sub-task..."
-                            value={sub.content}
-                            onChange={(e) => handleUpdateSubTask(sub.id, 'content', e.target.value)}
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 pr-6">
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 tracking-wider mb-0.5">Assignee</label>
-                            <select 
-                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 cursor-pointer text-left"
-                              value={sub.assignee}
-                              onChange={(e) => handleUpdateSubTask(sub.id, 'assignee', e.target.value)}
-                            >
-                              {AVAILABLE_PLES.map(p => (
-                                <option key={p} value={p}>{p}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 tracking-wider mb-0.5">Est (Phút)</label>
-                            <input 
-                              required
-                              type="number" 
-                              min={0}
-                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none"
-                              value={sub.estimated_minutes === 0 ? '' : sub.estimated_minutes}
-                              placeholder="Minutes"
-                              onChange={(e) => handleUpdateSubTask(sub.id, 'estimated_minutes', Math.max(0, parseInt(e.target.value) || 0))}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="py-6 text-center text-slate-400 text-xs italic font-medium">
-                      Bấm "+ Add Row" để thêm mới một row sub-task phụ.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Bottom Submit controls */}
-              <div className="pt-3 flex gap-3.5">
-                <button 
-                  type="button" 
-                  onClick={() => setIsModalOpen(false)} 
-                  className="flex-1 py-2.5 text-xs font-black text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-all uppercase tracking-widest text-center cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="flex-1 py-2.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-lg shadow-blue-50 uppercase tracking-widest text-center"
-                >
-                  {modalTask ? 'Save Changes' : 'Create Task'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateTaskModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onSuccess={() => {
+          loadTasks();
+          if (openedDrawerTask) {
+            setOpenedDrawerTask(null);
+          }
+        }} 
+        taskToEdit={modalTask} 
+      />
     </div>
   );
 };

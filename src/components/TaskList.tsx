@@ -4,6 +4,8 @@ import {
   X, Calendar, Download, RefreshCw, Layers, CheckSquare, Square
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { DateRangePicker } from './ui/DateRangePicker';
+import { FilterSelect } from './ui/FilterSelect';
 
 // TS interfaces matching the schema
 interface SubTask {
@@ -116,7 +118,6 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   // Date configuration
   const [startDate, setStartDate] = useState('2026-05-20');
   const [endDate, setEndDate] = useState('2026-05-20');
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -148,16 +149,64 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
     }
   };
 
+  // Metadata states
+  const [projectsList, setProjectsList] = useState<string[]>([]);
+  const [teamsList, setTeamsList] = useState<string[]>([]);
+  const [tagsList, setTagsList] = useState<string[]>([]);
+  const [assigneesList, setAssigneesList] = useState<string[]>([]);
+
+  // Fetch metadata dynamically and filter only active ones
+  const fetchMetadata = async () => {
+    try {
+      const [
+        { data: usersData },
+        { data: projectsData },
+        { data: teamsData },
+        { data: tagsData }
+      ] = await Promise.all([
+        supabase.from('users').select('name, status'),
+        supabase.from('projects').select('name, is_active'),
+        supabase.from('teams').select('name, is_active'),
+        supabase.from('tags').select('name, is_active')
+      ]);
+
+      const activeUsers = (usersData || [])
+        .filter((u: any) => u.status !== 'INACTIVE' && u.name)
+        .map((u: any) => u.name);
+
+      const activeProj = (projectsData || [])
+        .filter((p: any) => p.is_active !== false && p.name)
+        .map((p: any) => p.name);
+
+      const activeTms = (teamsData || [])
+        .filter((t: any) => t.is_active !== false && t.name)
+        .map((t: any) => t.name);
+
+      const activeTgs = (tagsData || [])
+        .filter((tg: any) => tg.is_active !== false && tg.name)
+        .map((tg: any) => tg.name);
+
+      setAssigneesList(activeUsers);
+      setProjectsList(activeProj);
+      setTeamsList(activeTms);
+      setTagsList(activeTgs);
+    } catch (err) {
+      console.error('Error fetching metadata in TaskList:', err);
+    }
+  };
+
   useEffect(() => {
     loadActiveTasks();
-  }, []);
+    fetchMetadata();
 
-  // Set real-time listener for tasks update
-  useEffect(() => {
-    const channel = supabase.channel('todo_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-        loadActiveTasks();
-      }).subscribe();
+    const channel = supabase.channel('todo_realtime_metadata_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadActiveTasks())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => fetchMetadata())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => fetchMetadata())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchMetadata())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tags' }, () => fetchMetadata())
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
     };
@@ -184,32 +233,32 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
   // Extract dynamically options list
   const assigneesOptions = useMemo(() => {
-    const set = new Set<string>();
-    parsedTasks.forEach(t => t.sub_tasks.forEach(s => { if (s.assignee) set.add(s.assignee); }));
-    AVAILABLE_ASSIGNEES.forEach(a => set.add(a));
-    return Array.from(set);
-  }, [parsedTasks]);
+    if (assigneesList.length > 0) {
+      return assigneesList;
+    }
+    return AVAILABLE_ASSIGNEES;
+  }, [assigneesList]);
 
   const tagsOptions = useMemo(() => {
-    const set = new Set<string>();
-    parsedTasks.forEach(t => { if (t.tag_name) set.add(t.tag_name); });
-    AVAILABLE_TAGS.forEach(tg => set.add(tg));
-    return Array.from(set);
-  }, [parsedTasks]);
+    if (tagsList.length > 0) {
+      return tagsList;
+    }
+    return AVAILABLE_TAGS;
+  }, [tagsList]);
 
   const projectsOptions = useMemo(() => {
-    const set = new Set<string>();
-    parsedTasks.forEach(t => { if (t.project_name) set.add(t.project_name); });
-    AVAILABLE_PROJECTS.forEach(p => set.add(p));
-    return Array.from(set);
-  }, [parsedTasks]);
+    if (projectsList.length > 0) {
+      return projectsList;
+    }
+    return AVAILABLE_PROJECTS;
+  }, [projectsList]);
 
   const teamsOptions = useMemo(() => {
-    const set = new Set<string>();
-    parsedTasks.forEach(t => { if (t.team_name) set.add(t.team_name); });
-    AVAILABLE_TEAMS.forEach(tm => set.add(tm));
-    return Array.from(set);
-  }, [parsedTasks]);
+    if (teamsList.length > 0) {
+      return teamsList;
+    }
+    return AVAILABLE_TEAMS;
+  }, [teamsList]);
 
   // Filter logic
   const filteredTasks = useMemo(() => {
@@ -560,135 +609,80 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           </div>
 
           {/* Assignees/Personnel filter */}
-          <select 
+          <FilterSelect
             value={filterAssignee}
-            className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer min-w-[130px]"
-            onChange={(e) => {
-              setFilterAssignee(e.target.value);
+            onChange={(val) => {
+              setFilterAssignee(val);
               setPage(1);
             }}
-          >
-            <option value="">All Assignees</option>
-            {assigneesOptions.map(person => (
-              <option key={person} value={person}>{person}</option>
-            ))}
-          </select>
+            defaultOptionLabel="All Assignees"
+            options={assigneesOptions.map(person => ({ value: person, label: person }))}
+            className="h-9 min-w-[130px]"
+          />
 
           {/* Tag filter */}
-          <select 
+          <FilterSelect
             value={filterTag}
-            className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer min-w-[110px]"
-            onChange={(e) => {
-              setFilterTag(e.target.value);
+            onChange={(val) => {
+              setFilterTag(val);
               setPage(1);
             }}
-          >
-            <option value="">All Tags</option>
-            {tagsOptions.map(tag => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
-          </select>
+            defaultOptionLabel="All Tags"
+            options={tagsOptions.map(tag => ({ value: tag, label: tag }))}
+            className="h-9 min-w-[110px]"
+          />
 
           {/* Project filter */}
-          <select 
+          <FilterSelect
             value={filterProject}
-            className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer min-w-[110px]"
-            onChange={(e) => {
-              setFilterProject(e.target.value);
+            onChange={(val) => {
+              setFilterProject(val);
               setPage(1);
             }}
-          >
-            <option value="">All Projects</option>
-            {projectsOptions.map(proj => (
-              <option key={proj} value={proj}>{proj}</option>
-            ))}
-          </select>
+            defaultOptionLabel="All Projects"
+            options={projectsOptions.map(proj => ({ value: proj, label: proj }))}
+            className="h-9 min-w-[110px]"
+          />
 
           {/* Team filter */}
-          <select 
+          <FilterSelect
             value={filterTeam}
-            className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer min-w-[110px]"
-            onChange={(e) => {
-              setFilterTeam(e.target.value);
+            onChange={(val) => {
+              setFilterTeam(val);
               setPage(1);
             }}
-          >
-            <option value="">All Teams</option>
-            {teamsOptions.map(tm => (
-              <option key={tm} value={tm}>{tm}</option>
-            ))}
-          </select>
+            defaultOptionLabel="All Teams"
+            options={teamsOptions.map(tm => ({ value: tm, label: tm }))}
+            className="h-9 min-w-[110px]"
+          />
 
           {/* Status checklist filter (NEW, DONE, SKIPPED) */}
-          <select 
+          <FilterSelect
             value={filterTodoStatus}
-            className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer min-w-[100px]"
-            onChange={(e) => {
-              setFilterTodoStatus(e.target.value);
+            onChange={(val) => {
+              setFilterTodoStatus(val);
               setPage(1);
             }}
-          >
-            <option value="">All Statuses</option>
-            <option value="NEW">New</option>
-            <option value="DONE">Done</option>
-            <option value="SKIPPED">Skipped</option>
-          </select>
+            defaultOptionLabel="All Statuses"
+            options={[
+              { value: 'NEW', label: 'New' },
+              { value: 'DONE', label: 'Done' },
+              { value: 'SKIPPED', label: 'Skipped' }
+            ]}
+            className="h-9 min-w-[100px]"
+          />
 
           {/* Interactive Date Range custom box mimicking mockup */}
-          <div className="relative">
-            <button
-              onClick={() => setShowDatePicker(!showDatePicker)}
-              className="px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 flex items-center gap-2 hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              <Calendar size={13} className="text-slate-400" />
-              <span>{startDate.replace(/-/g, '/')} - {endDate.replace(/-/g, '/')}</span>
-            </button>
-
-            {showDatePicker && (
-              <div className="absolute left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl p-4 z-50 space-y-3 min-w-[240px] animate-in fade-in duration-100">
-                <span className="block text-[10px] font-black uppercase text-slate-400 font-mono">Date Range Select</span>
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <label className="block text-slate-400 mb-0.5">From Date</label>
-                    <input 
-                      type="date"
-                      value={startDate}
-                      className="w-full p-1.5 border border-slate-200 rounded-md focus:outline-none"
-                      onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-0.5">To Date</label>
-                    <input 
-                      type="date"
-                      value={endDate}
-                      className="w-full p-1.5 border border-slate-200 rounded-md focus:outline-none"
-                      onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-between items-center pt-2">
-                  <button
-                    onClick={() => {
-                      setStartDate('2026-05-20');
-                      setEndDate('2026-05-20');
-                      setShowDatePicker(false);
-                      setPage(1);
-                    }}
-                    className="text-[10px] font-bold text-red-500 hover:underline"
-                  >
-                    Reset Date
-                  </button>
-                  <button
-                    onClick={() => setShowDatePicker(false)}
-                    className="px-2.5 py-1 bg-blue-600 text-white rounded text-[10px] font-bold"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <DateRangePicker 
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(start, end) => {
+              setStartDate(start || '2026-05-20');
+              setEndDate(end || '2026-05-20');
+              setPage(1);
+            }}
+            className="h-9 font-bold"
+          />
 
           {/* Reset Filters */}
           {(searchQuery || filterAssignee || filterTag || filterProject || filterTeam || filterTodoStatus !== 'NEW' || startDate !== '2026-05-20' || endDate !== '2026-05-20') && (
