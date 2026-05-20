@@ -1,142 +1,53 @@
 import { create } from 'zustand';
-import { Session } from '@supabase/supabase-js';
-import { UserProfile } from '../types/database.types';
-import { supabase } from '../lib/supabase';
 
+// Đơn giản hóa type tạm thời cho MVP
 interface AuthState {
-  session: Session | null;
-  profile: UserProfile | null;
+  session: any | null;
+  profile: any | null;
   loading: boolean;
-  setSession: (session: Session | null) => void;
-  setProfile: (profile: UserProfile | null) => void;
+  setSession: (session: any | null) => void;
+  setProfile: (profile: any | null) => void;
   setLoading: (loading: boolean) => void;
   signOut: () => Promise<void>;
   fetchProfile: (uid: string) => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
+  // 1. FAKE SESSION
   session: {
     access_token: 'mock-token',
-    refresh_token: 'mock-refresh-token',
-    expires_in: 3600,
-    token_type: 'bearer',
     user: {
       id: 'mock-user-id',
-      email: 'lequangvinh0611@gmail.com',
-      aud: 'authenticated',
+      email: 'admin@dymtask.com',
       role: 'authenticated',
-      app_metadata: {},
-      user_metadata: { full_name: 'Developer' },
-      created_at: new Date().toISOString(),
     }
-  } as any,
+  },
+  
+  // 2. FAKE PROFILE (Cấp quyền Master luôn để không bị vướng trang Settings)
   profile: {
     id: 'mock-user-id',
-    email: 'lequangvinh0611@gmail.com',
-    name: 'Developer',
-    role: 'master',
+    email: 'admin@dymtask.com',
+    name: 'Admin Dymtask',
+    role: 'master', 
     team_ids: [],
     status: 'ACTIVE',
-    created_at: new Date().toISOString()
-  } as any,
-  loading: false,
+  },
+  
+  loading: false, // Để false luôn để không bị xoay vòng xoay loading
+  
   setSession: (session) => set({ session }),
   setProfile: (profile) => set({ profile }),
   setLoading: (loading) => set({ loading }),
+  
   signOut: async () => {
-    await supabase.auth.signOut();
+    // Tạm thời không gọi supabase.auth.signOut() để tránh lỗi mạng
     set({ session: null, profile: null });
   },
+  
+  // 3. CHẶN KHÔNG CHO GỌI DATABASE BẢNG USERS
   fetchProfile: async (uid: string) => {
-    try {
-      console.log('[AuthStore] Fetching profile for:', uid);
-
-      // Bọc query trong timeout 8 giây để tránh treo vĩnh viễn
-      const queryPromise = supabase
-        .from('users')
-        .select('id, email, name, role, team_ids, status, created_at')
-        .eq('id', uid)
-        .single();
-
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('QUERY_TIMEOUT')), 8000)
-      );
-
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
-
-      if (error) {
-        console.warn('[AuthStore] Profile fetch error:', error.code, error.message);
-
-        if (error.code === 'PGRST116') {
-          // Không tìm thấy profile trong DB → Tự động tạo record
-          console.log('[AuthStore] No profile in DB, creating one...');
-          const { data: { user } } = await supabase.auth.getUser();
-          
-          if (user) {
-            const isMaster = user.email === 'lequangvinh0611@gmail.com';
-            const newProfile = {
-              id: user.id,
-              email: user.email!,
-              name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-              role: isMaster ? 'master' : 'user',
-              team_ids: [],
-              status: 'ACTIVE',
-              created_at: new Date().toISOString(),
-            };
-
-            // Thực hiện INSERT vào DB
-            const { error: insertError } = await supabase.from('users').insert([newProfile]);
-            
-            if (insertError) {
-              console.error('[AuthStore] Failed to auto-create profile:', insertError);
-              // Vẫn set profile vào store để UI không chết, nhưng DB operations khác sẽ lỗi FK
-              set({ profile: newProfile as any });
-            } else {
-              console.log('[AuthStore] Profile created successfully in DB');
-              set({ profile: newProfile as any });
-            }
-          }
-          return;
-        }
-        throw error;
-      }
-
-      console.log('[AuthStore] Profile fetched successfully:', data);
-      
-      // ✅ Force Master role if email matches (Security enforcement)
-      if (data.email === 'lequangvinh0611@gmail.com' && data.role !== 'master') {
-        data.role = 'master';
-      }
-      
-      set({ profile: data });
-
-    } catch (error: any) {
-      console.error('[AuthStore] fetchProfile failed:', error.message);
-
-      // ✅ FIX: Chỉ set fallback nếu CHƯA có profile — không ghi đè profile đã load được
-      const currentProfile = get().profile;
-      if (!currentProfile) {
-        const sessionUser = get().session?.user;
-        if (sessionUser) {
-          set({
-            profile: {
-              id: sessionUser.id,
-              email: sessionUser.email!,
-              name: sessionUser.user_metadata?.full_name
-                    || sessionUser.email?.split('@')[0]
-                    || 'User',
-              role: 'user',
-            } as any,
-          });
-        } else {
-          set({ profile: null });
-        }
-      }
-      // Nếu đã có profile rồi → giữ nguyên, không làm gì
-    } finally {
-      // Luôn luôn tắt loading dù có chuyện gì xảy ra
-      set({ loading: false });
-      console.log('[AuthStore] Loading finished → FALSE');
-    }
+    console.log('[AuthStore] MVP Mode: Đã bỏ qua việc gọi database bảng users.');
+    // Không làm gì cả vì chúng ta đã có Fake Profile ở trên rồi
+    set({ loading: false }); 
   },
 }));
