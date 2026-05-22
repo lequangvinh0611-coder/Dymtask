@@ -20,12 +20,14 @@ export interface Project {
   name: string;
   description?: string;
   created_at: string;
+  is_active: boolean;
 }
 
 export interface Team {
   id: string;
   name: string;
   created_at: string;
+  is_active: boolean;
 }
 
 export interface Tag {
@@ -33,6 +35,7 @@ export interface Tag {
   name: string;
   color?: string;
   created_at: string;
+  is_active: boolean;
 }
 
 export interface Subtask {
@@ -56,6 +59,11 @@ export interface Task {
   est_time: number;
   actual_time: number;
   created_at: string;
+  assignees?: string[] | null;
+  project_id?: string | null;
+  tag_id?: string | null;
+  due_date?: string | null;
+  priority?: string;
 }
 
 export interface AuditLog {
@@ -66,4 +74,166 @@ export interface AuditLog {
   user_name: string | null;
   metadata: any; // Ánh xạ JSONB
   created_at: string;
+}
+
+// Định nghĩa Database Type hoàn chỉnh của Supabase cho dự án Dymtask
+export interface Database {
+  public: {
+    Tables: {
+      tasks: {
+        Row: {
+          id: string;
+          title: string;
+          description: string | null;
+          task_type: string;
+          status: string;
+          is_active: boolean;
+          est_time: number;
+          actual_time: number;
+          created_at: string;
+          assignees: string[] | null;
+          project_id: string | null;
+          tag_id: string | null;
+          due_date: string | null;
+          priority: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string | null;
+          task_type: string;
+          status?: string;
+          is_active?: boolean;
+          est_time?: number;
+          actual_time?: number;
+          created_at?: string;
+          assignees?: string[] | null;
+          project_id?: string | null;
+          tag_id?: string | null;
+          due_date?: string | null;
+          priority?: string; // Mặc định 'Medium'
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          description?: string | null;
+          task_type?: string;
+          status?: string;
+          is_active?: boolean;
+          est_time?: number;
+          actual_time?: number;
+          created_at?: string;
+          assignees?: string[] | null;
+          project_id?: string | null;
+          tag_id?: string | null;
+          due_date?: string | null;
+          priority?: string;
+        };
+      };
+      projects: {
+        Row: {
+          id: string;
+          name: string;
+          is_active: boolean;
+          created_at: string;
+          description?: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          is_active?: boolean;
+          created_at?: string;
+          description?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          is_active?: boolean;
+          created_at?: string;
+          description?: string | null;
+        };
+      };
+      tags: {
+        Row: {
+          id: string;
+          name: string;
+          is_active: boolean;
+          created_at: string;
+          color?: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          is_active?: boolean;
+          created_at?: string;
+          color?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          is_active?: boolean;
+          created_at?: string;
+          color?: string | null;
+        };
+      };
+      teams: {
+        Row: {
+          id: string;
+          name: string;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+      };
+      users: {
+        Row: {
+          id: string;
+          email: string;
+          name: string;
+          role: string;
+          status: string;
+          team_ids: string[];
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          name: string;
+          role?: string;
+          status?: string;
+          team_ids?: string[];
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          name?: string;
+          role?: string;
+          status?: string;
+          team_ids?: string[];
+          created_at?: string;
+        };
+      };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      [_ in never]: never;
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+  };
 }
