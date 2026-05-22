@@ -54,81 +54,81 @@ export default function UserEditModal({ isOpen, onClose, onSave, user, available
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden transform animate-in slide-in-from-bottom-8 duration-300">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[1px] animate-in fade-in duration-150">
+      <div className="bg-white rounded-md shadow-2xl border border-slate-100 w-full max-w-md overflow-hidden transform animate-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white">
+        <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
           <div>
-            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Edit Permissions</h3>
-            <p className="text-xs text-slate-500 font-bold mt-1">{user.email?.toString().toUpperCase().trim()}</p>
+            <h3 className="text-xs font-semibold text-slate-800">Edit permissions</h3>
+            <p className="text-xs text-slate-400 font-normal mt-0.5">{user.email?.toString().toLowerCase().trim()}</p>
           </div>
           <button 
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
+            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
           >
-            <X size={24} />
+            <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Role selection */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                <Shield size={14} />
-                System Role
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                <Shield size={13} />
+                <span>System role</span>
               </div>
-              <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-1 gap-1.5">
                 {['MASTER', 'ADMIN', 'USER'].map((r) => (
                   <button
                     key={r}
                     type="button"
                     onClick={() => setRole(r)}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all font-bold text-sm ${
+                    className={`flex items-center justify-between px-3 h-8 rounded-md border transition-all text-xs font-medium ${
                       role === r 
-                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm' 
+                        ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700 shadow-sm' 
                         : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200'
                     }`}
                   >
-                    <span>{r}</span>
-                    {role === r && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                    <span>{r === 'MASTER' ? 'Master' : r === 'ADMIN' ? 'Admin' : 'User'}</span>
+                    {role === r && <div className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-in zoom-in-100" />}
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Status selection */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                <Power size={14} />
-                Account Status
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                <Power size={13} />
+                <span>Account status</span>
               </div>
-              <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-1 gap-1.5">
                 {['ACTIVE', 'INACTIVE'].map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => setStatus(s)}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all font-bold text-sm ${
+                    className={`flex items-center justify-between px-3 h-8 rounded-md border transition-all text-xs font-medium ${
                       status === s 
-                        ? (s === 'ACTIVE' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-600 bg-slate-50 text-slate-700')
+                        ? (s === 'ACTIVE' ? 'border-emerald-600 bg-emerald-50/50 text-emerald-700' : 'border-slate-600 bg-slate-50 text-slate-750')
                         : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
                     }`}
                   >
-                    <span>{s}</span>
-                    {status === s && <div className={`w-2 h-2 rounded-full ${s === 'ACTIVE' ? 'bg-emerald-600' : 'bg-slate-600'}`} />}
+                    <span>{s === 'ACTIVE' ? 'Active' : 'Inactive'}</span>
+                    {status === s && <div className={`w-1.5 h-1.5 rounded-full ${s === 'ACTIVE' ? 'bg-emerald-600' : 'bg-slate-400'} animate-in zoom-in-100`} />}
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Team selection (Full width) */}
-            <div className="md:col-span-2 space-y-4">
-              <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                <Users size={14} />
-                Team Assignments
+            <div className="md:col-span-2 space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                <Users size={13} />
+                <span>Team assignments</span>
               </div>
-              <div className="flex gap-2 flex-wrap min-h-[60px] p-4 bg-slate-50 border border-slate-100 rounded-xl">
+              <div className="flex gap-1.5 flex-wrap min-h-[50px] p-2.5 bg-slate-50 border border-slate-100 rounded-md">
                 {availableTeams.length > 0 ? (
                   availableTeams.map((team) => {
                     const normalized = team.name?.toString().toUpperCase().trim();
@@ -138,10 +138,10 @@ export default function UserEditModal({ isOpen, onClose, onSave, user, available
                         key={team.id}
                         type="button"
                         onClick={() => toggleTeam(normalized)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                        className={`px-2 py-1 rounded text-xs font-medium transition-all border ${
                           isSelected 
-                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100' 
-                            : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' 
+                            : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
                         }`}
                       >
                         {normalized}
@@ -156,21 +156,21 @@ export default function UserEditModal({ isOpen, onClose, onSave, user, available
           </div>
 
           {/* Footer */}
-          <div className="mt-10 flex gap-4">
+          <div className="pt-2 flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 bg-slate-100 text-slate-500 rounded-xl text-sm font-black hover:bg-slate-200 transition-all uppercase tracking-wider grow"
+              className="flex-1 h-8 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200 transition-all border border-slate-200"
             >
-              Cancel Changes
+              Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-8 py-3 bg-slate-900 text-white rounded-xl text-sm font-black hover:bg-black disabled:opacity-50 transition-all flex items-center justify-center gap-2 uppercase tracking-wider grow shadow-xl shadow-slate-200"
+              className="flex-1 h-8 bg-indigo-600 text-white rounded-md text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all flex items-center justify-center gap-1.5"
             >
-              <Save size={18} />
-              {saving ? 'Updating...' : 'Commit Changes'}
+              <Save size={13} />
+              {saving ? 'Updating...' : 'Save changes'}
             </button>
           </div>
         </form>

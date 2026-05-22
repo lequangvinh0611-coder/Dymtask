@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Trash2, Clock, Loader2, Plus, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
 
 // TS interfaces matching the schema
 interface SubTask {
@@ -251,7 +252,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     e.preventDefault();
 
     if (!taskName.trim()) {
-      alert('Please enter a Task Name.');
+      toast.warning('Vui lòng nhập tên công việc (Task Name).');
       return;
     }
 
@@ -306,11 +307,12 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
         if (error) throw error;
       }
 
+      toast.success(isEditMode ? 'Cập nhật template thành công!' : 'Tạo template thành công!');
       onSuccess();
       onClose();
     } catch (err: any) {
       console.error('Error saving task template:', err);
-      alert(`Error context: ${err.message || 'Unknown database issue'}`);
+      toast.error(`Error context: ${err.message || 'Unknown database issue'}`);
     } finally {
       setLoading(false);
     }
@@ -323,40 +325,40 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
       <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
         
         {/* 1. HEADER SECTION */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-4">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest font-mono">
-              {isEditMode ? 'Edit Template' : 'Create New Template'}
+            <h3 className="text-sm font-semibold text-slate-800">
+              {isEditMode ? 'Edit template' : 'Create new template'}
             </h3>
           </div>
 
           <button onClick={onClose} className="p-1.5 hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-full transition-all">
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* 2. FORM BODY COVER */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-left">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4 text-left">
           
           {/* HÀNG 1: Task Name */}
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">TASK NAME</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Task name</label>
             <input 
               required 
               type="text"
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-semibold focus:outline-none transition-all text-slate-800"
-              placeholder="Nhập tên Task..." 
+              className="w-full h-8 px-3 bg-white border border-slate-200 focus:border-indigo-500 rounded-md text-xs font-medium focus:outline-none transition-all text-slate-800 shadow-sm"
+              placeholder="Nhập tên task..." 
               value={taskName} 
               onChange={(e) => setTaskName(e.target.value)} 
             />
           </div>
 
           {/* HÀNG 2: Grid Dropdowns - Project, Tag, Task Type */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">PROJECT</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Project</label>
               <select 
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 cursor-pointer text-slate-700 font-sans"
+                className="w-full h-8 px-2 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 cursor-pointer text-slate-700"
                 value={project} 
                 onChange={(e) => setProject(e.target.value)}
               >
@@ -367,9 +369,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             </div>
 
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">TAG</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Tag</label>
               <select 
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 cursor-pointer text-slate-700 font-sans"
+                className="w-full h-8 px-2 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 cursor-pointer text-slate-700"
                 value={tag} 
                 onChange={(e) => setTag(e.target.value)}
               >
@@ -380,39 +382,39 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             </div>
 
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">TASK TYPE</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Task type</label>
               <select 
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 cursor-pointer text-slate-700 font-sans"
+                className="w-full h-8 px-2 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 cursor-pointer text-slate-700"
                 value={taskType} 
                 onChange={(e) => setTaskType(e.target.value)}
               >
-                <option value="DAILY">DAILY TIME</option>
-                <option value="WEEKLY">WEEKLY TIME</option>
-                <option value="MONTHLY">MONTHLY TIME</option>
-                <option value="ONETIME">ONETIME TIME</option>
+                <option value="DAILY">Daily time</option>
+                <option value="WEEKLY">Weekly time</option>
+                <option value="MONTHLY">Monthly time</option>
+                <option value="ONETIME">Onetime time</option>
               </select>
             </div>
           </div>
 
           {/* HÀNG 3: Dynamic Conditional Settings Panel */}
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5">
+          <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
             {taskType === 'DAILY' && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex-1">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">DEADLINE TIME</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Deadline time</label>
                   <div className="relative">
                     <input 
                       required 
                       type="time"
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500 text-slate-700"
+                      className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-mono font-medium focus:outline-none focus:border-indigo-500 text-slate-700"
                       value={deadlineTime24h} 
                       onChange={(e) => setDeadlineTime24h(e.target.value)} 
                     />
                   </div>
                 </div>
                 <div className="flex-1">
-                  <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 font-mono">DEADLINE DAYS</span>
-                  <p className="text-xs font-semibold text-slate-500 italic mt-2.5">
+                  <span className="block text-xs font-medium text-slate-500 mb-1">Deadline days</span>
+                  <p className="text-xs font-normal text-slate-500 italic mt-1.5">
                     Triggered everyday Mon - Fri (Saturday and Sunday optional)
                   </p>
                 </div>
@@ -420,20 +422,20 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             )}
 
             {taskType === 'WEEKLY' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">DEADLINE TIME</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Deadline time</label>
                   <input 
                     required 
                     type="time"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500 text-slate-700"
+                    className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-mono font-medium focus:outline-none focus:border-indigo-500 text-slate-700"
                     value={deadlineTime24h} 
                     onChange={(e) => setDeadlineTime24h(e.target.value)} 
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">REPEAT DAYS</label>
-                  <div className="flex items-center gap-1.5 pt-1.5">
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Repeat days</label>
+                  <div className="flex items-center gap-1">
                     {DAYS_OF_WEEK.map((day) => {
                       const isActive = selectedDays.includes(day.value);
                       return (
@@ -442,7 +444,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                           type="button"
                           title={day.fullName}
                           onClick={() => handleToggleDay(day.value)}
-                          className={`w-8 h-8 flex items-center justify-center rounded-full text-[10px] font-black tracking-tighter transition-all cursor-pointer border ${
+                          className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-medium tracking-tighter transition-all cursor-pointer border ${
                             isActive 
                               ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
                               : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'
@@ -458,23 +460,23 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             )}
 
             {taskType === 'MONTHLY' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">DEADLINE TIME</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Deadline time</label>
                   <input 
                     required 
                     type="time"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500 text-slate-700"
+                    className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-mono font-medium focus:outline-none focus:border-indigo-500 text-slate-700"
                     value={deadlineTime24h} 
                     onChange={(e) => setDeadlineTime24h(e.target.value)} 
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">MONTHLY REPEAT DAYS</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Monthly repeat days</label>
                   <input 
                     required 
                     type="text"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500 text-slate-800"
+                    className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 text-slate-800"
                     placeholder="e.g. 10, 15, 20" 
                     value={monthlyDays} 
                     onChange={(e) => setMonthlyDays(e.target.value)} 
@@ -484,24 +486,24 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             )}
 
             {taskType === 'ONETIME' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">DEADLINE TIME</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Deadline time</label>
                   <input 
                     required 
                     type="time"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500 text-slate-700"
+                    className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-mono font-medium focus:outline-none focus:border-indigo-500 text-slate-700"
                     value={deadlineTime24h} 
                     onChange={(e) => setDeadlineTime24h(e.target.value)} 
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 font-mono">DEADLINE DATE</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Deadline date</label>
                   <div className="relative">
                     <input 
                       required 
                       type="date"
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 text-slate-700"
+                      className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 text-slate-700"
                       value={oneTimeDate} 
                       onChange={(e) => setOneTimeDate(e.target.value)} 
                     />
@@ -512,35 +514,35 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
           </div>
 
           {/* HÀNG 4: Sub-tasks management (FLEXBOX HORIZONTAL ONE-ROW) */}
-          <div className="border border-slate-200/60 bg-slate-50/25 rounded-2xl p-5 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider font-mono">Sub-tasks management</span>
+          <div className="border border-slate-200 bg-slate-50/50 rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+              <span className="text-xs font-semibold text-slate-500">Sub-tasks management</span>
               <button 
                 type="button" 
                 onClick={handleAddSubTask}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 transition-colors"
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-2.5 h-7 rounded border border-blue-100 transition-colors"
               >
-                <Plus size={13} />
-                <span>+ Add Row</span>
+                <Plus size={12} />
+                <span>Add row</span>
               </button>
             </div>
 
             {/* Sub-task List Area with Header */}
             {subTasks.length > 0 && (
-              <div className="hidden md:flex flex-row items-center gap-4 px-2 text-[10px] font-black uppercase text-slate-400 tracking-wider font-mono">
-                <div className="flex-1">Sub-task Content</div>
+              <div className="hidden md:flex flex-row items-center gap-4 px-2 text-xs font-medium text-slate-400">
+                <div className="flex-1">Sub-task content</div>
                 <div className="w-48">Personnel</div>
-                <div className="w-24 text-center">Est. Min</div>
+                <div className="w-24 text-center">Est. min</div>
                 <div className="w-10"></div>
               </div>
             )}
 
-            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {subTasks.length > 0 ? (
                 subTasks.map((sub, index) => (
                   <div 
                     key={sub.id} 
-                    className="flex flex-col md:flex-row md:items-center gap-3 w-full bg-white border border-slate-100 rounded-xl p-3 md:p-2.5 hover:border-blue-100/80 hover:shadow-sm transition-all animate-in fade-in duration-100"
+                    className="flex flex-col md:flex-row md:items-center gap-2 w-full bg-white border border-slate-100 rounded-md p-2 hover:border-blue-100/80 hover:shadow-sm transition-all animate-in fade-in"
                   >
                     {/* Content */}
                     <div className="flex-1">
@@ -548,7 +550,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                         required
                         type="text" 
                         value={sub.content}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:bg-white focus:border-blue-400 transition-all font-sans"
+                        className="w-full h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-400 transition-all"
                         placeholder="Content"
                         onChange={(e) => handleUpdateSubTaskField(sub.id, 'content', e.target.value)}
                       />
@@ -557,7 +559,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                     {/* Assignee / Personnel Selection dropdown */}
                     <div className="w-full md:w-48">
                       <select 
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer font-sans h-[34px] md:h-9"
+                        className="w-full h-8 px-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium text-slate-600 focus:outline-none cursor-pointer"
                         value={sub.assignee}
                         onChange={(e) => handleUpdateSubTaskField(sub.id, 'assignee', e.target.value)}
                       >
@@ -574,7 +576,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                         type="number" 
                         min={1}
                         value={sub.estimated_minutes === 0 ? '' : sub.estimated_minutes}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:bg-white focus:border-blue-400 font-mono text-center h-[34px] md:h-9"
+                        className="w-full h-8 px-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-400 font-mono text-center"
                         placeholder="Min"
                         onChange={(e) => handleUpdateSubTaskField(sub.id, 'estimated_minutes', Math.max(0, parseInt(e.target.value) || 0))}
                       />
@@ -585,16 +587,16 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                       <button 
                         type="button"
                         onClick={() => handleDeleteSubTask(sub.id)}
-                        className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                        title="Remove Row"
+                        className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors border border-transparent hover:border-red-100"
+                        title="Remove row"
                       >
-                        <Trash2 size={15} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="py-8 text-center text-slate-400 text-xs italic font-medium bg-slate-50/50 rounded-xl border border-dashed border-slate-200 select-none">
+                <div className="py-6 text-center text-slate-400 text-xs italic font-medium bg-slate-50/50 rounded-md border border-dashed border-slate-200 select-none">
                   Bấm "+ Add Row" để thêm subtask của bạn.
                 </div>
               )}
@@ -602,29 +604,29 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
 
             {/* Total Minutes display */}
             <div className="flex justify-between items-center pt-2 border-t border-slate-100 font-mono">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">SUB-TASKS TOTAL VALUE</span>
-              <span className="text-xs font-black text-slate-700">
-                Total Est: <span className="text-blue-600 text-sm font-black">{totalEstMinutes}</span> min
+              <span className="text-xs text-slate-400 font-medium">Sub-tasks total value</span>
+              <span className="text-xs font-semibold text-slate-700">
+                Total est: <span className="text-blue-600 font-bold">{totalEstMinutes}</span> min
               </span>
             </div>
           </div>
 
           {/* 5. BOTTOM COMMAND TRIGGERS */}
-          <div className="pt-3 flex gap-3.5 shrink-0">
+          <div className="pt-2 flex gap-3 shrink-0">
             <button 
               type="button" 
               onClick={onClose} 
-              className="flex-1 py-3 text-xs font-black text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all uppercase tracking-widest text-center cursor-pointer border border-slate-200/40 font-mono"
+              className="flex-1 h-8 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-all text-center cursor-pointer border border-slate-200"
             >
               Cancel
             </button>
             <button 
               type="submit" 
               disabled={loading} 
-              className="flex-1 py-1 px-4 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl transition-all shadow-md shadow-blue-100 flex items-center justify-center gap-2 uppercase tracking-widest font-mono cursor-pointer"
+              className="flex-1 h-8 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-md transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              {loading ? <Loader2 className="w-4.5 h-4.5 animate-spin text-white" /> : null}
-              <span>{isEditMode ? 'Save Changes' : 'Create Task'}</span>
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" /> : null}
+              <span>{isEditMode ? 'Save changes' : 'Create task'}</span>
             </button>
           </div>
         </form>

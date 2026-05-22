@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { toast } from 'sonner';
 
 interface DateRangePickerProps {
   startDate: string;
@@ -64,7 +65,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
         const diffTime = Math.abs(end.getTime() - start.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         if (diffDays > 62) {
-          alert("Khoảng thời gian chọn không được vượt quá 62 ngày!");
+          toast.warning("Khoảng thời gian chọn không được vượt quá 62 ngày!");
           const adjustedEndDate = new Date(start.getTime() + 62 * 24 * 60 * 60 * 1000);
           const adjustedEndDateStr = formatDate(adjustedEndDate);
           setTempEnd(adjustedEndDateStr);
@@ -94,20 +95,20 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
   const blanks = Array(startOffset).fill(null);
 
   return (
-    <div className={cn("relative", className)} ref={containerRef}>
+    <div className={cn("relative h-8 flex items-center shrink-0 z-20 overflow-visible", className)} ref={containerRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 h-8 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all min-w-[180px]"
+        className="flex items-center gap-2 px-3 h-8 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 transition-all min-w-[180px] shrink-0 cursor-pointer pointer-events-auto"
       >
-        <CalendarIcon size={14} className="text-slate-400" />
-        <span>
+        <CalendarIcon size={14} className="text-slate-400 shrink-0" />
+        <span className="truncate">
           {startDate ? `${formatDateToDisplay(startDate)} - ${formatDateToDisplay(endDate || startDate)}` : "Chọn ngày"}
         </span>
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 z-50 w-[280px] animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="absolute right-0 top-full mt-2 bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 z-[100] w-[280px] animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center justify-between mb-4">
             <button 
               type="button"
@@ -116,7 +117,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
             >
               <ChevronLeft size={16} />
             </button>
-            <h4 className="text-[11px] font-black uppercase text-slate-900 tracking-widest">
+            <h4 className="text-xs font-semibold text-slate-900">
               {currentMonth.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' })}
             </h4>
             <button 
@@ -130,7 +131,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
 
           <div className="grid grid-cols-7 gap-1 mb-2">
             {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map(d => (
-              <div key={d} className="text-center text-[9px] font-black text-slate-300 py-1">{d}</div>
+              <div key={d} className="text-center text-xs font-semibold text-slate-400 py-1">{d}</div>
             ))}
             {blanks.map((_, i) => <div key={`b-${i}`} />)}
             {days.map(d => {
@@ -145,7 +146,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
                   type="button"
                   onClick={() => handleDateClick(dStr)}
                   className={cn(
-                    "text-[10px] font-bold py-1.5 rounded-lg transition-all z-10",
+                    "text-xs font-medium py-1.5 rounded-lg transition-all z-10",
                     isStart || isEnd ? "bg-indigo-600 text-white" :
                     isInRange ? "bg-indigo-50 text-indigo-600" :
                     "text-slate-600 hover:bg-slate-100"
@@ -158,11 +159,11 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ startDate, end
           </div>
           
           <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
-            <p className="text-[9px] font-bold text-slate-400 italic">Tối đa 62 ngày</p>
+            <p className="text-xs font-medium text-slate-400 italic">Tối đa 62 ngày</p>
             <button 
               type="button"
               onClick={() => { setTempStart(null); setTempEnd(null); onChange('', ''); setIsOpen(false); }}
-              className="text-[9px] font-black uppercase text-rose-500 hover:text-rose-600"
+              className="text-xs font-semibold text-rose-500 hover:text-rose-600"
             >
               Xóa lọc
             </button>

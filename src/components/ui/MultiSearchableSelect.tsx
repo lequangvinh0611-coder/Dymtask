@@ -27,6 +27,7 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [openUpward, setOpenUpward] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedOptions = options.filter(o => value.includes(o.id));
@@ -45,6 +46,20 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      // If space below is less than 300px and space above is greater, flip up
+      if (spaceBelow < 300 && spaceAbove > spaceBelow) {
+        setOpenUpward(true);
+      } else {
+        setOpenUpward(false);
+      }
+    }
+  }, [isOpen]);
+
   const toggleOption = (id: string) => {
     if (value.includes(id)) {
       onChange(value.filter(v => v !== id));
@@ -59,7 +74,7 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
   };
 
   return (
-    <div className={cn("relative", className)} ref={containerRef}>
+    <div className={cn("relative overflow-visible", className)} ref={containerRef}>
       <div 
         onClick={() => setIsOpen(!isOpen)}
         className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm cursor-pointer hover:border-indigo-300 transition-colors min-h-[40px]"
@@ -72,7 +87,7 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
                 <X className="w-3 h-3 cursor-pointer hover:text-indigo-900 shrink-0" onClick={(e) => removeOption(e, selectedOptions[0].id)} />
               </span>
               {selectedOptions.length > 1 && (
-                <span className="text-[10px] font-bold text-slate-400">+{selectedOptions.length - 1}</span>
+                <span className="text-xs font-bold text-slate-400">+{selectedOptions.length - 1}</span>
               )}
             </div>
           ) : (
@@ -90,7 +105,10 @@ export const MultiSearchableSelect: React.FC<MultiSearchableSelectProps> = ({
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-100">
+        <div className={cn(
+          "absolute z-[100] w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in duration-100",
+          openUpward ? "bottom-full mb-1" : "top-full mt-1"
+        )}>
           <div className="p-2 border-b border-slate-100">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

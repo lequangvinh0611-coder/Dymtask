@@ -5,9 +5,10 @@ import { supabase } from '../lib/supabase';
 import { useAppStore } from '../types';
 import { AuditLog as AuditLogType } from '../types/database.types';
 import { DateRangePicker } from './ui/DateRangePicker';
+import { toast } from 'sonner';
 
 const AuditLog = () => {
-  const { refreshKey } = useAppStore();
+  const { refreshKey, showConfirm } = useAppStore();
   const [logs, setLogs] = useState<AuditLogType[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -106,27 +107,39 @@ const AuditLog = () => {
   }
 
   const handleDeleteLog = async (id: string) => {
-    if (!window.confirm('Delete this log entry?')) return;
-    const { error } = await supabase.from('audit_logs').delete().eq('id', id);
-    if (!error) fetchLogs();
+    showConfirm({
+      title: "Xác nhận xóa log",
+      message: "Bạn có chắc chắn muốn xóa bản ghi nhật ký hoạt động này?",
+      confirmText: "Xóa",
+      cancelText: "Hủy",
+      onConfirm: async () => {
+        const { error } = await supabase.from('audit_logs').delete().eq('id', id);
+        if (!error) {
+          toast.success("Xóa nhật ký hoạt động thành công!");
+          fetchLogs();
+        } else {
+          toast.error(`Lỗi khi xóa nhật ký: ${error.message}`);
+        }
+      }
+    });
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-x-auto">
       {/* Header Bar */}
-      <div className="px-6 py-1 flex items-center justify-start bg-white shrink-0 border-b border-slate-100">
-        <div className="flex items-center gap-1.5">
-           <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+      <div className="px-6 py-3 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between gap-4 flex-nowrap overflow-visible relative z-[40] min-w-max w-full">
+        <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Tìm kiếm..." 
+              placeholder="Search..." 
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setPage(1);
               }}
-              className="pl-10 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 focus:outline-none focus:border-indigo-600 transition-all font-medium w-64"
+              className="pl-8 pr-2.5 py-1 bg-white border border-slate-200 rounded-md text-xs w-48 focus:outline-none focus:border-slate-400 font-medium text-slate-700 h-8 shadow-sm"
             />
           </div>
           <DateRangePicker 
@@ -140,57 +153,65 @@ const AuditLog = () => {
           {isFilterChanged && (
             <button 
               onClick={handleReset} 
-              className="p-2 ml-1 text-indigo-600 hover:text-indigo-800 transition-colors"
-              title="Reset Filters"
+              className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
+              title="Đặt lại bộ lọc"
             >
-               <RotateCcw className="w-5 h-5" />
+               <RotateCcw size={14} />
             </button>
           )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-white min-h-[500px]">
-        <table className="w-full text-left border-collapse min-w-[900px] table-fixed">
-          <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
-            <tr>
-              <th className="px-6 py-2 w-[15%] text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Action</th>
-              <th className="px-6 py-2 w-[35%] text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Description</th>
-              <th className="px-6 py-2 w-[20%] text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">User</th>
-              <th className="px-6 py-2 w-[15%] text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">Time</th>
-              <th className="px-6 py-2 w-[10%] text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right pr-10 bg-slate-50/50">Detail</th>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-white min-h-[500px]">
+        <table className="w-full text-left border-collapse table-fixed min-w-[1100px]">
+          <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-20">
+            <tr className="h-8">
+              <th className="px-6 py-2 w-[15%] text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Action</th>
+              <th className="px-6 py-2 w-[35%] text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Description</th>
+              <th className="px-6 py-2 w-[20%] text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">User</th>
+              <th className="px-6 py-2 w-[15%] text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Time</th>
+              <th className="px-6 py-2 w-[10%] text-[11px] uppercase tracking-wider font-bold text-slate-500 text-right pr-6 bg-slate-100">Detail</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {logs.length > 0 ? (
               logs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/50 transition-all group h-[41px]">
-                  <td className="px-6 py-3">
+                <tr key={log.id} className="hover:bg-slate-50/50 transition-all h-9">
+                  <td className="px-6 py-1.5 overflow-hidden">
                     <span className={cn(
-                      "px-2 py-0.5 rounded-md text-[8px] font-black border uppercase tracking-widest",
-                      getActionColor(log.action)
+                      "inline-flex items-center gap-1.5 text-xs font-medium rounded-full",
                     )}>
-                      {log.action}
+                      {/* Dot style action indicators */}
+                      <span className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        log.action.toUpperCase().includes('CREATE') ? "bg-emerald-500" :
+                        log.action.toUpperCase().includes('UPDATE') ? "bg-blue-500" :
+                        log.action.toUpperCase().includes('DELETE') ? "bg-rose-500" : "bg-slate-400"
+                      )} />
+                      <span className="text-slate-600 text-xs">
+                        {log.action}
+                      </span>
                     </span>
                   </td>
-                  <td className="px-6 py-3">
-                    <p className="font-bold text-slate-700 text-[11px] truncate" title={log.description}>{log.description}</p>
+                  <td className="px-6 py-1.5 overflow-hidden">
+                    <p className="text-slate-700 text-xs truncate font-medium" title={log.description}>{log.description}</p>
                   </td>
-                  <td className="px-6 py-3">
-                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{log.user_name || 'System Auto'}</span>
+                  <td className="px-6 py-1.5 overflow-hidden">
+                     <span className="text-xs font-medium text-slate-500">{log.user_name || 'System Auto'}</span>
                   </td>
-                  <td className="px-6 py-3">
-                       <span className="text-[10px] font-bold text-slate-400 font-mono">
+                  <td className="px-6 py-1.5 overflow-hidden">
+                       <span className="text-xs text-slate-400 font-mono">
                          {(() => { const d = new Date(log.created_at); if (isNaN(d.getTime())) return ''; const day = String(d.getDate()).padStart(2, '0'); const month = String(d.getMonth() + 1).padStart(2, '0'); const year = d.getFullYear(); return `${day}/${month}/${year}`; })()} - {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                        </span>
                   </td>
-                  <td className="px-6 py-3 text-right pr-10">
+                  <td className="px-6 py-1.5 text-right pr-6">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="text-slate-300 hover:text-indigo-600 transition-all">
+                       <button className="text-slate-300 hover:text-indigo-600 transition-all cursor-pointer">
                         <Info size={14} />
                       </button>
                       <button 
                         onClick={() => handleDeleteLog(log.id)}
-                        className="text-slate-200 hover:text-rose-600 transition-all"
+                        className="text-slate-300 hover:text-rose-600 transition-all cursor-pointer"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -201,7 +222,15 @@ const AuditLog = () => {
             ) : (
               <tr>
                 <td colSpan={5} className="py-24 text-center">
-                   <p className="text-[10px] font-black uppercase text-slate-300 tracking-widest">No forensic data</p>
+                  <div className="flex flex-col items-center justify-center text-center">
+                    <div className="p-4 bg-slate-50 rounded-full mb-3 text-slate-300 inline-block mx-auto">
+                      <AlertCircle size={36} />
+                    </div>
+                    <h4 className="text-slate-800 font-bold text-sm">No Audit Logs Available</h4>
+                    <p className="text-slate-400 text-xs mt-1 max-w-xs leading-relaxed mx-auto">
+                      Không tìm thấy bản ghi hoạt động nào khớp với bộ lọc của bạn.
+                    </p>
+                  </div>
                 </td>
               </tr>
             )}
@@ -209,13 +238,13 @@ const AuditLog = () => {
         </table>
       </div>
       
-      <div className="px-4 py-0 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
-         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">TỔNG: {totalCount} ENTITIES</span>
+      <div className="px-6 py-3 border-t border-slate-100 bg-white flex items-center justify-between shrink-0 selection:bg-none">
+         <span className="text-xs font-medium text-slate-400 font-mono min-w-[100px]">Total logs: {totalCount}</span>
          <div className="flex-1 flex items-center justify-center gap-1">
             <button 
               disabled={page === 1} 
               onClick={() => setPage(p => p - 1)} 
-              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
+              className="px-2 py-1 select-none border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white cursor-pointer"
             >
               <ChevronLeft size={14} />
             </button>
@@ -226,9 +255,9 @@ const AuditLog = () => {
                   onClick={() => typeof item === 'number' && setPage(item)}
                   disabled={typeof item !== 'number'}
                   className={cn(
-                    "w-7 h-7 flex items-center justify-center rounded text-xs font-bold transition-all",
+                    "w-7 h-7 flex items-center justify-center rounded text-xs font-medium transition-all select-none",
                     page === item ? "bg-indigo-600 text-white shadow-sm" : 
-                    typeof item === 'number' ? "text-slate-400 hover:bg-slate-100" : 
+                    typeof item === 'number' ? "text-slate-400 border border-slate-200 hover:bg-slate-50 bg-white cursor-pointer" : 
                     "text-slate-300 cursor-default"
                   )}
                 >
@@ -239,7 +268,7 @@ const AuditLog = () => {
             <button 
               disabled={page === totalPages} 
               onClick={() => setPage(p => p + 1)} 
-              className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"
+              className="px-2 py-1 select-none border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white cursor-pointer"
             >
               <ChevronRight size={14} />
             </button>

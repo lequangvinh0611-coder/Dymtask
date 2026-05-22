@@ -25,6 +25,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [openUpward, setOpenUpward] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find(o => o.id === value);
@@ -43,8 +44,22 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      // If space below is less than 300px and space above is greater, flip up
+      if (spaceBelow < 300 && spaceAbove > spaceBelow) {
+        setOpenUpward(true);
+      } else {
+        setOpenUpward(false);
+      }
+    }
+  }, [isOpen]);
+
   return (
-    <div className={cn("relative", className)} ref={containerRef}>
+    <div className={cn("relative overflow-visible", className)} ref={containerRef}>
       <div 
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm cursor-pointer hover:border-indigo-300 transition-colors"
@@ -56,7 +71,10 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-100">
+        <div className={cn(
+          "absolute z-[100] w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in duration-100",
+          openUpward ? "bottom-full mb-1" : "top-full mt-1"
+        )}>
           <div className="p-2 border-b border-slate-100">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

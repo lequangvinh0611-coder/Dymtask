@@ -1,18 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, Edit2, Trash2, Loader2, Users, FolderKanban, ShieldCheck, Tag as TagIcon, Settings2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit2, Trash2, Loader2, Users, FolderKanban, ShieldCheck, Tag as TagIcon, Settings2, Search, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import MasterDataModal from './MasterDataModal';
 import UserEditModal from './UserEditModal';
+import UserCreateModal from './UserCreateModal';
 import { cn } from '../lib/utils';
 import { logger } from '../lib/logger';
 import { useAuthStore } from '../store/authStore';
+import { useAppStore } from '../types';
+import { toast } from 'sonner';
 
 type TabType = 'USERS' | 'PROJECTS' | 'TEAMS' | 'TAGS';
 
 export default function Settings() {
+  const { showConfirm } = useAppStore();
   const { profile: currentUser } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabType>('USERS');
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   
   const [users, setUsers] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -21,6 +26,7 @@ export default function Settings() {
 
   const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isUserCreateModalOpen, setIsUserCreateModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
 
   const fetchData = async () => {
@@ -67,7 +73,11 @@ export default function Settings() {
 
   const handleAdd = () => {
     setEditingItem(null);
-    setIsMasterModalOpen(true);
+    if (activeTab === 'USERS') {
+      setIsUserCreateModalOpen(true);
+    } else {
+      setIsMasterModalOpen(true);
+    }
   };
 
   const handleEdit = (item: any) => {
@@ -87,13 +97,46 @@ export default function Settings() {
       if (editingItem) {
         await supabase.from(tableName).update({ name: formattedName }).eq('id', editingItem.id);
         await logger.log('UPDATE_MASTER_DATA', `Updated item in ${tableName} to ${formattedName}`, { id: editingItem.id });
+        toast.success(`Đã lưu thay đổi ${tableName} thành công!`);
       } else {
         await supabase.from(tableName).insert([{ name: formattedName }]);
         await logger.log('CREATE_MASTER_DATA', `Created item in ${tableName} named ${formattedName}`);
+        toast.success(`Đã tạo ${tableName} mới thành công!`);
       }
       fetchData();
     } catch (error: any) {
-      alert(`Error saving ${tableName}: ${error.message}`);
+      toast.error(`Error saving ${tableName}: ${error.message}`);
+    }
+  };
+
+  const handleCreateUser = async (data: { name: string; email: string; role: string; teams: string[] }) => {
+    try {
+      const newId = crypto.randomUUID();
+      const { error } = await supabase
+        .from('users')
+        .insert([{
+          id: newId,
+          name: data.name,
+          email: data.email,
+          role: data.role.toLowerCase(),
+          team_ids: data.teams,
+          status: 'ACTIVE'
+        }]);
+
+      if (error) throw error;
+
+      await logger.log('CREATE_USER', `Created new user ${data.email}`, { name: data.name, role: data.role });
+      
+      fetchData();
+      toast.success("Thêm nhân sự thành công!");
+      setIsUserCreateModalOpen(false);
+    } catch (err: any) {
+      console.error('[Settings] Error creating user:', err);
+      if (err.code === '23505') {
+        toast.error("Email đã tồn tại trong hệ thống!");
+      } else {
+        toast.error(`Lỗi thêm nhân sự: ${err.message || 'Unknown error'}`);
+      }
     }
   };
 
@@ -102,7 +145,7 @@ export default function Settings() {
     
     // Safety check for Master email
     if (userToUpdate?.email === 'lequangvinh0611@gmail.com' && data.role.toUpperCase() !== 'MASTER') {
-      alert('Cannot downgrade the Master account role.');
+      toast.warning('Cannot downgrade the Master account role.');
       return;
     }
 
@@ -123,18 +166,18 @@ export default function Settings() {
       }
       
       await logger.log('UPDATE_USER', `Updated user settings for ${userToUpdate?.email}`, { userId, updates: data });
-      alert('User updated successfully!');
+      toast.success('Cập nhật thông tin nhân sự thành công!');
       fetchData();
     } catch (err: any) {
       console.error('[Settings] Full Error Object:', err);
-      alert(`Error updating user: ${err.message || 'Unknown error'}`);
+      toast.error(`Error updating user: ${err.message || 'Unknown error'}`);
     }
   };
 
   const handleDelete = async (id: string, itemEmail?: string) => {
     // Safety checks
     if (activeTab === 'USERS' && itemEmail === 'lequangvinh0611@gmail.com') {
-      alert('Master account cannot be deleted.');
+      toast.error('Master account cannot be deleted.');
       return;
     }
 
@@ -145,13 +188,13 @@ export default function Settings() {
         .select('*');
 
       if (taskErr) {
-        alert(`Error checking validation rules: ${taskErr.message}`);
+        toast.error(`Error checking validation rules: ${taskErr.message}`);
         return;
       }
 
       // Filter tasks where is_active is true or status is 'ON'
       const filteredActiveTasks = (activeTasks || []).filter(
-        t => t.is_active === true || (t.status || '').toUpperCase() === 'ON'
+        (t: any) => t.is_active === true || String(t.status || '').toUpperCase() === 'ON'
       );
 
       // Validation Checks based on Tab Type
@@ -159,12 +202,12 @@ export default function Settings() {
         const userObj = users.find(u => u.id === id);
         if (userObj) {
           const userName = userObj.name;
-          const isAssigned = filteredActiveTasks.some(task => {
+          const isAssigned = filteredActiveTasks.some((task: any) => {
             const hasInAssigneesField = Array.isArray(task.assignees) && task.assignees.includes(userName);
             let hasInSubtasks = false;
             if (task.description) {
               try {
-                const parsed = JSON.parse(task.description);
+                const parsed = JSON.parse(String(task.description));
                 const subs = Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : [];
                 hasInSubtasks = subs.some((s: any) => s.assignee === userName);
               } catch (_) {}
@@ -173,7 +216,7 @@ export default function Settings() {
           });
 
           if (isAssigned) {
-            alert("Không thể xóa nhân sự này vì đang phụ trách công việc đang hoạt động!");
+            toast.warning("Không thể xóa nhân sự này vì đang phụ trách công việc đang hoạt động!");
             return;
           }
         }
@@ -182,12 +225,12 @@ export default function Settings() {
       if (activeTab === 'PROJECTS') {
         const projObj = projects.find(p => p.id === id);
         if (projObj) {
-          const isLinked = filteredActiveTasks.some(task => {
+          const isLinked = filteredActiveTasks.some((task: any) => {
             const matchId = task.project_id === id;
             let matchName = false;
             if (task.description) {
               try {
-                const parsed = JSON.parse(task.description);
+                const parsed = JSON.parse(String(task.description));
                 matchName = parsed.project_name === projObj.name;
               } catch (_) {}
             }
@@ -195,7 +238,7 @@ export default function Settings() {
           });
 
           if (isLinked) {
-            alert("Không thể xóa dự án này vì chứa công việc đang hoạt động!");
+            toast.warning("Không thể xóa dự án này vì chứa công việc đang hoạt động!");
             return;
           }
         }
@@ -204,12 +247,12 @@ export default function Settings() {
       if (activeTab === 'TAGS') {
         const tagObj = tags.find(t => t.id === id);
         if (tagObj) {
-          const isLinked = filteredActiveTasks.some(task => {
+          const isLinked = filteredActiveTasks.some((task: any) => {
             const matchId = task.tag_id === id;
             let matchName = false;
             if (task.description) {
               try {
-                const parsed = JSON.parse(task.description);
+                const parsed = JSON.parse(String(task.description));
                 matchName = parsed.tag_name === tagObj.name;
               } catch (_) {}
             }
@@ -217,7 +260,7 @@ export default function Settings() {
           });
 
           if (isLinked) {
-            alert("Không thể xóa nhãn này vì có công việc đang hoạt động sử dụng nó!");
+            toast.warning("Không thể xóa nhãn này vì có công việc đang hoạt động sử dụng nó!");
             return;
           }
         }
@@ -236,28 +279,35 @@ export default function Settings() {
           });
 
           if (hasActiveMembers) {
-            alert("Không thể xóa phòng ban này vì đang có nhân sự hoạt động thuộc nhóm!");
+            toast.warning("Không thể xóa phòng ban này vì đang có nhân sự hoạt động thuộc nhóm!");
             return;
           }
         }
       }
 
     } catch (err: any) {
-      alert(`Validation process failed: ${err.message}`);
+      toast.error(`Validation process failed: ${err.message}`);
       return;
     }
 
-    if (!window.confirm('Are you sure you want to delete this item?')) return;
-    
-    const tableName = activeTab.toLowerCase();
-    try {
-      const { error } = await supabase.from(tableName).delete().eq('id', id);
-      if (error) throw error;
-      await logger.log('DELETE_MASTER_DATA', `Deleted item from ${tableName}`, { id });
-      fetchData();
-    } catch (error: any) {
-      alert(`Error deleting: ${error.message}`);
-    }
+    showConfirm({
+      title: "Xác nhận xóa vĩnh viễn",
+      message: `Bạn có chắc chắn muốn xóa mục này ra khỏi hệ thống dymtask? Hành động này không thể hoàn tác.`,
+      confirmText: "Xóa vĩnh viễn",
+      cancelText: "Hủy bỏ",
+      onConfirm: async () => {
+        const tableName = activeTab.toLowerCase();
+        try {
+          const { error } = await supabase.from(tableName).delete().eq('id', id);
+          if (error) throw error;
+          await logger.log('DELETE_MASTER_DATA', `Deleted item from ${tableName}`, { id });
+          toast.success("Xóa dữ liệu thành công!");
+          fetchData();
+        } catch (error: any) {
+          toast.error(`Error deleting: ${error.message}`);
+        }
+      }
+    });
   };
 
   const handleToggleActive = async (item: any) => {
@@ -267,7 +317,7 @@ export default function Settings() {
       const nextStatus = item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
       
       if (item.email === 'lequangvinh0611@gmail.com' && nextStatus === 'INACTIVE') {
-        alert('Cannot deactivate the Master account.');
+        toast.warning('Cannot deactivate the Master account.');
         return;
       }
 
@@ -279,9 +329,10 @@ export default function Settings() {
           .eq('id', item.id);
         if (error) throw error;
         await logger.log('TOGGLE_ACTIVE', `Toggled user status to ${nextStatus} for ID: ${item.id}`);
+        toast.success(`Đã thay đổi trạng thái hoạt động thành công!`);
       } catch (err: any) {
         setUsers(prev => prev.map(u => u.id === item.id ? { ...u, status: item.status } : u));
-        alert(`Error toggling status: ${err.message}`);
+        toast.error(`Error toggling status: ${err.message}`);
       }
       return;
     }
@@ -305,6 +356,7 @@ export default function Settings() {
       if (error) throw error;
 
       await logger.log('TOGGLE_ACTIVE', `Toggled is_active to ${nextActive} in ${tableName} for ID: ${item.id}`);
+      toast.success(`Đã cập nhật trạng thái hoạt động!`);
     } catch (error: any) {
       if (activeTab === 'PROJECTS') {
         setProjects(prev => prev.map(p => p.id === item.id ? { ...p, is_active: !nextActive } : p));
@@ -313,7 +365,7 @@ export default function Settings() {
       } else if (activeTab === 'TEAMS') {
         setTeams(prev => prev.map(t => t.id === item.id ? { ...t, is_active: !nextActive } : t));
       }
-      alert(`Error toggling active status: ${error.message}`);
+      toast.error(`Error toggling active status: ${error.message}`);
     }
   };
 
@@ -354,21 +406,48 @@ export default function Settings() {
     return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   };
 
+  const filteredUsers = users.filter(user => {
+    const term = searchQuery.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      (user.name || '').toLowerCase().includes(term) ||
+      (user.email || '').toLowerCase().includes(term)
+    );
+  });
+
+  const filteredProjects = projects.filter(item => {
+    const term = searchQuery.trim().toLowerCase();
+    return (item.name || '').toLowerCase().includes(term);
+  });
+
+  const filteredTeams = teams.filter(item => {
+    const term = searchQuery.trim().toLowerCase();
+    return (item.name || '').toLowerCase().includes(term);
+  });
+
+  const filteredTags = tags.filter(item => {
+    const term = searchQuery.trim().toLowerCase();
+    return (item.name || '').toLowerCase().includes(term);
+  });
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white shadow-sm overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 bg-white overflow-x-auto">
       {/* Header Bar */}
-      <div className="px-6 py-1 flex items-center justify-between bg-white shrink-0 border-b border-slate-100">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
+      <div className="px-6 py-3 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between gap-4 flex-nowrap overflow-visible relative z-[40] min-w-max w-full select-none">
+        <div className="flex items-center gap-4 shrink-0 flex-nowrap">
+          <div className="flex items-center bg-slate-100/80 p-0.5 rounded-md gap-0.5 border border-slate-200/50">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as TabType)}
+                onClick={() => {
+                  setActiveTab(tab.id as TabType);
+                  setSearchQuery('');
+                }}
                 className={cn(
-                  "flex items-center gap-1.5 px-6 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all tracking-wider",
+                  "flex items-center justify-center h-8 w-28 rounded-md text-sm font-medium transition-all shrink-0",
                   activeTab === tab.id
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                    ? "bg-white text-slate-800 shadow-sm border border-slate-200/80 font-semibold"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
                 )}
               >
                 <span>{tab.label}</span>
@@ -377,161 +456,228 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0 flex-nowrap">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input 
               type="text" 
               placeholder="Search..." 
-              className="pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs w-48 h-8 focus:outline-none focus:border-indigo-600"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 pr-3 bg-white border border-slate-200 rounded-md text-sm w-40 h-8 focus:outline-none focus:border-slate-400 font-sans"
             />
           </div>
-          {activeTab === 'USERS' && (
-            <select className="px-3 h-8 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500 min-w-[120px]">
-              <option value="">All Teams</option>
-              {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-            </select>
-          )}
           <button 
+            type="button"
             onClick={handleAdd}
-            className="flex items-center gap-1.5 h-8 px-4 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-lg text-[10px] font-black uppercase tracking-wider"
+            className="flex items-center gap-1.5 h-8 px-3 bg-indigo-600 hover:bg-indigo-700 hover:ring-2 hover:ring-indigo-600/10 hover:border-indigo-600 text-white rounded-md text-sm font-medium select-none cursor-pointer border border-transparent transition-all font-sans"
           >
             <Plus size={14} />
-            <span>Add {activeTab !== 'USERS' ? activeTab.slice(0, -1) : 'User'}</span>
+            <span>Add New</span>
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
-        <table className="w-full text-left border-collapse table-fixed min-w-[1000px]">
-          <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
-            <tr>
-              <th className="px-8 py-2 w-[25%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Name / Email</th>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <table className="w-full text-left border-collapse table-fixed min-w-[1100px]">
+          <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-20">
+            <tr className="h-8">
+              <th className="px-6 py-1.5 w-[25%] text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Name / Email</th>
               {activeTab === 'USERS' ? (
                 <>
-                  <th className="px-8 py-2 w-[25%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Teams</th>
-                  <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Role</th>
-                  <th className="px-8 py-2 w-[15%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-1.5 w-[25%] text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Teams</th>
+                  <th className="px-6 py-1.5 w-[15%] text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Role</th>
+                  <th className="px-6 py-1.5 w-[15%] text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Status</th>
                 </>
               ) : (
-                <th className="px-8 py-2 w-[55%] text-[9px] font-black text-slate-400 uppercase tracking-widest">Date Created</th>
+                <th className="px-6 py-1.5 w-[55%] text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Date Created</th>
               )}
-              <th className="px-8 py-2 w-[20%] text-[9px] font-black text-slate-400 uppercase tracking-widest text-right pr-12">Actions</th>
+              <th className="px-6 py-1.5 w-[20%] text-[11px] uppercase tracking-wider font-bold text-slate-500 text-right pr-12 bg-slate-100">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 text-[11px]">
+          <tbody className="divide-y divide-slate-150 text-xs text-slate-700">
             {activeTab === 'USERS' ? (
-              getSortedUsers(users).map((user) => (
-                <tr key={user.id} className="hover:bg-slate-50/50 group transition-all h-[41px]">
-                  <td className="px-8 py-3">
-                    <div className="flex flex-col truncate">
-                      <span className="font-black text-slate-800 uppercase tracking-tight truncate">{user.name}</span>
-                      <span className="text-[9px] font-bold text-slate-400 tracking-tighter truncate">{user.email}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-3">
-                    <div className="flex gap-1 flex-wrap">
-                      {(Array.isArray(user.team_ids) ? user.team_ids : Array.isArray(user.teams) ? user.teams : [])
-                        .map((t: string) => t.toString().replace(/[\[\]"]/g, '').trim())
-                        .filter((t: string) => t !== "")
-                        .map((cleanT: string) => (
-                        <span key={cleanT} className="px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 rounded text-[8px] font-bold uppercase">
-                          {cleanT}
+              filteredUsers.length > 0 ? (
+                getSortedUsers(filteredUsers).map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-50/40 group transition-all h-9">
+                    <td className="px-6 py-1">
+                      <div className="flex flex-col truncate">
+                        <span className="font-semibold text-slate-800 truncate">{user.name}</span>
+                        <span className="text-xs text-slate-400 font-medium truncate">{user.email}</span>
+                      </div>
+                    </td>
+                     <td className="px-6 py-1">
+                      <div className="flex gap-1 flex-nowrap overflow-hidden items-center">
+                        {(() => {
+                          const rawTeams = Array.isArray(user.team_ids) ? user.team_ids : Array.isArray(user.teams) ? user.teams : [];
+                          const teams = rawTeams
+                            .map((t: any) => t?.toString().replace(/[\[\]"]/g, '').trim())
+                            .filter((t: string) => t && t !== "");
+                          
+                          if (teams.length === 0) return <span className="text-slate-400 italic text-[11px]">No team</span>;
+                          
+                          const showTeams = teams.slice(0, 2);
+                          const remainingCount = teams.length - 2;
+                          
+                          return (
+                            <>
+                              {showTeams.map((cleanT: string) => (
+                                <span key={cleanT} className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 rounded text-xs font-medium shrink-0">
+                                  {cleanT}
+                                </span>
+                              ))}
+                              {remainingCount > 0 && (
+                                <span className="px-1.5 py-0.5 bg-slate-200 border border-slate-300 text-slate-600 rounded text-xs font-semibold shrink-0" title={teams.slice(2).join(', ')}>
+                                  +{remainingCount}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-1">
+                      <div className="flex items-center gap-1.5 select-none font-sans">
+                        <span className={cn(
+                          "w-1.5 h-1.5 rounded-full shrink-0",
+                          user.role?.toString().toLowerCase() === 'master' ? "bg-rose-500" :
+                          user.role?.toString().toLowerCase() === 'admin' ? "bg-indigo-500" : 
+                          "bg-slate-400"
+                        )} />
+                        <span className="text-xs text-slate-600 font-medium">
+                          {user.role?.toString().toLowerCase() === 'master' ? 'Master' :
+                           user.role?.toString().toLowerCase() === 'admin' ? 'Admin' : 'User'}
                         </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-8 py-3">
-                    <span className={cn(
-                      "px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border",
-                      user.role === 'MASTER' ? "bg-rose-50 text-rose-500 border-rose-100" :
-                      user.role === 'ADMIN' ? "bg-indigo-50 text-indigo-500 border-indigo-100" : 
-                      "bg-amber-50 text-amber-600 border-amber-100"
-                    )}>{user.role || 'USER'}</span>
-                  </td>
-                  <td className="px-8 py-3">
-                    <span className={cn(
-                      "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
-                      user.status === 'ACTIVE' ? "bg-emerald-50 text-emerald-500 border-emerald-100" : "bg-slate-100 text-slate-400 border-slate-200"
-                    )}>{user.status || 'ACTIVE'}</span>
-                  </td>
-                  <td className="px-8 py-3 text-right pr-12">
-                    <div className="flex items-center justify-end gap-3">
-                      <button 
-                        onClick={() => handleToggleActive(user)}
-                        className={cn(
-                          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
-                          user.status === 'ACTIVE' ? "bg-emerald-500" : "bg-slate-200"
-                        )}
-                        title={user.status === 'ACTIVE' ? "Click to deactivate" : "Click to activate"}
-                      >
-                        <span
+                      </div>
+                    </td>
+                    <td className="px-6 py-1">
+                      <div className="flex items-center gap-1.5 select-none font-sans">
+                        <span className={cn(
+                          "w-1.5 h-1.5 rounded-full shrink-0",
+                          user.status === 'ACTIVE' ? "bg-emerald-500" : "bg-slate-400"
+                        )} />
+                        <span className="text-xs text-slate-600 font-medium">
+                          {user.status === 'ACTIVE' ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-1 text-right pr-12">
+                      <div className="flex items-center justify-end gap-3 font-sans">
+                        <button 
+                          onClick={() => handleToggleActive(user)}
                           className={cn(
-                            "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
-                            user.status === 'ACTIVE' ? "translate-x-4" : "translate-x-0"
+                            "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
+                            user.status === 'ACTIVE' ? "bg-emerald-500" : "bg-slate-200"
                           )}
-                        />
-                      </button>
-                      <button onClick={() => handleEdit(user)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
-                      <button onClick={() => handleDelete(user.id, user.email)} className="text-slate-200 hover:text-rose-600 transition-all"><Trash2 size={14} /></button>
+                          title={user.status === 'ACTIVE' ? "Click to deactivate" : "Click to activate"}
+                        >
+                          <span
+                            className={cn(
+                              "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-150 ease-in-out",
+                              user.status === 'ACTIVE' ? "translate-x-4" : "translate-x-0"
+                            )}
+                          />
+                        </button>
+                        <button onClick={() => handleEdit(user)} className="text-slate-400 hover:text-indigo-600 transition-all"><Edit2 size={13} /></button>
+                        <button onClick={() => handleDelete(user.id, user.email)} className="text-slate-300 hover:text-rose-600 transition-all"><Trash2 size={13} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="py-24 text-center">
+                    <div className="flex flex-col items-center justify-center text-center font-sans">
+                      <div className="p-4 bg-slate-50 rounded-full mb-3 text-slate-300 inline-block mx-auto">
+                        <AlertCircle size={36} />
+                      </div>
+                      <h4 className="text-slate-800 font-bold text-sm">No Users Available</h4>
+                      <p className="text-slate-400 text-xs mt-1 max-w-xs leading-relaxed mx-auto">
+                        Không tìm thấy người dùng nào khớp với danh mục bộ lọc của bạn.
+                      </p>
                     </div>
                   </td>
                 </tr>
-              ))
+              )
             ) : (
                 (() => {
-                    const list = activeTab === 'PROJECTS' ? projects : activeTab === 'TEAMS' ? teams : tags;
-                    return getSortedList(list).map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50/50 group transition-all h-[41px]">
-                          <td className="px-8 py-3 font-black text-slate-800 uppercase tracking-widest">{item.name}</td>
-                          <td className="px-8 py-3 text-slate-400 font-bold uppercase text-[9px]">{(() => { const d = new Date(item.created_at); if (isNaN(d.getTime())) return ''; const day = String(d.getDate()).padStart(2, '0'); const month = String(d.getMonth() + 1).padStart(2, '0'); const year = d.getFullYear(); return `${day}/${month}/${year}`; })()}</td>
+                    const list = activeTab === 'PROJECTS' ? filteredProjects : activeTab === 'TEAMS' ? filteredTeams : filteredTags;
+                    return list.length > 0 ? (
+                      getSortedList(list).map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50/40 group transition-all h-9">
+                          <td className="px-6 py-1 font-semibold text-slate-800 truncate">{item.name}</td>
+                          <td className="px-6 py-1 text-slate-400 font-medium text-xs">{(() => { const d = new Date(item.created_at); if (isNaN(d.getTime())) return ''; const day = String(d.getDate()).padStart(2, '0'); const month = String(d.getMonth() + 1).padStart(2, '0'); const year = d.getFullYear(); return `${day}/${month}/${year}`; })()}</td>
                           
-                          <td className="px-8 py-3 text-right pr-12">
-                            <div className="flex items-center justify-end gap-3">
+                          <td className="px-6 py-1 text-right pr-12">
+                            <div className="flex items-center justify-end gap-3 font-sans">
                               <button 
                                 onClick={() => handleToggleActive(item)}
                                 className={cn(
-                                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
+                                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
                                   item.is_active !== false ? "bg-emerald-500" : "bg-slate-200"
                                 )}
                                 title={item.is_active !== false ? "Click to deactivate" : "Click to activate"}
                               >
                                 <span
                                   className={cn(
-                                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-150 ease-in-out",
                                     item.is_active !== false ? "translate-x-4" : "translate-x-0"
                                   )}
                                 />
                               </button>
-                              <button onClick={() => handleEdit(item)} className="text-slate-300 hover:text-indigo-600 transition-all"><Edit2 size={14} /></button>
-                              <button onClick={() => handleDelete(item.id)} className="text-slate-200 hover:text-rose-600 transition-all"><Trash2 size={14} /></button>
+                              <button onClick={() => handleEdit(item)} className="text-slate-400 hover:text-indigo-600 transition-all"><Edit2 size={13} /></button>
+                              <button onClick={() => handleDelete(item.id)} className="text-slate-300 hover:text-rose-600 transition-all"><Trash2 size={13} /></button>
                             </div>
                           </td>
                         </tr>
-                    ));
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={3} className="py-24 text-center">
+                          <div className="flex flex-col items-center justify-center text-center font-sans">
+                            <div className="p-4 bg-slate-50 rounded-full mb-3 text-slate-300 inline-block mx-auto">
+                              <AlertCircle size={36} />
+                            </div>
+                            <h4 className="text-slate-800 font-bold text-sm">No Records Available</h4>
+                            <p className="text-slate-400 text-xs mt-1 max-w-xs leading-relaxed mx-auto">
+                              Không tìm thấy bản ghi nào khớp với danh mục {activeTab.toLowerCase()}.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    );
                 })()
             )}
           </tbody>
         </table>
       </div>
 
-      <div className="px-4 py-0 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[100px]">
-            TỔNG: {activeTab === 'USERS' ? users.length : (activeTab === 'PROJECTS' ? projects.length : (activeTab === 'TEAMS' ? teams.length : tags.length))} ENTITIES
-          </span>
-          <div className="flex-1 flex items-center justify-center gap-1">
-            <button className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"><ChevronLeft size={14} /></button>
-            <div className="flex gap-1 mx-2">
-              {[1].map(p => (
-                <button key={p} className={cn(
-                    "w-7 h-7 flex items-center justify-center rounded text-xs font-bold transition-all",
-                    p === 1 ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:bg-slate-100"
-                )}>{p}</button>
-              ))}
-            </div>
-            <button className="px-2 py-1 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30"><ChevronRight size={14} /></button>
+      <div className="px-6 py-3 flex items-center justify-between border-t border-slate-100 bg-white shrink-0 selection:bg-none font-sans">
+        <span className="text-xs font-medium text-slate-400 font-mono">
+          Tổng số: {activeTab === 'USERS' ? filteredUsers.length : (activeTab === 'PROJECTS' ? filteredProjects.length : (activeTab === 'TEAMS' ? filteredTeams.length : filteredTags.length))} bản ghi
+        </span>
+        <div className="flex items-center justify-center gap-1.5">
+          <button 
+            disabled={true} 
+            className="px-2.5 py-1.5 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-all cursor-pointer"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <div className="flex gap-1.5 mx-2">
+            <button
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100"
+            >
+              1
+            </button>
           </div>
-          <div className="min-w-[100px]"></div>
+          <button 
+            disabled={true} 
+            className="px-2.5 py-1.5 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-all cursor-pointer"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+        <div className="w-20 hidden md:block"></div>
       </div>
  
       {/* Modals */}
@@ -548,6 +694,13 @@ export default function Settings() {
         onClose={() => setIsUserModalOpen(false)}
         onSave={handleSaveUser}
         user={editingItem}
+        availableTeams={teams}
+      />
+
+      <UserCreateModal
+        isOpen={isUserCreateModalOpen}
+        onClose={() => setIsUserCreateModalOpen(false)}
+        onSave={handleCreateUser}
         availableTeams={teams}
       />
     </div>

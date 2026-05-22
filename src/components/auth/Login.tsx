@@ -87,7 +87,7 @@ const Login = () => {
           </button>
 
           <footer className="mt-10 pt-8 border-t border-white/5 w-full flex flex-col items-center">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-4">Secured by</span>
+            <span className="text-xs text-slate-500 font-semibold mb-4">Secured by</span>
             <div className="flex items-center gap-2 grayscale opacity-40">
                 <img src="https://supabase.com/dashboard/img/supabase-logo.svg" className="h-5" alt="Supabase" />
                 <span className="text-white font-bold text-xs">Supabase Auth</span>
@@ -96,7 +96,7 @@ const Login = () => {
         </div>
         
         <div className="mt-8 text-center">
-          <p className="text-slate-600 text-[10px] uppercase tracking-widest font-bold">
+          <p className="text-slate-600 text-xs font-semibold">
             &copy; 2026 DYM Vietnam. All rights reserved.
           </p>
         </div>

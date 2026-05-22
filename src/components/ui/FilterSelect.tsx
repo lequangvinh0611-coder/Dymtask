@@ -24,7 +24,7 @@ export const FilterSelect: React.FC<FilterSelectProps> = ({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs h-8 min-w-[140px] font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none cursor-pointer text-center ${className || ''}`}
+      className={`px-3.5 bg-white border border-slate-200 rounded-md text-xs font-medium h-8 min-w-[130px] text-slate-600 focus:border-slate-400 focus:outline-none cursor-pointer transition-colors hover:bg-slate-50/50 shadow-sm ${className || ''}`}
     >
       <option value="">{defaultOptionLabel}</option>
       {options.map((option) => (

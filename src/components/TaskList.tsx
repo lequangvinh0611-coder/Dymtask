@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, RotateCcw, Clock, Check, AlertCircle, ChevronLeft, ChevronRight, 
-  X, Calendar, Download, RefreshCw, Layers, CheckSquare, Square
+  X, Calendar, Download, RefreshCw, Layers, CheckSquare, Square, Loader2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { DateRangePicker } from './ui/DateRangePicker';
 import { FilterSelect } from './ui/FilterSelect';
+import { toast } from 'sonner';
+import { useAppStore } from '../types';
 
 // TS interfaces matching the schema
 interface SubTask {
@@ -103,6 +105,8 @@ const serializeTaskDescription = (metadata: TaskMetadata): string => {
 };
 
 const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
+  const { showConfirm } = useAppStore();
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   // Database Tasks State (where status column is 'ON', i.e., template active)
   const [tasks, setTasks] = useState<DbTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -565,20 +569,30 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   // Bulk Submit selected tasks
   const handleBulkSubmit = async () => {
     if (selectedTaskIds.size === 0) return;
-    if (!window.confirm(`Bạn có chắc muốn Submit ${selectedTaskIds.size} task đã chọn không?`)) return;
 
-    try {
-      for (const taskId of selectedTaskIds) {
-        const taskObj = tasks.find(t => t.id === taskId);
-        if (taskObj) {
-          await handleDirectSubmit(taskObj);
+    showConfirm({
+      title: "Xác nhận Submit",
+      message: `Bạn có chắc muốn Submit ${selectedTaskIds.size} task đã chọn không?`,
+      confirmText: "Submit",
+      cancelText: "Hủy",
+      onConfirm: async () => {
+        setIsBulkSubmitting(true);
+        try {
+          for (const taskId of selectedTaskIds) {
+            const taskObj = tasks.find(t => t.id === taskId);
+            if (taskObj) {
+              await handleDirectSubmit(taskObj);
+            }
+          }
+          setSelectedTaskIds(new Set());
+          toast.success('Đã hoàn thành submit hàng loạt!');
+        } catch (err: any) {
+          toast.error(`Lỗi khi xử lý hàng loạt: ${err.message}`);
+        } finally {
+          setIsBulkSubmitting(false);
         }
       }
-      setSelectedTaskIds(new Set());
-      alert('Đã hoàn thành submit hàng loạt!');
-    } catch (err: any) {
-      alert(`Lỗi khi xử lý hàng loạt: ${err.message}`);
-    }
+    });
   };
 
   // Parse details for Slider drawer component
@@ -588,19 +602,19 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   }, [openedTask]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white overflow-hidden relative font-sans">
+    <div className="flex-1 flex flex-col min-h-0 bg-white overflow-x-auto relative font-sans">
       
       {/* 1. Header with Filters of Checklist To-do */}
-      <div className="px-6 py-4 flex flex-wrap items-center bg-white shrink-0 border-b border-slate-100 justify-between gap-4">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="px-6 py-3 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between gap-4 flex-nowrap overflow-visible relative z-[40] min-w-max w-full select-none">
+        <div className="flex items-center gap-2 shrink-0 flex-nowrap">
           {/* Search bar */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input 
               type="text" 
               placeholder="Search..." 
               value={searchQuery}
-              className="pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs w-48 focus:outline-none focus:border-blue-500 font-medium text-slate-700 h-9"
+              className="pl-8 pr-2.5 py-1 bg-white border border-slate-200 rounded-md text-xs w-40 focus:outline-none focus:border-slate-400 font-medium text-slate-700 h-8 shadow-sm"
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setPage(1);
@@ -615,9 +629,9 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
               setFilterAssignee(val);
               setPage(1);
             }}
-            defaultOptionLabel="All Assignees"
+            defaultOptionLabel="Assignees"
             options={assigneesOptions.map(person => ({ value: person, label: person }))}
-            className="h-9 min-w-[130px]"
+            className="h-8 min-w-[120px]"
           />
 
           {/* Tag filter */}
@@ -627,9 +641,9 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
               setFilterTag(val);
               setPage(1);
             }}
-            defaultOptionLabel="All Tags"
+            defaultOptionLabel="Tags"
             options={tagsOptions.map(tag => ({ value: tag, label: tag }))}
-            className="h-9 min-w-[110px]"
+            className="h-8 min-w-[105px]"
           />
 
           {/* Project filter */}
@@ -639,9 +653,9 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
               setFilterProject(val);
               setPage(1);
             }}
-            defaultOptionLabel="All Projects"
+            defaultOptionLabel="Projects"
             options={projectsOptions.map(proj => ({ value: proj, label: proj }))}
-            className="h-9 min-w-[110px]"
+            className="h-8 min-w-[105px]"
           />
 
           {/* Team filter */}
@@ -651,9 +665,9 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
               setFilterTeam(val);
               setPage(1);
             }}
-            defaultOptionLabel="All Teams"
+            defaultOptionLabel="Teams"
             options={teamsOptions.map(tm => ({ value: tm, label: tm }))}
-            className="h-9 min-w-[110px]"
+            className="h-8 min-w-[105px]"
           />
 
           {/* Status checklist filter (NEW, DONE, SKIPPED) */}
@@ -663,13 +677,13 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
               setFilterTodoStatus(val);
               setPage(1);
             }}
-            defaultOptionLabel="All Statuses"
+            defaultOptionLabel="Status"
             options={[
               { value: 'NEW', label: 'New' },
               { value: 'DONE', label: 'Done' },
               { value: 'SKIPPED', label: 'Skipped' }
             ]}
-            className="h-9 min-w-[100px]"
+            className="h-8 min-w-[95px]"
           />
 
           {/* Interactive Date Range custom box mimicking mockup */}
@@ -681,7 +695,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
               setEndDate(end || '2026-05-20');
               setPage(1);
             }}
-            className="h-9 font-bold"
+            className="h-8"
           />
 
           {/* Reset Filters */}
@@ -698,70 +712,72 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
                 setEndDate('2026-05-20');
                 setPage(1);
               }}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-50 transition-all"
+              className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
               title="Đặt lại bộ lọc"
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={14} />
             </button>
           )}
         </div>
 
         {/* Main interactive triggers */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {selectedTaskIds.size > 0 && (
             <button
               onClick={handleBulkSubmit}
-              className="flex items-center gap-1.5 px-3.5 h-9 bg-emerald-600 hover:bg-emerald-700 transition-all text-white rounded-lg text-xs font-bold shadow-sm"
+              disabled={isBulkSubmitting}
+              className="flex items-center gap-1.5 px-3 h-8 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 transition-colors text-white rounded-md text-xs font-medium shadow-sm cursor-pointer disabled:cursor-not-allowed"
             >
-              <CheckSquare size={13} />
-              <span>Submit Checked ({selectedTaskIds.size})</span>
+              {isBulkSubmitting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <CheckSquare size={13} />
+              )}
+              <span>{isBulkSubmitting ? 'Submitting...' : `Submit checked (${selectedTaskIds.size})`}</span>
             </button>
           )}
 
           <button 
             onClick={handleExportCsv}
             disabled={filteredTasks.length === 0}
-            className="flex items-center gap-1.5 px-3.5 h-9 bg-white border border-slate-200 hover:bg-slate-50 hover:text-blue-600 transition-all text-slate-600 rounded-lg text-xs font-bold shadow-sm disabled:opacity-40"
+            className="h-8 px-3 flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-md transition-colors disabled:opacity-40"
           >
-            <Download size={13} />
-            <span>Export</span>
+            <Download className="w-3.5 h-3.5" />
+            <span className="text-xs font-medium">Export CSV</span>
           </button>
         </div>
       </div>
 
       {/* 2. Main Daily Checklist tasks list Table context */}
-      <div className="flex-1 overflow-auto bg-white min-h-[400px]">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-white min-h-[400px]">
         {loading ? (
           <div className="h-full w-full flex flex-col items-center justify-center py-24 gap-3">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs uppercase tracking-widest text-slate-400 font-bold animate-pulse">Loading checklist...</p>
+            <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-xs text-slate-400 font-medium animate-pulse">Loading checklist...</p>
           </div>
         ) : paginatedTasks.length > 0 ? (
-          <table className="w-full text-left border-collapse table-fixed select-none">
-            <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 z-10">
-              <tr>
-                <th className="w-[5%] px-6 py-3.5 text-center">
-                  <button 
-                    onClick={handleToggleSelectAll}
-                    className="text-slate-400 hover:text-blue-600 transition-colors"
-                  >
+          <table className="w-full text-left border-collapse table-fixed select-none min-w-[1100px]">
+            <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-20">
+              <tr className="h-8">
+                <th className="w-[5%] px-3 text-center bg-slate-100">
+                  <button onClick={handleToggleSelectAll} className="text-slate-400 hover:text-indigo-600 transition-colors">
                     {selectedTaskIds.size === paginatedTasks.length ? (
-                      <CheckSquare size={16} className="text-blue-600 mx-auto" />
+                      <CheckSquare size={14} className="text-indigo-600 mx-auto" />
                     ) : (
-                      <Square size={16} className="mx-auto" />
+                      <Square size={14} className="mx-auto" />
                     )}
                   </button>
                 </th>
-                <th className="w-[10%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID</th>
-                <th className="w-[21%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Task Name</th>
-                <th className="w-[11%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tag</th>
-                <th className="w-[17%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Project</th>
-                <th className="w-[11%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Team</th>
-                <th className="w-[8%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Type</th>
-                <th className="w-[12%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Deadline</th>
-                <th className="w-[12%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Time (Est/Act)</th>
-                <th className="w-[10%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
-                <th className="w-[10%] px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center font-mono">Actions</th>
+                <th className="w-[10%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Id</th>
+                <th className="w-[21%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Task Name</th>
+                <th className="w-[11%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Tag</th>
+                <th className="w-[17%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Project</th>
+                <th className="w-[11%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Team</th>
+                <th className="w-[8%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 text-center bg-slate-100">Type</th>
+                <th className="w-[12%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Deadline</th>
+                <th className="w-[12%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 text-center bg-slate-100">Time</th>
+                <th className="w-[10%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 text-center bg-slate-100">Status</th>
+                <th className="w-[10%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 text-center bg-slate-100">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -770,116 +786,111 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
                 return (
                   <tr 
                     key={task.id} 
-                    className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
+                    className="h-9 hover:bg-slate-50/50 transition-colors group cursor-pointer"
                     onClick={() => setOpenedTask(task)}
                   >
                     {/* Checkbox selector item */}
-                    <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                       <button 
                         onClick={() => handleToggleSelectRow(task.id)}
-                        className="text-slate-400 hover:text-blue-600 transition-colors"
+                        className="text-slate-400 hover:text-indigo-600 transition-colors"
                       >
                         {isChecked ? (
-                          <CheckSquare size={16} className="text-blue-600 mx-auto" />
+                          <CheckSquare size={14} className="text-indigo-600 mx-auto" />
                         ) : (
-                          <Square size={16} className="mx-auto" />
+                          <Square size={14} className="mx-auto" />
                         )}
                       </button>
                     </td>
 
                     {/* ID */}
-                    <td className="px-4 py-4">
-                      <span className="font-mono text-xs text-slate-400 font-bold">
+                    <td className="px-3 py-1.5">
+                      <span className="font-mono text-xs text-slate-400 font-medium">
                         {getDisplayId(task.id)}
                       </span>
                     </td>
 
                     {/* Task Name */}
-                    <td className="px-4 py-4 overflow-hidden">
-                      <span className="font-semibold text-slate-800 text-sm tracking-tight truncate block" title={task.title}>
+                    <td className="px-3 py-1.5 overflow-hidden">
+                      <span className="font-medium text-slate-700 text-xs truncate block" title={task.title || ''}>
                         {task.title}
                       </span>
                     </td>
 
                     {/* Tag label */}
-                    <td className="px-4 py-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                      <span className="inline-block border border-slate-200 bg-slate-50 px-2.5 py-0.5 rounded text-[11px] font-medium text-slate-600 truncate max-w-full">
+                    <td className="px-3 py-1.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                      <span className="inline-block bg-slate-50 border border-slate-100 px-2 py-0.5 rounded text-xs text-slate-600 truncate max-w-full font-medium">
                         {task.tag_name || '数値報告'}
                       </span>
                     </td>
 
                     {/* Project */}
-                    <td className="px-4 py-4 overflow-hidden">
-                      <span className="text-slate-600 text-xs truncate block font-medium">
+                    <td className="px-3 py-1.5 overflow-hidden">
+                      <span className="text-slate-600 text-xs truncate block font-normal">
                         {task.project_name}
                       </span>
                     </td>
 
                     {/* Team */}
-                    <td className="px-4 py-4 overflow-hidden">
-                      <span className="text-slate-500 text-xs truncate block font-medium">
+                    <td className="px-3 py-1.5 overflow-hidden">
+                      <span className="text-slate-500 text-xs truncate block font-normal">
                         {task.team_name}
                       </span>
                     </td>
 
                     {/* Frequency Badge */}
-                    <td className="px-4 py-4 text-center">
-                      <span className="inline-block px-2.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-blue-50 text-blue-600 border border-blue-100">
+                    <td className="px-3 py-1.5 text-center">
+                      <span className="inline-block bg-slate-50 border border-slate-100 px-2 py-0.5 rounded text-xs text-slate-600 font-medium">
                         {task.task_type || 'DAILY'}
                       </span>
                     </td>
 
                     {/* Deadline hours and days limit representation */}
-                    <td className="px-4 py-4">
-                      <div className="flex flex-col text-xs font-semibold leading-tight">
-                        <span className="text-slate-800 font-bold flex items-center gap-1">
-                          <Clock size={11} className="text-slate-400 shrink-0" />
+                    <td className="px-3 py-1.5">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                        <Clock size={12} className="text-slate-400 shrink-0" />
+                        <span className="truncate" title={`${task.deadline_time || '08:30'} ${task.deadline_days || 'Mon - Fri'}`}>
                           {task.deadline_time || '08:30'}
                         </span>
-                        <span className="text-slate-400 text-[10px] font-medium mt-0.5">
-                          {task.deadline_days || 'Mon - Fri'}
-                        </span>
                       </div>
                     </td>
 
-                    {/* TIME (EST/ACT) columns colored capsule with precise indicators */}
-                    <td className="px-4 py-4 text-center">
-                      <div className="flex flex-col items-center justify-center font-mono text-xs font-bold leading-none gap-1">
-                        <span className="text-slate-600">
-                          E: <span className="text-blue-600">{task.est_time || 0}m</span>
-                        </span>
-                        <span className="text-slate-400 text-[10px] font-medium mt-0.5">
-                          A: <span className="text-emerald-600 font-bold">{task.actual_time || 0}m</span>
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* To-do list internal status pill ('NEW', 'DONE', 'SKIPPED') */}
-                    <td className="px-4 py-4 text-center">
-                      <span className={`inline-block px-3.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase transition-all shadow-sm ${
-                        task.todo_status === 'DONE' 
-                          ? 'bg-emerald-600 border border-emerald-500 text-white' 
-                          : task.todo_status === 'SKIPPED'
-                            ? 'bg-amber-500 border border-amber-400 text-white'
-                            : 'bg-blue-600 border border-blue-500 text-white'
-                      }`}>
-                        {task.todo_status}
+                    {/* TIME (EST/ACT) columns */}
+                    <td className="px-3 py-1.5 text-center">
+                      <span className="font-mono text-xs text-slate-600">
+                        {task.est_time || 0}m / <span className="text-emerald-600 font-medium">{task.actual_time || 0}m</span>
                       </span>
                     </td>
 
+                    {/* To-do list internal status pill with standard minimalistic dot */}
+                    <td className="px-3 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <div className="inline-flex items-center gap-1.5 justify-center">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          task.todo_status === 'DONE' 
+                            ? 'bg-emerald-500' 
+                            : task.todo_status === 'SKIPPED'
+                              ? 'bg-slate-400'
+                              : 'bg-blue-500'
+                        }`} />
+                        <span className="text-xs text-slate-600">
+                          {task.todo_status === 'DONE' ? 'Done' : task.todo_status === 'SKIPPED' ? 'Skipped' : 'New'}
+                        </span>
+                      </div>
+                    </td>
+
                     {/* Direct action triggers */}
-                    <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
                       {task.todo_status === 'NEW' ? (
                         <button
                           onClick={() => handleDirectSubmit(task)}
-                          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 hover:shadow-md transition-all text-white rounded-lg text-xs font-bold shadow-sm"
+                          className="px-2.5 h-6 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-md text-xs font-medium"
                         >
                           Submit
                         </button>
                       ) : (
                         <button
                           onClick={() => handleResetTask(task)}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg text-xs font-bold transition-all border border-slate-200"
+                          className="px-2.5 h-6 bg-white hover:bg-slate-50 text-slate-500 rounded-md text-xs font-medium transition-colors border border-slate-200"
                         >
                           Undo
                         </button>
@@ -904,9 +915,9 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
       </div>
 
       {/* 3. Footer Pagination standard matching list mockup */}
-      <div className="px-6 py-4 flex items-center justify-between border-t border-slate-100 bg-white shrink-0">
-        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest font-mono">
-          TOTAL: {totalCount} CHECKS
+      <div className="px-6 py-3 flex items-center justify-between border-t border-slate-100 bg-white shrink-0 selection:bg-none">
+        <span className="text-xs font-medium text-slate-400 font-mono">
+          Total: {totalCount} tasks
         </span>
         
         {totalPages > 1 && (
@@ -960,92 +971,95 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           {/* Drawer Body container */}
           <div className="relative w-full max-w-[450px] bg-white h-full shadow-2xl flex flex-col z-10 border-l border-slate-100 animate-in slide-in-from-right duration-300">
             {/* Header info */}
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
               <div>
-                <h3 className="text-base font-bold text-slate-800 leading-snug">{openedTask.title}</h3>
-                <span className="text-[10px] font-mono font-bold text-slate-400 mt-1 block uppercase">ID: {getDisplayId(openedTask.id)}</span>
+                <h3 className="text-sm font-semibold text-slate-800 leading-snug">{openedTask.title}</h3>
+                <span className="text-xs font-mono text-slate-400 mt-0.5 block">Id: {getDisplayId(openedTask.id)}</span>
               </div>
               <button 
                 onClick={() => setOpenedTask(null)}
                 className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-all"
               >
-                <X size={20} />
+                <X size={16} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
               
               {/* TASK STATUS Section showing status indicator and Undo */}
-              <div className="space-y-3 pb-4 border-b border-slate-100">
-                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none font-mono block">TASK STATUS</span>
+              <div className="space-y-2 pb-3 border-b border-slate-100">
+                <span className="text-xs font-semibold text-slate-500 block">Task status</span>
                 
-                <div className="flex items-center justify-between bg-slate-50/70 p-4 rounded-xl border border-slate-100">
-                  <span className={`inline-block px-3.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase shadow-sm ${
-                    openedTaskParsedMeta.todo_status === 'DONE' 
-                      ? 'bg-emerald-600 text-white' 
-                      : openedTaskParsedMeta.todo_status === 'SKIPPED'
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-blue-600 text-white'
-                  }`}>
-                    {openedTaskParsedMeta.todo_status || 'NEW'}
-                  </span>
+                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-120">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      openedTaskParsedMeta.todo_status === 'DONE' 
+                        ? 'bg-emerald-500' 
+                        : openedTaskParsedMeta.todo_status === 'SKIPPED'
+                          ? 'bg-slate-400'
+                          : 'bg-blue-500'
+                    }`} />
+                    <span className="text-xs text-slate-600">
+                      {openedTaskParsedMeta.todo_status === 'DONE' ? 'Done' : openedTaskParsedMeta.todo_status === 'SKIPPED' ? 'Skipped' : 'New'}
+                    </span>
+                  </div>
                   
                   <div className="flex gap-2">
                     {openedTaskParsedMeta.todo_status !== 'SKIPPED' && (
                       <button
                         onClick={() => handleSkipTask(openedTask)}
-                        className="px-3 py-1.5 hover:bg-amber-50 hover:text-amber-600 transition-colors text-slate-500 text-xs font-bold rounded-lg border border-slate-200"
+                        className="px-2.5 h-7 hover:bg-amber-50 hover:text-amber-600 transition-colors text-slate-500 text-xs font-medium rounded border border-slate-200 bg-white"
                       >
-                        Skip Task
+                        Skip task
                       </button>
                     )}
                     <button
                       onClick={() => handleResetTask(openedTask)}
-                      className="px-3 py-1.5 hover:bg-slate-100 transition-colors text-slate-600 text-xs font-bold rounded-lg border border-slate-200"
+                      className="px-2.5 h-7 hover:bg-slate-120 transition-colors text-slate-600 text-xs font-medium rounded border border-slate-200 bg-white"
                     >
-                      Reset Task
+                      Reset task
                     </button>
                   </div>
                 </div>
               </div>
 
               {/* Dynamic subtasks detailed adjustments inside the slider drawer */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between pb-1">
-                  <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none font-mono">SUB-TASKS MANAGEMENT</h3>
-                  <div className="text-[10px] font-bold text-slate-500 font-mono flex items-center gap-2">
-                    <span>EST: {openedTask.est_time || 0}m</span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between pb-0.5">
+                  <h3 className="text-xs font-semibold text-slate-500">Sub-tasks management</h3>
+                  <div className="text-xs font-medium text-slate-500 font-mono flex items-center gap-2">
+                    <span>Est: {openedTask.est_time || 0}m</span>
                     <span>•</span>
-                    <span className="text-emerald-600">ACT: {openedTask.actual_time || 0}m</span>
+                    <span className="text-emerald-600">Act: {openedTask.actual_time || 0}m</span>
                   </div>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {openedTaskParsedMeta.sub_tasks && openedTaskParsedMeta.sub_tasks.length > 0 ? (
                     openedTaskParsedMeta.sub_tasks.map((sub, index) => {
                       const currentSubStatus = sub.sub_status || 'New';
                       return (
                         <div 
                           key={sub.id || index} 
-                          className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col justify-between gap-3 shadow-xs hover:border-blue-100 transition-all"
+                          className="border border-slate-100 rounded-lg p-3 bg-white flex flex-col justify-between gap-2 shadow-xs hover:border-blue-100 transition-all animate-in fade-in"
                         >
                           <div className="flex items-start justify-between gap-3 flex-wrap">
-                            <span className="text-slate-800 text-xs font-bold leading-normal">{sub.content}</span>
-                            <span className="text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200 rounded px-1.5 py-0.5 shrink-0 ml-auto">
+                            <span className="text-slate-800 text-xs font-medium leading-normal">{sub.content}</span>
+                            <span className="text-xs bg-slate-50 text-slate-500 border border-slate-100 rounded px-1.5 py-0.5 shrink-0 ml-auto font-medium">
                               {sub.assignee}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 pt-2 border-t border-slate-50/80 flex-wrap sm:flex-nowrap justify-between">
+                          <div className="flex items-center gap-2 pt-1.5 border-t border-slate-50 flex-wrap sm:flex-nowrap justify-between">
                             {/* ACTUAL: [ x ] MIN field */}
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 font-mono">
-                              <span className="text-[10px] font-black">ACTUAL:</span>
+                            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono">
+                              <span>Actual:</span>
                               <div className="relative flex items-center">
                                 <input 
                                   type="number"
                                   min={0}
                                   value={sub.actual_minutes !== undefined ? sub.actual_minutes : 0}
-                                  className="w-12 h-7 px-1 text-center bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 focus:outline-none focus:bg-white text-xs font-mono"
+                                  className="w-12 h-6 px-1 text-center bg-slate-50 border border-slate-200 rounded font-medium text-slate-800 focus:outline-none focus:bg-white text-xs font-mono"
                                   onChange={(e) => {
                                     const rawVal = parseInt(e.target.value) || 0;
                                     handleUpdateSubtaskValue(openedTask, sub.id, { 
@@ -1054,13 +1068,13 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
                                   }}
                                 />
                               </div>
-                              <span className="text-[10px] font-bold text-slate-400">MIN</span>
+                              <span>min</span>
                             </div>
 
                             {/* SELECT BOX sub-task state selection (Done, New, Skipped) */}
                             <select
                               value={currentSubStatus}
-                              className="h-7 px-2 py-0 bg-slate-50 border border-slate-200 rounded-md text-[10px] font-black text-slate-600 focus:outline-none cursor-pointer"
+                              className="h-6 px-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600 focus:outline-none cursor-pointer"
                               onChange={(e) => {
                                 const nextVal = e.target.value as 'New' | 'Done' | 'Skipped';
                                 handleUpdateSubtaskValue(openedTask, sub.id, { 
@@ -1088,21 +1102,21 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             </div>
 
             {/* Submit template button at bottom of Side Drawer */}
-            <div className="p-6 border-t border-slate-100 shrink-0">
+            <div className="p-4 border-t border-slate-100 shrink-0">
               {openedTaskParsedMeta.todo_status === 'NEW' ? (
                 <button 
                   onClick={() => handleDirectSubmit(openedTask)}
-                  className="w-full h-11 bg-blue-600 hover:bg-blue-700 transition-all text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-100"
+                  className="w-full h-8 bg-blue-600 hover:bg-blue-700 transition-all text-white rounded text-xs font-semibold flex items-center justify-center gap-2 shadow-sm"
                 >
                   <Check size={14} />
-                  <span>Submit Task</span>
+                  <span>Submit task</span>
                 </button>
               ) : (
                 <button 
                   onClick={() => handleResetTask(openedTask)}
-                  className="w-full h-11 bg-slate-100 hover:bg-slate-200 transition-all text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-slate-200"
+                  className="w-full h-8 bg-slate-100 hover:bg-slate-200 transition-all text-slate-600 rounded text-xs font-semibold flex items-center justify-center gap-2 border border-slate-200"
                 >
-                  <span>Re-open Task to NEW</span>
+                  <span>Re-open task to New</span>
                 </button>
               )}
             </div>

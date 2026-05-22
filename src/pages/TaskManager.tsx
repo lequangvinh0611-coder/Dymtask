@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, RotateCcw, Plus, Trash2, Power, Clock, Download, 
   ChevronLeft, ChevronRight, Edit2, MoreHorizontal, X, HelpCircle,
-  Building, Briefcase, Tag, Users, Check, AlertCircle, FileSpreadsheet
+  Building, Briefcase, Tag, Users, Check, AlertCircle, FileSpreadsheet, Loader2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import CreateTaskModal from '../components/CreateTaskModal';
 import { FilterSelect } from '../components/ui/FilterSelect';
+import { toast } from 'sonner';
+import { useAppStore } from '../types';
 
 // Definition of SubTask interface matching mockup
 interface SubTask {
@@ -102,6 +104,8 @@ const serializeTaskDescription = (metadata: TaskMetadata): string => {
 };
 
 const TaskManager: React.FC = () => {
+  const { showConfirm } = useAppStore();
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   // Page state
   const [tasks, setTasks] = useState<DbTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -328,33 +332,45 @@ const TaskManager: React.FC = () => {
           is_active: nextStatus === 'ON'
         });
       }
+      toast.success(`Đã thay đổi trạng thái hoạt động thành ${nextStatus}!`);
     } catch (err: any) {
       console.error('Error toggling task status:', err);
-      alert(`Không thể thay đổi trạng thái: ${err.message}`);
+      toast.error(`Không thể thay đổi trạng thái: ${err.message}`);
     }
   };
 
   // Delete a task permanently from supabase without RLS
   const handleDeleteTask = async (taskId: string) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn template task này không?')) return;
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
+    showConfirm({
+      title: "Xác nhận xóa vĩnh viễn",
+      message: "Bạn có chắc chắn muốn xóa vĩnh viễn template task này không? Hành động này sẽ loại bỏ nó hoàn toàn khỏi dymtask.",
+      confirmText: "Xóa vĩnh viễn",
+      cancelText: "Hủy",
+      onConfirm: async () => {
+        setDeletingTaskId(taskId);
+        try {
+          const { error } = await supabase
+            .from('tasks')
+            .delete()
+            .eq('id', taskId);
 
-      if (error) throw error;
-      
-      // Sync state and close elements
-      setTasks(prev => prev.filter(t => t.id !== taskId));
-      if (openedDrawerTask && openedDrawerTask.id === taskId) {
-        setOpenedDrawerTask(null);
+          if (error) throw error;
+          
+          // Sync state and close elements
+          setTasks(prev => prev.filter(t => t.id !== taskId));
+          if (openedDrawerTask && openedDrawerTask.id === taskId) {
+            setOpenedDrawerTask(null);
+          }
+          setActiveMenuTaskId(null);
+          toast.success("Xóa template task thành công!");
+        } catch (err: any) {
+          console.error('Error deleting task:', err);
+          toast.error(`Không thể xóa task: ${err.message}`);
+        } finally {
+          setDeletingTaskId(null);
+        }
       }
-      setActiveMenuTaskId(null);
-    } catch (err: any) {
-      console.error('Error deleting task:', err);
-      alert(`Không thể xóa task: ${err.message}`);
-    }
+    });
   };
 
   // Open Modal in Edit Mode
@@ -414,19 +430,20 @@ const TaskManager: React.FC = () => {
   }, [openedDrawerTask]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white overflow-hidden relative font-sans">
+    <div className="flex-1 flex flex-col min-h-0 bg-white overflow-x-auto relative font-sans">
       
       {/* 1. Header Filter & Actions Controls */}
-      <div className="px-6 py-4 flex flex-wrap items-center bg-white shrink-0 border-b border-slate-100 justify-between gap-4">
-        <div className="flex items-center gap-3 flex-wrap">
+      {/* 1. Actions Header toolbar */}
+      <div className="px-6 py-3 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between gap-4 flex-nowrap overflow-visible relative z-[40] min-w-max w-full mb-0">
+        <div className="flex items-center gap-2 shrink-0 flex-nowrap">
           {/* Search task */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input 
               type="text" 
               placeholder="Search..." 
               value={searchQuery}
-              className="pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs w-48 focus:outline-none focus:border-blue-500 transition-all font-medium text-slate-700 h-9"
+              className="pl-8 pr-2.5 py-1 bg-white border border-slate-200 rounded-md text-xs w-40 focus:outline-none focus:border-slate-400 font-medium text-slate-700 h-8 shadow-sm"
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setPage(1);
@@ -441,7 +458,7 @@ const TaskManager: React.FC = () => {
               setFilterPersonnel(val);
               setPage(1);
             }}
-            defaultOptionLabel="PERSONNEL"
+            defaultOptionLabel="Assignees"
             options={dynamicPersonnel.map(person => ({ value: person, label: person }))}
           />
 
@@ -452,7 +469,7 @@ const TaskManager: React.FC = () => {
               setFilterTag(val);
               setPage(1);
             }}
-            defaultOptionLabel="ALL TAGS"
+            defaultOptionLabel="Tags"
             options={dynamicTags.map(tag => ({ value: tag, label: tag }))}
           />
 
@@ -463,7 +480,7 @@ const TaskManager: React.FC = () => {
               setFilterProject(val);
               setPage(1);
             }}
-            defaultOptionLabel="ALL PROJECTS"
+            defaultOptionLabel="Projects"
             options={dynamicProjects.map(proj => ({ value: proj, label: proj }))}
           />
 
@@ -474,7 +491,7 @@ const TaskManager: React.FC = () => {
               setFilterTeam(val);
               setPage(1);
             }}
-            defaultOptionLabel="ALL TEAMS"
+            defaultOptionLabel="Teams"
             options={dynamicTeams.map(tm => ({ value: tm, label: tm }))}
           />
 
@@ -485,10 +502,10 @@ const TaskManager: React.FC = () => {
               setFilterStatus(val);
               setPage(1);
             }}
-            defaultOptionLabel="STATUS (ALL)"
+            defaultOptionLabel="Status"
             options={[
-              { value: 'ON', label: 'ON' },
-              { value: 'OFF', label: 'OFF' }
+              { value: 'ON', label: 'On' },
+              { value: 'OFF', label: 'Off' }
             ]}
           />
 
@@ -504,171 +521,168 @@ const TaskManager: React.FC = () => {
                 setFilterStatus('ON');
                 setPage(1);
               }}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-50 transition-all"
+              className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
               title="Đặt lại bộ lọc"
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={14} />
             </button>
           )}
         </div>
 
         {/* Create and CSV action triggers */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0">
+          <button 
+            onClick={handleOpenCreateModal}
+            className="flex items-center gap-1.5 px-3 h-8 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-md text-xs font-medium shadow-sm"
+          >
+            <Plus size={14} />
+            <span>Create task</span>
+          </button>
           <button 
             onClick={handleExportCsv}
             disabled={filteredTasks.length === 0}
-            className="flex items-center gap-1.5 px-3.5 h-9 bg-white border border-slate-200 hover:bg-slate-50 hover:text-blue-600 transition-all text-slate-600 rounded-lg text-xs font-bold shadow-sm disabled:opacity-40"
+            className="h-8 px-3 flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-md transition-colors disabled:opacity-40"
           >
-            <Download size={14} />
-            <span>Export CSV</span>
-          </button>
-          <button 
-            onClick={handleOpenCreateModal}
-            className="flex items-center gap-1.5 px-4 h-9 bg-blue-600 hover:bg-blue-700 transition-all text-white rounded-lg text-xs font-bold shadow-sm shadow-blue-100"
-          >
-            <Plus size={16} />
-            <span>Create Task</span>
+            <Download className="w-3.5 h-3.5" />
+            <span className="text-xs font-medium">Export CSV</span>
           </button>
         </div>
       </div>
 
       {/* 2. Main High-Polished Grid/Table Grid Panel */}
-      <div className="flex-1 overflow-auto bg-white min-h-[400px]">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-white min-h-[400px]">
         {loading ? (
           <div className="h-full w-full flex flex-col items-center justify-center py-24 gap-3">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs uppercase tracking-widest text-slate-400 font-bold animate-pulse">Loading templates...</p>
+            <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-xs text-slate-400 font-medium animate-pulse">Loading templates...</p>
           </div>
         ) : paginatedTasks.length > 0 ? (
-          <table className="w-full text-left border-collapse table-fixed select-none">
-            <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 z-10">
-              <tr>
-                <th className="w-[8%] px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID</th>
-                <th className="w-[22%] px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Task Name</th>
-                <th className="w-[11%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tag</th>
-                <th className="w-[18%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Project</th>
-                <th className="w-[12%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Team</th>
-                <th className="w-[9%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Type</th>
-                <th className="w-[11%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Deadline</th>
-                <th className="w-[9%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Est.Min</th>
-                <th className="w-[11%] px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
-                <th className="w-[6%] px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Actions</th>
+          <table className="w-full text-left border-collapse table-fixed select-none min-w-[1100px]">
+            <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-20">
+              <tr className="h-8">
+                <th className="w-[8%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Id</th>
+                <th className="w-[22%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Task Name</th>
+                <th className="w-[11%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Tag</th>
+                <th className="w-[18%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Project</th>
+                <th className="w-[12%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Team</th>
+                <th className="w-[9%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 text-center bg-slate-100">Type</th>
+                <th className="w-[11%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Deadline</th>
+                <th className="w-[9%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 text-center bg-slate-100">Est. min</th>
+                <th className="w-[11%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 text-center bg-slate-100">Status</th>
+                <th className="w-[6%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 text-center bg-slate-100">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedTasks.map((task) => (
                 <tr 
                   key={task.id} 
-                  className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
+                  className="h-9 hover:bg-slate-50/50 transition-colors group cursor-pointer"
                   onClick={() => setOpenedDrawerTask(task)}
                 >
                   {/* ID */}
-                  <td className="px-6 py-4">
-                    <span className="font-mono text-xs text-slate-400 font-bold">
+                  <td className="px-3 py-1.5">
+                    <span className="font-mono text-xs text-slate-400 font-medium">
                       {getDisplayId(task.id)}
                     </span>
                   </td>
 
                   {/* Task Name */}
-                  <td className="px-6 py-4 overflow-hidden">
-                    <span className="font-semibold text-slate-800 text-sm tracking-tight truncate block" title={task.title}>
+                  <td className="px-3 py-1.5 overflow-hidden">
+                    <span className="font-medium text-slate-700 text-xs truncate block" title={task.title || ''}>
                       {task.title}
                     </span>
                   </td>
 
                   {/* Tag */}
-                  <td className="px-4 py-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                    <span className="inline-block border border-slate-200 bg-slate-50 px-2.5 py-0.5 rounded text-[11px] font-medium text-slate-600 truncate max-w-full">
+                  <td className="px-3 py-1.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <span className="inline-block bg-slate-50 border border-slate-100 px-2 py-0.5 rounded text-xs text-slate-600 truncate max-w-full font-medium">
                       {task.tag_name || '求人更新'}
                     </span>
                   </td>
 
                   {/* Project */}
-                  <td className="px-4 py-4 overflow-hidden">
-                    <span className="text-slate-600 text-xs truncate block font-medium" title={task.project_name || '【事務代行】HR TECH'}>
-                      {task.project_name || '【事務代行】HR TECH'}
+                  <td className="px-3 py-1.5 overflow-hidden">
+                    <span className="text-slate-600 text-xs truncate block font-normal" title={task.project_name || '【事務代行】HR TECH'}>
+                      {task.project_id ? (projectsList.find((p: any) => p === task.project_name) || task.project_name) : task.project_name}
                     </span>
                   </td>
 
                   {/* Team */}
-                  <td className="px-4 py-4 overflow-hidden">
-                    <span className="text-slate-500 text-xs truncate block font-medium" title={task.team_name || '内部・2課E'}>
+                  <td className="px-3 py-1.5 overflow-hidden">
+                    <span className="text-slate-500 text-xs truncate block font-normal" title={task.team_name || '内部・2課E'}>
                       {task.team_name || '内部・2課E'}
                     </span>
                   </td>
 
                   {/* Type */}
-                  <td className="px-4 py-4 text-center">
-                    <span className={`inline-block px-2.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-widest ${
-                      task.task_type === 'DAILY' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
-                      task.task_type === 'WEEKLY' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                      task.task_type === 'MONTHLY' ? 'bg-purple-50 text-purple-600 border border-purple-100' :
-                      'bg-slate-100 text-slate-500 border border-slate-200'
-                    }`}>
+                  <td className="px-3 py-1.5 text-center">
+                    <span className="inline-block bg-slate-50 border border-slate-100 px-2 py-0.5 rounded text-xs text-slate-600 font-medium">
                       {task.task_type || 'DAILY'}
                     </span>
                   </td>
 
                   {/* Deadline text output */}
-                  <td className="px-4 py-4">
-                    <div className="flex flex-col text-xs font-semibold leading-tight">
-                      <span className="text-slate-800 font-bold flex items-center gap-1">
-                        <Clock size={11} className="text-slate-400 shrink-0" />
+                  <td className="px-3 py-1.5">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <Clock size={12} className="text-slate-400 shrink-0" />
+                      <span className="truncate" title={`${task.deadline_time || '17:00'} ${task.deadline_days || 'Mon - Fri'}`}>
                         {task.deadline_time || '17:00'}
-                      </span>
-                      <span className="text-slate-400 text-[10px] font-medium mt-0.5">
-                        {task.deadline_days || 'Mon - Fri'}
                       </span>
                     </div>
                   </td>
 
                   {/* Estimated minutes */}
-                  <td className="px-4 py-4 text-center" onClick={(e) => { e.stopPropagation(); setOpenedDrawerTask(task); }}>
-                    <span className="text-blue-600 hover:text-blue-800 font-bold font-mono text-xs underline cursor-pointer">
+                  <td className="px-3 py-1.5 text-center" onClick={(e) => { e.stopPropagation(); setOpenedDrawerTask(task); }}>
+                    <span className="text-indigo-600 hover:text-indigo-800 font-medium font-mono text-xs underline cursor-pointer">
                       {task.est_time || 0}m
                     </span>
                   </td>
 
-                  {/* Status Switch (ON/OFF) Toggle Pill */}
-                  <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                  {/* Status Switch (ON/OFF) Toggle Pill - Dot style */}
+                  <td className="px-3 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => handleToggleStatus(task, task.status)}
-                      className={`inline-flex px-3.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase transition-all shadow-sm ${
-                        task.status === 'ON' 
-                          ? 'bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-100' 
-                          : 'bg-slate-100 border border-slate-200 text-slate-400 hover:bg-slate-200 hover:text-slate-500'
-                      }`}
+                      className="inline-flex items-center gap-1.5 hover:text-slate-800 transition-colors"
+                      title="Click to toggle status"
                     >
-                      {task.status || 'ON'}
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${task.status === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                      <span className="text-xs text-slate-600 font-medium">
+                        {task.status === 'ON' ? 'On' : 'Off'}
+                      </span>
                     </button>
                   </td>
 
                   {/* Actions dropdown button */}
-                  <td className="px-6 py-4 text-center relative" onClick={(e) => e.stopPropagation()}>
+                  <td className="px-3 py-1.5 text-center relative" onClick={(e) => e.stopPropagation()}>
                     <button 
                       onClick={() => setActiveMenuTaskId(activeMenuTaskId === task.id ? null : task.id)}
                       className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                     >
-                      <MoreHorizontal size={16} />
+                      <MoreHorizontal size={14} />
                     </button>
 
                     {/* Quick action floating menu context popup */}
                     {activeMenuTaskId === task.id && (
-                      <div className="absolute right-6 top-12 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-[100] w-32 animate-in fade-in duration-100">
+                      <div className="absolute right-3 top-8 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-[100] w-32">
                         <button
                           onClick={() => handleOpenEditModal(task)}
-                          className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
+                          className="w-full text-left px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
                         >
                           <Edit2 size={12} className="text-slate-400" />
-                          <span>Edit Template</span>
+                          <span>Edit template</span>
                         </button>
                         <hr className="my-1 border-slate-100" />
                         <button
                           onClick={() => handleDeleteTask(task.id)}
-                          className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                          disabled={deletingTaskId === task.id}
+                          className="w-full text-left px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors flex items-center gap-2 cursor-pointer"
                         >
-                          <Trash2 size={12} className="text-red-400" />
-                          <span>Delete</span>
+                          {deletingTaskId === task.id ? (
+                            <Loader2 size={12} className="text-red-400 animate-spin" />
+                          ) : (
+                            <Trash2 size={12} className="text-red-400" />
+                          )}
+                          <span>{deletingTaskId === task.id ? 'Deleting...' : 'Delete'}</span>
                         </button>
                       </div>
                     )}
@@ -691,9 +705,9 @@ const TaskManager: React.FC = () => {
       </div>
 
       {/* 3. Footer Statistics and Client-side Page Navigator */}
-      <div className="px-6 py-4 flex items-center justify-between border-t border-slate-100 bg-white shrink-0">
-        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest font-mono">
-          TOTAL: {totalCount} TEMPLATES
+      <div className="px-6 py-3 flex items-center justify-between border-t border-slate-100 bg-white shrink-0 selection:bg-none">
+        <span className="text-xs font-medium text-slate-400 font-mono">
+          Total: {totalCount} templates
         </span>
         
         {totalPages > 1 && (
@@ -745,85 +759,85 @@ const TaskManager: React.FC = () => {
           />
           {/* Drawer Panel Body container */}
           <div className="relative w-full max-w-[450px] bg-white h-full shadow-2xl flex flex-col z-10 border-l border-slate-100 animate-in slide-in-from-right duration-300">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
-              <span className="text-xs uppercase tracking-widest font-black text-slate-400 font-mono">Template Details</span>
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <span className="text-xs font-semibold text-slate-400">Template details</span>
               <button 
                 onClick={() => setOpenedDrawerTask(null)}
                 className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-all"
               >
-                <X size={20} />
+                <X size={16} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* Task template heading with toggle switch */}
               <div className="flex items-start justify-between">
                 <div>
-                  <h2 className="text-xl font-black text-slate-800 tracking-tight leading-tight">{openedDrawerTask.title}</h2>
-                  <span className="text-xs font-mono font-bold text-slate-400 mt-1 block uppercase">ID: {getDisplayId(openedDrawerTask.id)}</span>
+                  <h2 className="text-sm font-semibold text-slate-800 leading-tight">{openedDrawerTask.title}</h2>
+                  <span className="text-xs font-mono text-slate-400 mt-0.5 block">Id: {getDisplayId(openedDrawerTask.id)}</span>
                 </div>
                 <button
                   onClick={() => handleToggleStatus(openedDrawerTask, openedDrawerTask.status)}
-                  className={`px-4 py-1.5 rounded-xl text-xs font-black tracking-widest uppercase transition-all shadow-sm ${
-                    openedDrawerTask.status === 'ON' 
-                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-100' 
-                      : 'bg-slate-100 border border-slate-200 text-slate-400 hover:bg-slate-200 hover:text-slate-500'
-                  }`}
+                  className="inline-flex items-center gap-1.5 transition-colors"
+                  title="Click to toggle status"
                 >
-                  {openedDrawerTask.status || 'ON'}
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${openedDrawerTask.status === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                  <span className="text-xs text-slate-600 font-medium">
+                    {openedDrawerTask.status === 'ON' ? 'On' : 'Off'}
+                  </span>
                 </button>
               </div>
 
               {/* Tags info grid block */}
-              <div className="grid grid-cols-2 gap-3 bg-slate-50/70 rounded-2xl p-4 text-xs font-semibold">
-                <div className="space-y-1">
-                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Project</span>
-                  <span className="text-slate-700 block text-xs underline decoration-dotted truncate">{drawerParsedMeta.project_name}</span>
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 rounded-lg p-3 text-xs">
+                <div className="space-y-0.5">
+                  <span className="text-slate-400 font-medium block">Project</span>
+                  <span className="text-slate-700 block text-xs font-semibold hover:text-indigo-600 cursor-pointer transition-colors truncate">{drawerParsedMeta.project_name}</span>
                 </div>
-                <div className="space-y-1">
-                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Tag</span>
+                <div className="space-y-0.5">
+                  <span className="text-slate-400 font-medium block">Tag</span>
                   <span className="text-slate-700 block text-xs truncate">{drawerParsedMeta.tag_name}</span>
                 </div>
-                <div className="space-y-1">
-                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Team</span>
+                <div className="space-y-0.5">
+                  <span className="text-slate-400 font-medium block">Team</span>
                   <span className="text-slate-700 block text-xs truncate">{drawerParsedMeta.team_name}</span>
                 </div>
-                <div className="space-y-1">
-                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Frequency Mode</span>
+                <div className="space-y-0.5">
+                  <span className="text-slate-400 font-medium block">Frequency mode</span>
                   <span className="text-slate-700 block text-xs">{openedDrawerTask.task_type || 'DAILY'}</span>
                 </div>
               </div>
 
               {/* Sub-tasks management section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none font-mono">SUB-TASKS MANAGEMENT</h3>
-                  <span className="text-[10px] font-bold text-blue-600 uppercase font-mono tracking-wider">
-                    TOTAL EST: {openedDrawerTask.est_time || 0} MIN
+              <div className="space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                  <h3 className="text-xs font-semibold text-slate-500">Sub-tasks management</h3>
+                  <span className="text-xs font-medium text-blue-600 font-mono">
+                    Total est: {openedDrawerTask.est_time || 0} min
                   </span>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {drawerParsedMeta.sub_tasks && drawerParsedMeta.sub_tasks.length > 0 ? (
                     drawerParsedMeta.sub_tasks.map((sub, index) => (
                       <div 
                         key={sub.id || index} 
-                        className="border border-slate-100 hover:border-blue-100 hover:bg-blue-50/10 transition-all rounded-xl p-4 bg-white flex flex-col justify-between gap-3 relative shadow-xs"
+                        className="border border-slate-100 hover:border-blue-100 hover:bg-blue-50/10 transition-all rounded-lg p-3 bg-white flex flex-col justify-between gap-2 relative shadow-xs animate-in fade-in"
                       >
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-slate-700 text-xs font-bold leading-normal">{sub.content}</span>
-                          <span className="text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200 rounded px-1.5 py-0.5 ml-auto shrink-0">
+                          <span className="text-slate-700 text-xs font-medium leading-normal">{sub.content}</span>
+                          <span className="text-xs bg-slate-50 text-slate-500 border border-slate-100 rounded px-1.5 py-0.5 ml-auto shrink-0 font-medium">
                             {sub.assignee}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-50/80">
-                          <div className="flex-1 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center justify-between gap-1.5 font-mono">
-                            <span>ESTIMATED</span>
-                            <span className="text-slate-700 font-black">{sub.estimated_minutes} MIN</span>
+                        <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-50">
+                          <div className="flex-1 bg-slate-50 border border-slate-100 rounded px-2 py-1 text-xs text-slate-400 flex items-center justify-between font-mono">
+                            <span>Estimated</span>
+                            <span className="text-slate-700 font-medium">{sub.estimated_minutes} min</span>
                           </div>
                           
-                          <div className="border border-slate-100 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0 font-mono text-center">
-                            TEMPLATE
+                          <div className="border border-slate-100 rounded px-2 py-1 text-xs text-slate-400 shrink-0 font-mono text-center">
+                            Template
                           </div>
                         </div>
                       </div>
@@ -838,13 +852,13 @@ const TaskManager: React.FC = () => {
             </div>
 
             {/* Bottom Edit Action Button */}
-            <div className="p-6 border-t border-slate-100 shrink-0">
+            <div className="p-4 border-t border-slate-100 shrink-0">
               <button 
                 onClick={() => handleOpenEditModal(openedDrawerTask)}
-                className="w-full h-11 bg-blue-600 hover:bg-blue-700 transition-all text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-100"
+                className="w-full h-8 bg-blue-600 hover:bg-blue-700 transition-all text-white rounded text-xs font-semibold flex items-center justify-center gap-2 shadow-sm"
               >
                 <Edit2 size={13} />
-                <span>Edit This Template</span>
+                <span>Edit template</span>
               </button>
             </div>
           </div>

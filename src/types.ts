@@ -74,6 +74,15 @@ export interface AuditLog {
   created_at: string;   // Thay thế cho field 'time' cũ
 }
 
+export interface ConfirmConfig {
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}
+
 export interface AppState {
   activeTab: 'TO-DO LIST' | 'TASK MANAGER' | 'DASHBOARD' | 'AUDIT LOG' | 'SETTINGS';
   setActiveTab: (tab: AppState['activeTab']) => void;
@@ -81,14 +90,24 @@ export interface AppState {
   setTheme: (theme: AppState['theme']) => void;
   refreshKey: number;
   triggerRefresh: () => void;
+  isSidebarOpen: boolean;
+  setSidebarOpen: (isOpen: boolean) => void;
+  confirmDialog: ConfirmConfig | null;
+  showConfirm: (config: ConfirmConfig) => void;
+  hideConfirm: () => void;
 }
 
 // Store chỉ còn quản lý trạng thái UI (activeTab)
 export const useAppStore = create<AppState>((set) => ({
   activeTab: 'TO-DO LIST',
-  setActiveTab: (tab) => set({ activeTab: tab }),
+  setActiveTab: (tab) => set({ activeTab: tab, isSidebarOpen: false }),
   theme: 'indigo',
   setTheme: (theme) => set({ theme }),
   refreshKey: 0,
   triggerRefresh: () => set((state) => ({ refreshKey: state.refreshKey + 1 })),
+  isSidebarOpen: false,
+  setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
+  confirmDialog: null,
+  showConfirm: (config) => set({ confirmDialog: config }),
+  hideConfirm: () => set({ confirmDialog: null }),
 }));

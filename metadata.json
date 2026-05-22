@@ -1,6 +1,8 @@
 {
-  "name": "Dym Task Tool",
+  "name": "Remix: Dym Task Tool",
   "description": "A professional task management system with multi-role support, audit logs, and project tracking.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

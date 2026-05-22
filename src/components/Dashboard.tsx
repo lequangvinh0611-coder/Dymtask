@@ -132,7 +132,7 @@ const getWeekDays = () => {
   monday.setDate(current.getDate() + diffToMonday);
   
   const weekdays = [];
-  const names = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
+  const names = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6'];
   const mapShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
   
   for (let i = 0; i < 5; i++) {
@@ -438,155 +438,161 @@ export default function Dashboard() {
   const currentTeams = teamsList.length > 0 ? teamsList : AVAILABLE_TEAMS;
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-slate-50 overflow-hidden text-left">
+    <div className="flex-1 flex flex-col min-h-0 bg-slate-50 overflow-x-auto text-left font-sans">
       
-      {/* FILTER BAR / OPTIMIZED HEADER BAR - Height h-10/h-12 & thin padding */}
-      <div className="flex items-center justify-start gap-1.5 bg-white px-6 py-1 border-b border-slate-100 shrink-0 select-none">
-        {/* 1. Dropdown PERSONNEL */}
-        <FilterSelect
-          value={filterPersonnel}
-          onChange={setFilterPersonnel}
-          defaultOptionLabel="PERSONNEL"
-          options={currentAssignees.map(assignee => ({ value: assignee, label: assignee }))}
-        />
+      {/* FILTER BAR / OPTIMIZED HEADER BAR */}
+      <div className="px-6 py-3 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between gap-4 flex-nowrap overflow-visible relative z-[40] min-w-max w-full select-none">
+        <div className="flex items-center gap-2 shrink-0 flex-nowrap">
+          {/* 1. Dropdown PERSONNEL */}
+          <FilterSelect
+            value={filterPersonnel}
+            onChange={setFilterPersonnel}
+            defaultOptionLabel="Assignees"
+            options={currentAssignees.map(assignee => ({ value: assignee, label: assignee }))}
+            className="h-8 min-w-[120px]"
+          />
 
-        {/* 2. Dropdown PROJECTS */}
-        <FilterSelect
-          value={filterProject}
-          onChange={setFilterProject}
-          defaultOptionLabel="PROJECTS"
-          options={currentProjects.map(project => ({ value: project, label: project }))}
-        />
+          {/* 2. Dropdown PROJECTS */}
+          <FilterSelect
+            value={filterProject}
+            onChange={setFilterProject}
+            defaultOptionLabel="Projects"
+            options={currentProjects.map(project => ({ value: project, label: project }))}
+            className="h-8 min-w-[120px]"
+          />
 
-        {/* 3. Dropdown TAGS */}
-        <FilterSelect
-          value={filterTag}
-          onChange={setFilterTag}
-          defaultOptionLabel="TAGS"
-          options={currentTags.map(tag => ({ value: tag, label: tag }))}
-        />
+          {/* 3. Dropdown TAGS */}
+          <FilterSelect
+            value={filterTag}
+            onChange={setFilterTag}
+            defaultOptionLabel="Tags"
+            options={currentTags.map(tag => ({ value: tag, label: tag }))}
+            className="h-8 min-w-[110px]"
+          />
 
-        {/* 4. Dropdown TEAMS */}
-        <FilterSelect
-          value={filterTeam}
-          onChange={setFilterTeam}
-          defaultOptionLabel="TEAMS"
-          options={currentTeams.map(team => ({ value: team, label: team }))}
-        />
+          {/* 4. Dropdown TEAMS */}
+          <FilterSelect
+            value={filterTeam}
+            onChange={setFilterTeam}
+            defaultOptionLabel="Teams"
+            options={currentTeams.map(team => ({ value: team, label: team }))}
+            className="h-8 min-w-[110px]"
+          />
 
-        {/* 5. Date Filter */}
-        <DateRangePicker 
-          startDate={startDate}
-          endDate={endDate}
-          onChange={(start, end) => {
-            setStartDate(start);
-            setEndDate(end);
-          }}
-          className="h-8 text-xs font-bold"
-        />
+          {/* 5. Date Filter */}
+          <DateRangePicker 
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(start, end) => {
+              setStartDate(start);
+              setEndDate(end);
+            }}
+            className="h-8"
+          />
+        </div>
       </div>
 
-      <div className="flex-1 flex flex-col p-6 gap-6 min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col p-4 gap-4 min-h-0 overflow-hidden bg-slate-50/30">
         {/* Error handling alert block */}
         {error && (
-          <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3.5 rounded-xl flex items-start gap-2.5 shadow-sm shrink-0">
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 p-2.5 rounded-md flex items-start gap-2 shadow-sm shrink-0">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
             <div className="text-left">
-              <span className="font-bold block text-xs uppercase tracking-wider font-mono">Database Error Occurred</span>
-              <span className="text-[10px] text-rose-600/90 font-medium">{error}</span>
+              <span className="font-semibold block text-xs">Database Error Occurred</span>
+              <span className="text-xs text-rose-600/90 font-medium">{error}</span>
             </div>
           </div>
         )}
 
         {/* 1. HÀNG 1: 5 KHỐI THÈ THỐNG KÊ (OVERVIEW CARDS) */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5 shrink-0">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
         
         {/* Card 1: TOTAL TASKS */}
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-xs flex flex-col justify-between transition-all duration-300 hover:shadow-sm">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest font-mono">TOTAL TASKS</span>
-            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
-              <ClipboardList className="w-4 h-4" />
+        <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-colors">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-slate-500">Total Templates</span>
+            <div className="p-1 bg-slate-50 text-indigo-600 rounded">
+              <ClipboardList className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-1 text-left">
-            <h3 className="text-2xl font-black text-slate-800 tracking-tight leading-none font-mono">
+            <h3 className="text-xl font-bold text-slate-800 leading-none">
               {stats.total}
             </h3>
-            <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider font-mono">
-              Total Tasks
+            <p className="text-xs font-normal text-slate-400 mt-1">
+              Active tasks
             </p>
           </div>
         </div>
 
         {/* Card 2: COMPLETED */}
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-xs flex flex-col justify-between transition-all duration-300 hover:shadow-sm">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest font-mono">COMPLETED</span>
-            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
-              <CheckCircle2 className="w-4 h-4" />
+        <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-colors">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-slate-500">Completed</span>
+            <div className="p-1 bg-slate-50 text-emerald-600 rounded">
+              <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-1 text-left">
-            <h3 className="text-2xl font-black text-emerald-600 tracking-tight leading-none font-mono">
+            <h3 className="text-xl font-bold text-emerald-600 leading-none">
               {stats.completed}
             </h3>
-            <p className="text-[9px] font-bold text-emerald-500 mt-1 uppercase tracking-wider font-mono">
-              Done Tasks
+            <p className="text-xs font-normal text-slate-400 mt-1">
+              Done task checklist
             </p>
           </div>
         </div>
 
         {/* Card 3: SKIPPED */}
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-xs flex flex-col justify-between transition-all duration-350 hover:shadow-sm">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest font-mono">SKIPPED</span>
-            <div className="p-1.5 bg-slate-50 text-slate-500 rounded-lg">
-              <FastForward className="w-4 h-4" />
+        <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-colors">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-slate-500">Skipped</span>
+            <div className="p-1 bg-slate-50 text-amber-500 rounded">
+              <FastForward className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-1 text-left">
-            <h3 className="text-2xl font-black text-slate-500 tracking-tight leading-none font-mono">
+            <h3 className="text-xl font-bold text-slate-600 leading-none">
               {stats.skipped}
             </h3>
-            <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider font-mono">
-              Skipped Tasks
+            <p className="text-xs font-normal text-slate-400 mt-1">
+              Skipped task checklist
             </p>
           </div>
         </div>
 
         {/* Card 4: ESTIMATED */}
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-xs flex flex-col justify-between transition-all duration-300 hover:shadow-sm">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest font-mono">ESTIMATED</span>
-            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
-              <Clock className="w-4 h-4" />
+        <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-colors">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-slate-500">Est. Time</span>
+            <div className="p-1 bg-slate-50 text-indigo-600 rounded">
+              <Clock className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-1 text-left min-w-0">
-            <h3 className="text-sm md:text-base font-black text-blue-600 tracking-tight leading-none font-mono truncate py-1">
+            <h3 className="text-xs sm:text-sm font-bold text-indigo-650 truncate py-0.5 leading-none">
               {formatDuration(stats.totalEst)}
             </h3>
-            <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider font-mono">
-              Est. Time
+            <p className="text-xs font-normal text-slate-400 mt-1">
+              Estimated effort
             </p>
           </div>
         </div>
 
         {/* Card 5: ACTUAL */}
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-xs flex flex-col justify-between transition-all duration-300 hover:shadow-sm">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest font-mono">ACTUAL</span>
-            <div className="p-1.5 bg-teal-50 text-teal-600 rounded-lg">
-              <Clock className="w-4 h-4" />
+        <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-colors">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-slate-500">Actual Time</span>
+            <div className="p-1 bg-slate-50 text-emerald-600 rounded">
+              <Clock className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-1 text-left min-w-0">
-            <h3 className="text-sm md:text-base font-black text-teal-600 tracking-tight leading-none font-mono truncate py-1">
-              {formatDuration(stats.totalAct)}
+            <h3 className="text-xs sm:text-sm font-bold text-emerald-600 truncate py-0.5 leading-none">
+               {formatDuration(stats.totalAct)}
             </h3>
-            <p className="text-[9px] font-bold text-teal-500 mt-1 uppercase tracking-wider font-mono">
-              Actual Time
+            <p className="text-xs font-normal text-slate-400 mt-1">
+              Logged duration
             </p>
           </div>
         </div>
@@ -594,34 +600,23 @@ export default function Dashboard() {
       </div>
 
       {/* 2. HÀNG 2: KHỐI WEEKLY ROADMAP MONDAY - FRIDAY VISUALIZER */}
-      <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl border border-slate-100 p-5 shadow-sm space-y-4 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 bg-white rounded-md border border-slate-200 p-4 shadow-sm space-y-3 overflow-hidden">
         
         {/* Row Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-150/40 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100 shrink-0">
           <div>
-            <h3 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-widest font-mono">
+            <h3 className="text-sm font-semibold text-slate-800">
               Weekly Roadmap (Monday - Friday Visualizer)
             </h3>
-            <p className="text-[10px] text-slate-400 mt-0.5 font-bold uppercase tracking-wider">
-              Bản đồ lịch trình phân bổ chu kỳ công việc và tỷ lệ đạt mục tiêu hàng ngày
-            </p>
-          </div>
-
-          <div className="text-[10px] text-slate-500 font-bold font-mono bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">
-            📊 ACTIVE WORKDAYS: 5 DAYS
           </div>
         </div>
 
         {/* Grid 5 Column of Monday to Friday */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4 min-h-0">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-3 min-h-0">
           {weekDays.map((day) => {
-            // Aggregate database or mock tasks applicable on this day of the week
-            const dayTasks = baseTasks.filter(t => isTaskOnWeekday(t, day.short, day.dateString, day.dayOfMonth));
+            // Aggregate database or mock tasks applicable on this day of the week and is active
+            const dayTasks = baseTasks.filter(t => t.is_active === true && isTaskOnWeekday(t, day.short, day.dateString, day.dayOfMonth));
             
-            // Calculate completed progress
-            const completedCount = dayTasks.filter(t => (t.status || '').toUpperCase() === 'DONE').length;
-            const progressPercent = dayTasks.length > 0 ? Math.round((completedCount / dayTasks.length) * 100) : 0;
-
             const dailyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'DAILY');
             const weeklyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'WEEKLY');
             const monthlyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'MONTHLY');
@@ -629,28 +624,28 @@ export default function Dashboard() {
 
             const dayRows = [
               {
-                label: 'TOTAL',
+                label: 'Total',
                 count: dayTasks.length,
                 estMinutes: dayTasks.reduce((sum, t) => sum + (t.est_time || 0), 0),
                 isTotal: true
               },
               {
-                label: 'DAILY',
+                label: 'Daily',
                 count: dailyTypeTasks.length,
                 estMinutes: dailyTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
               },
               {
-                label: 'WEEKLY',
+                label: 'Weekly',
                 count: weeklyTypeTasks.length,
                 estMinutes: weeklyTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
               },
               {
-                label: 'MONTHLY',
+                label: 'Monthly',
                 count: monthlyTypeTasks.length,
                 estMinutes: monthlyTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
               },
               {
-                label: 'SPOT(NEW)',
+                label: 'Spot',
                 count: spotTypeTasks.length,
                 estMinutes: spotTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
               }
@@ -659,54 +654,51 @@ export default function Dashboard() {
             return (
               <div 
                 key={day.name} 
-                className={`bg-white rounded-xl border flex flex-col justify-between overflow-hidden relative shadow-xs transition-all duration-300 h-full ${
+                className={`bg-white rounded-md border flex flex-col justify-between overflow-hidden relative shadow-sm h-full ${
                   day.isToday 
-                    ? 'border-blue-400 ring-2 ring-blue-50' 
-                    : 'border-slate-100 hover:border-slate-200'
+                    ? 'border-indigo-500 ring-2 ring-indigo-50/50' 
+                    : 'border-slate-200 hover:border-slate-300'
                 }`}
               >
                 {/* Column header element */}
-                <div className={`px-3 py-2 border-b border-slate-100 flex flex-col items-start justify-between relative shrink-0 ${
-                  day.isToday ? 'bg-blue-50/10' : 'bg-slate-50/30'
+                <div className={`px-2.5 py-1.5 border-b border-slate-150 flex flex-col items-start justify-between relative shrink-0 ${
+                  day.isToday ? 'bg-indigo-50/10' : 'bg-slate-50/50'
                 }`}>
                   <div className="flex items-center justify-between w-full">
-                    <span className={`text-[10px] font-black tracking-widest font-mono ${
-                      day.isToday ? 'text-blue-600' : 'text-slate-700'
+                    <span className={`text-xs font-semibold ${
+                      day.isToday ? 'text-indigo-600' : 'text-slate-700'
                     }`}>
                       {day.name}
                     </span>
                     
                     {day.isToday && (
-                      <span className="bg-blue-600 text-[8px] font-black text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider font-mono scale-90">
-                        TODAY
+                      <span className="bg-indigo-600 text-xs font-medium text-white px-1.5 py-0.5 rounded-sm">
+                        Today
                       </span>
                     )}
                   </div>
-                  <span className="text-[9px] font-semibold text-slate-400 mt-0.5 font-mono tracking-wider">
-                    {formatDateToDisplay(day.dateString)}
-                  </span>
                 </div>
 
                 {/* List items block */}
-                <div className="flex-1 flex flex-col justify-between p-3 min-h-0 space-y-2">
+                <div className="flex-1 flex flex-col justify-between p-2.5 min-h-0 space-y-1.5 pb-3">
                   {dayRows.map((row) => (
                     <div 
                       key={row.label}
-                      className={`flex-1 flex items-center justify-between px-3 py-2.5 rounded-lg transition-all ${
+                      className={`flex-1 flex items-center justify-between px-2 py-1 rounded-md transition-all ${
                         row.isTotal 
-                          ? 'bg-blue-50/50 border border-blue-100/40 font-black' 
+                          ? 'bg-indigo-50/40 border border-indigo-100/50 font-semibold text-indigo-950' 
                           : 'border border-slate-50 hover:bg-slate-50/50 hover:border-slate-100'
                       }`}
                     >
                       {/* Left: Tên loại + Số lượng Task */}
                       <div className="flex flex-col justify-center">
-                        <span className={`text-[8px] font-black tracking-wider uppercase font-mono leading-none ${
-                          row.isTotal ? 'text-blue-600' : 'text-slate-400'
+                        <span className={`text-xs font-medium leading-none ${
+                          row.isTotal ? 'text-indigo-600' : 'text-slate-400'
                         }`}>
                           {row.label}
                         </span>
-                        <span className={`text-sm font-black leading-none mt-0.5 ${
-                          row.isTotal ? 'text-indigo-700' : 'text-slate-800'
+                        <span className={`text-xs font-semibold leading-none mt-0.5 ${
+                          row.isTotal ? 'text-indigo-800' : 'text-slate-700'
                         }`}>
                           {row.count}
                         </span>
@@ -714,30 +706,15 @@ export default function Dashboard() {
 
                       {/* Right: Est Time */}
                       <div className="text-right flex flex-col justify-center">
-                        <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider font-mono leading-none">Est Time</span>
-                        <span className={`text-[10px] font-bold font-mono mt-0.5 leading-none ${
-                          row.isTotal ? 'text-blue-600' : 'text-slate-500'
+                        <span className="text-xs text-slate-400 font-normal leading-none font-sans">Est time</span>
+                        <span className={`text-xs font-medium mt-0.5 leading-none ${
+                          row.isTotal ? 'text-indigo-600' : 'text-slate-500'
                         }`}>
                           {formatDuration(row.estMinutes)}
                         </span>
                       </div>
                     </div>
                   ))}
-                </div>
-
-                {/* Progress completed label percentage */}
-                <div className="px-3 pb-2 pt-0.5 text-right font-mono shrink-0">
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                    Done: <span className="text-blue-600 font-extrabold">{progressPercent}%</span>
-                  </span>
-                </div>
-
-                {/* Horizontal custom extra thin progress bar */}
-                <div className="w-full bg-slate-100 h-1 mt-auto shrink-0">
-                  <div 
-                    className="bg-blue-600 h-full transition-all duration-300" 
-                    style={{ width: `${progressPercent}%` }}
-                  />
                 </div>
 
               </div>
@@ -748,6 +725,6 @@ export default function Dashboard() {
       </div>
 
     </div>
-  </div>
+    </div>
   );
 }
