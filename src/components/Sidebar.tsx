@@ -15,7 +15,6 @@ import {
 const Sidebar = () => {
   const { activeTab, setActiveTab, theme, setTheme, isSidebarOpen, setSidebarOpen } = useAppStore();
   const { profile, signOut } = useAuthStore();
-  const [isProfileOpen, setIsProfileOpen] = React.useState(false);
 
   const menuItems: { id: AppState['activeTab']; icon: any; roles: string[]; label: string }[] = [
     { id: 'TO-DO LIST', icon: ClipboardList, roles: ['master', 'admin', 'user'], label: 'To-do list' },
@@ -75,7 +74,7 @@ const Sidebar = () => {
       </nav>
 
       <div className="p-4 mt-auto space-y-4">
-        <div className="bg-slate-800/30 rounded-md p-3 border border-slate-850">
+        <div className="bg-slate-800/30 rounded-md p-3 border border-slate-800">
           <p className="text-xs font-medium text-slate-500 mb-2">System theme</p>
           <div className="flex gap-1.5">
             {themes.map(t => (
@@ -92,70 +91,52 @@ const Sidebar = () => {
           </div>
         </div>
 
-        <div className="relative">
-          <button 
-            onClick={() => setIsProfileOpen(!isProfileOpen)}
-            className="w-full flex items-center gap-2.5 p-2 bg-slate-800/20 rounded-md border border-slate-805 hover:bg-slate-800/40 transition-colors group text-left"
-          >
-            <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white font-semibold shadow-inner text-xs">
+        <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3.5 space-y-3">
+          {/* Header */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold shrink-0">
               {profile?.name?.charAt(0) || '?'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{profile?.name || 'Loading...'}</p>
-              <p className="text-xs text-slate-500 font-medium truncate">{profile?.role || 'user'}</p>
+              <p className="text-xs font-bold text-slate-200 truncate" title={profile?.name || 'Loading...'}>
+                {profile?.name || 'Loading...'}
+              </p>
+              <p className="text-[10px] text-slate-500 truncate" title={profile?.email || 'N/A'}>
+                {profile?.email || 'N/A'}
+              </p>
             </div>
-          </button>
+          </div>
 
-          {isProfileOpen && (
-            <div className="absolute left-full bottom-0 ml-3 w-64 bg-slate-850 border border-slate-700 rounded-xl shadow-2xl p-3 z-50 animate-in slide-in-from-left-2 duration-200 flex flex-col space-y-3">
-              {/* Basic Info */}
-              <div className="space-y-0.5">
-                <p className="text-xs font-bold text-slate-200 truncate">{profile?.name || 'Loading...'}</p>
-                <p className="text-[11px] font-normal text-slate-400 truncate">{profile?.email || 'N/A'}</p>
-              </div>
+          {/* Details - Role & Team */}
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <span className={cn(
+              "px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase shrink-0",
+              (profile?.role || 'user').toString().toLowerCase().trim() === 'master' 
+                ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' 
+                : (profile?.role || 'user').toString().toLowerCase().trim() === 'admin' 
+                  ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' 
+                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+            )}>
+              {profile?.role || 'user'}
+            </span>
 
-              {/* Details (darker background box) */}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-2.5 space-y-2">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-500 font-medium font-sans">Chức vụ</span>
-                  <span className={cn(
-                    "px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase",
-                    (profile?.role || 'user').toString().toLowerCase().trim() === 'master' 
-                      ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' 
-                      : (profile?.role || 'user').toString().toLowerCase().trim() === 'admin' 
-                        ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' 
-                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  )}>
-                    {profile?.role || 'user'}
-                  </span>
-                </div>
+            {profile?.team_ids && profile.team_ids.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px] border border-slate-700 truncate max-w-[100px]" title={profile.team_ids[0]}>
+                {profile.team_ids[0]}
+              </span>
+            )}
+          </div>
 
-                {profile?.team_ids && profile.team_ids.length > 0 && (
-                  <div className="pt-2 border-t border-slate-800/60">
-                    <p className="text-[10px] text-slate-500 mb-1.5 font-medium font-sans">Phòng ban tham gia:</p>
-                    <div className="flex gap-1 flex-wrap">
-                      {profile.team_ids.map((teamId: string) => (
-                        <span key={teamId} className="px-1.5 py-0.5 rounded bg-slate-850 text-slate-300 font-bold text-[9px] border border-slate-750">
-                          {teamId}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Signout Button */}
-              <div className="pt-2 border-t border-slate-800">
-                <button 
-                  onClick={() => signOut()}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Đăng xuất</span>
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Nút Đăng xuất */}
+          <div className="pt-2.5 border-t border-slate-800/80">
+            <button 
+              onClick={() => signOut()}
+              className="w-full flex items-center gap-2 text-rose-400 hover:bg-rose-500/10 py-1.5 px-2 rounded-md transition-colors text-xs font-medium text-left"
+            >
+              <LogOut className="w-3.5 h-3.5 shrink-0" />
+              <span>Đăng xuất</span>
+            </button>
+          </div>
         </div>
       </div>
     </aside>

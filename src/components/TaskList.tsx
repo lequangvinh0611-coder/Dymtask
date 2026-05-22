@@ -8,6 +8,7 @@ import { DateRangePicker } from './ui/DateRangePicker';
 import { FilterSelect } from './ui/FilterSelect';
 import { toast } from 'sonner';
 import { useAppStore } from '../types';
+import { useAuthStore } from '../store/authStore';
 
 // TS interfaces matching the schema
 interface SubTask {
@@ -41,6 +42,7 @@ interface DbTask {
   est_time: number;
   actual_time: number;
   created_at: string;
+  assignees?: string[];
 }
 
 const AVAILABLE_PROJECTS = ['【事務代行】HR TECH', 'GLOBAL OUTSOURCING', '求人媒体運用', 'RECRUITING MANAGEMENT', 'ADMIN OPERATIONS'];
@@ -105,6 +107,7 @@ const serializeTaskDescription = (metadata: TaskMetadata): string => {
 };
 
 const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
+  const { profile } = useAuthStore();
   const { showConfirm } = useAppStore();
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   // Database Tasks State (where status column is 'ON', i.e., template active)
@@ -133,15 +136,15 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   // Drawer slider panel
   const [openedTask, setOpenedTask] = useState<DbTask | null>(null);
 
-  // Initial tasks loader filtering status = 'ON' or active
+  // Initial tasks loader filtering is_active = true
   const loadActiveTasks = async () => {
     setLoading(true);
     try {
-      // Query templates configured active (status = 'ON')
+      // Query active tasks (is_active = true)
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .eq('status', 'ON')
+        .eq('is_active', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -280,8 +283,16 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
       // 2. Assignee / Personnel filter
       if (filterAssignee) {
-        const hasAssignee = task.sub_tasks.some(s => s.assignee === filterAssignee);
-        if (!hasAssignee) return false;
+        if (filterAssignee === 'ME') {
+          const myName = (profile?.name || '').toLowerCase().trim();
+          const hasInSubTask = task.sub_tasks.some(s => (s.assignee || '').toLowerCase().trim() === myName);
+          const hasInMain = task.assignees?.some(a => (a || '').toLowerCase().trim() === myName);
+          if (!hasInSubTask && !hasInMain) return false;
+        } else {
+          const hasInSubTask = task.sub_tasks.some(s => s.assignee === filterAssignee);
+          const hasInMain = task.assignees?.includes(filterAssignee);
+          if (!hasInSubTask && !hasInMain) return false;
+        }
       }
 
       // 3. Tag filter
@@ -630,7 +641,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
               setPage(1);
             }}
             defaultOptionLabel="Assignees"
-            options={assigneesOptions.map(person => ({ value: person, label: person }))}
+            options={[{value: 'ME', label: 'Chỉ việc của tôi'}, ...assigneesOptions.map(person => ({ value: person, label: person }))]}
             className="h-8 min-w-[120px]"
           />
 
