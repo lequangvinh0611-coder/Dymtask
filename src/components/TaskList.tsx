@@ -30,6 +30,7 @@ interface TaskMetadata {
   sub_tasks: SubTask[];
   todo_status?: 'NEW' | 'DONE' | 'SKIPPED'; // Checklist status stored in JSON
   todo_date?: string; // Date of list tracking
+  completions?: Record<string, { todo_status: 'NEW' | 'DONE' | 'SKIPPED', actual_time: number, sub_tasks?: SubTask[] }>;
 }
 
 interface DbTask {
@@ -44,6 +45,28 @@ interface DbTask {
   created_at: string;
   assignees?: string[];
 }
+
+interface VirtualTask extends DbTask {
+  virtual_id: string;
+  meta: TaskMetadata;
+  project_name?: string;
+  team_name?: string;
+  tag_name?: string;
+  todo_date: string;
+  todo_status: string;
+  sub_tasks: any[];
+}
+
+const getDatesBetween = (start: string, end: string) => {
+  const dates = [];
+  let curr = new Date(start);
+  const last = new Date(end);
+  while (curr <= last) {
+    dates.push(curr.toISOString().split('T')[0]);
+    curr.setDate(curr.getDate() + 1);
+  }
+  return dates;
+};
 
 const AVAILABLE_PROJECTS = ['【事務代行】HR TECH', 'GLOBAL OUTSOURCING', '求人媒体運用', 'RECRUITING MANAGEMENT', 'ADMIN OPERATIONS'];
 const AVAILABLE_TEAMS = ['内部・2課E', '内部・1課', 'アウトソーシングG', '人事総務部', '営業サポート課'];
@@ -134,7 +157,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
   // Drawer slider panel
-  const [openedTask, setOpenedTask] = useState<DbTask | null>(null);
+  const [openedTask, setOpenedTask] = useState<VirtualTask | null>(null);
 
   // Initial tasks loader filtering is_active = true
   const loadActiveTasks = async () => {
@@ -238,6 +261,67 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
     });
   }, [tasks]);
 
+  // Generate frontend trackable virtual tasks for 'DAILY' type within startDate & endDate
+  const virtualTasks = useMemo(() => {
+    const dates = getDatesBetween(startDate, endDate);
+    const list: VirtualTask[] = [];
+
+    parsedTasks.forEach(task => {
+      const isDaily = task.task_type?.toUpperCase() === 'DAILY';
+
+      if (isDaily) {
+        dates.forEach(date => {
+          const completions = task.meta.completions || {};
+          const completion = completions[date];
+          
+          const todo_status = completion?.todo_status || 'NEW';
+          const actual_time = completion?.actual_time || 0;
+          
+          // Map subtasks separately per date
+          const sub_tasks = completion?.sub_tasks || task.meta.sub_tasks.map(s => ({
+            ...s,
+            sub_status: 'New' as const,
+            actual_minutes: 0
+          }));
+
+          list.push({
+            ...task,
+            virtual_id: `${task.id}_${date}`,
+            todo_date: date,
+            todo_status,
+            actual_time,
+            sub_tasks
+          });
+        });
+      } else {
+        const todo_date = task.todo_date || new Date(task.created_at).toISOString().split('T')[0];
+        list.push({
+          ...task,
+          virtual_id: task.id,
+          todo_date,
+          todo_status: task.todo_status || 'NEW',
+          sub_tasks: task.sub_tasks || []
+        });
+      }
+    });
+
+    return list;
+  }, [parsedTasks, startDate, endDate]);
+
+  // Sync opened task dynamically inside the slider drawer
+  useEffect(() => {
+    if (openedTask) {
+      const updatedOpenedTask = virtualTasks.find(t => t.virtual_id === openedTask.virtual_id);
+      if (updatedOpenedTask) {
+        const strA = JSON.stringify(updatedOpenedTask);
+        const strB = JSON.stringify(openedTask);
+        if (strA !== strB) {
+          setOpenedTask(updatedOpenedTask);
+        }
+      }
+    }
+  }, [virtualTasks, openedTask]);
+
   // Extract dynamically options list
   const assigneesOptions = useMemo(() => {
     if (assigneesList.length > 0) {
@@ -269,7 +353,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
   // Filter logic
   const filteredTasks = useMemo(() => {
-    return parsedTasks.filter(task => {
+    return virtualTasks.filter(task => {
       // 1. Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -314,8 +398,32 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
       }
 
       return true;
+    }).sort((a, b) => {
+      const dateA = a.todo_date || '';
+      const dateB = b.todo_date || '';
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+      const dlA = a.deadline_time || '';
+      const dlB = b.deadline_time || '';
+      if (dlA !== dlB) return dlA.localeCompare(dlB);
+
+      const teamA = a.team_name || '';
+      const teamB = b.team_name || '';
+      if (teamA !== teamB) return teamA.localeCompare(teamB);
+
+      const projA = a.project_name || '';
+      const projB = b.project_name || '';
+      if (projA !== projB) return projA.localeCompare(projB);
+
+      const tagA = a.tag_name || '';
+      const tagB = b.tag_name || '';
+      if (tagA !== tagB) return tagA.localeCompare(tagB);
+
+      const titleA = a.title || '';
+      const titleB = b.title || '';
+      return titleA.localeCompare(titleB);
     });
-  }, [parsedTasks, searchQuery, filterAssignee, filterTag, filterProject, filterTeam, filterTodoStatus, startDate, endDate]);
+  }, [virtualTasks, searchQuery, filterAssignee, filterTag, filterProject, filterTeam, filterTodoStatus, startDate, endDate, profile]);
 
   // Paginated client side calculation
   const totalCount = filteredTasks.length;
@@ -326,13 +434,13 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   }, [filteredTasks, page]);
 
   // Handle checking checkbox
-  const handleToggleSelectRow = (taskId: string) => {
+  const handleToggleSelectRow = (virtualId: string) => {
     setSelectedTaskIds(prev => {
       const next = new Set(prev);
-      if (next.has(taskId)) {
-        next.delete(taskId);
+      if (next.has(virtualId)) {
+        next.delete(virtualId);
       } else {
-        next.add(taskId);
+        next.add(virtualId);
       }
       return next;
     });
@@ -342,204 +450,437 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
     if (selectedTaskIds.size === paginatedTasks.length) {
       setSelectedTaskIds(new Set());
     } else {
-      setSelectedTaskIds(new Set(paginatedTasks.map(t => t.id)));
+      setSelectedTaskIds(new Set(paginatedTasks.map(t => t.virtual_id)));
     }
   };
 
   // Submit task directly changing status to DONE from actions button
-  const handleDirectSubmit = async (task: DbTask) => {
+  const handleDirectSubmit = async (task: VirtualTask) => {
     const meta = parseTaskDescription(task.description);
-    
-    // Set all sub-tasks to completed as default if not already, and sync times
-    const updatedSubTasks = (meta.sub_tasks || []).map(sub => ({
-      ...sub,
-      sub_status: (sub.sub_status === 'Skipped' ? 'Skipped' : 'Done') as 'New' | 'Done' | 'Skipped',
-      actual_minutes: sub.actual_minutes !== undefined ? sub.actual_minutes : sub.estimated_minutes
-    }));
+    const isDaily = task.task_type?.toUpperCase() === 'DAILY';
 
-    const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
+    if (isDaily) {
+      // Set all sub-tasks to completed as default if not already, and sync times
+      const updatedSubTasks = (task.sub_tasks || []).map(sub => {
+        const sub_status = (sub.sub_status === 'Skipped' ? 'Skipped' : 'Done') as 'New' | 'Done' | 'Skipped';
+        const actual_minutes = sub.actual_minutes !== undefined && sub.actual_minutes > 0 ? sub.actual_minutes : (sub_status === 'Skipped' ? 0 : sub.estimated_minutes);
+        return {
+          ...sub,
+          sub_status,
+          actual_minutes
+        };
+      });
 
-    const updatedMeta: TaskMetadata = {
-      ...meta,
-      todo_status: 'DONE',
-      sub_tasks: updatedSubTasks
-    };
+      const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
+      const hasSubtasks = updatedSubTasks.length > 0;
+      const allSkipped = hasSubtasks && updatedSubTasks.every(sub => sub.sub_status === 'Skipped');
+      const finalStatus = allSkipped ? 'SKIPPED' : 'DONE';
 
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          description: serializeTaskDescription(updatedMeta),
-          actual_time: calculated_actual_time
-        })
-        .eq('id', task.id);
+      const completions = meta.completions || {};
+      completions[task.todo_date] = {
+        todo_status: finalStatus,
+        actual_time: calculated_actual_time,
+        sub_tasks: updatedSubTasks
+      };
 
-      if (error) throw error;
+      const updatedMeta: TaskMetadata = {
+        ...meta,
+        completions
+      };
 
-      // Sync local tasks state list
-      setTasks(prev => prev.map(t => t.id === task.id ? {
-        ...t,
-        description: serializeTaskDescription(updatedMeta),
-        actual_time: calculated_actual_time
-      } : t));
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            description: serializeTaskDescription(updatedMeta)
+          })
+          .eq('id', task.id);
 
-      if (openedTask && openedTask.id === task.id) {
-        setOpenedTask({
-          ...openedTask,
-          description: serializeTaskDescription(updatedMeta),
-          actual_time: calculated_actual_time
-        });
+        if (error) throw error;
+
+        // Sync local tasks state list
+        setTasks(prev => prev.map(t => t.id === task.id ? {
+          ...t,
+          description: serializeTaskDescription(updatedMeta)
+        } : t));
+
+        if (openedTask && openedTask.id === task.id && openedTask.todo_date === task.todo_date) {
+          setOpenedTask({
+            ...openedTask,
+            description: serializeTaskDescription(updatedMeta),
+            actual_time: calculated_actual_time,
+            todo_status: finalStatus,
+            sub_tasks: updatedSubTasks
+          });
+        }
+      } catch (err) {
+        console.error('Error submitting task:', err);
       }
-    } catch (err) {
-      console.error('Error submitting task:', err);
+    } else {
+      // Set all sub-tasks to completed as default if not already, and sync times
+      const updatedSubTasks = (meta.sub_tasks || []).map(sub => {
+        const sub_status = (sub.sub_status === 'Skipped' ? 'Skipped' : 'Done') as 'New' | 'Done' | 'Skipped';
+        const actual_minutes = sub.actual_minutes !== undefined && sub.actual_minutes > 0 ? sub.actual_minutes : (sub_status === 'Skipped' ? 0 : sub.estimated_minutes);
+        return {
+          ...sub,
+          sub_status,
+          actual_minutes
+        };
+      });
+
+      const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
+      const hasSubtasks = updatedSubTasks.length > 0;
+      const allSkipped = hasSubtasks && updatedSubTasks.every(sub => sub.sub_status === 'Skipped');
+      const finalStatus = allSkipped ? 'SKIPPED' : 'DONE';
+
+      const updatedMeta: TaskMetadata = {
+        ...meta,
+        todo_status: finalStatus,
+        sub_tasks: updatedSubTasks
+      };
+
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            description: serializeTaskDescription(updatedMeta),
+            actual_time: calculated_actual_time
+          })
+          .eq('id', task.id);
+
+        if (error) throw error;
+
+        // Sync local tasks state list
+        setTasks(prev => prev.map(t => t.id === task.id ? {
+          ...t,
+          description: serializeTaskDescription(updatedMeta),
+          actual_time: calculated_actual_time
+        } : t));
+
+        if (openedTask && openedTask.id === task.id) {
+          setOpenedTask({
+            ...openedTask,
+            description: serializeTaskDescription(updatedMeta),
+            actual_time: calculated_actual_time,
+            todo_status: finalStatus,
+            sub_tasks: updatedSubTasks
+          });
+        }
+      } catch (err) {
+        console.error('Error submitting task:', err);
+      }
     }
   };
 
   // Reset task back to NEW or other status adjustments inside the slider drawer
-  const handleResetTask = async (task: DbTask) => {
+  const handleResetTask = async (task: VirtualTask) => {
     const meta = parseTaskDescription(task.description);
-    
-    // Reset individual sub-tasks to New and actual mins to 0
-    const updatedSubTasks = (meta.sub_tasks || []).map(sub => ({
-      ...sub,
-      sub_status: 'New' as const,
-      actual_minutes: 0
-    }));
+    const isDaily = task.task_type?.toUpperCase() === 'DAILY';
 
-    const updatedMeta: TaskMetadata = {
-      ...meta,
-      todo_status: 'NEW',
-      sub_tasks: updatedSubTasks
-    };
+    if (isDaily) {
+      const completions = meta.completions || {};
+      // Reset individual sub-tasks to New and actual mins to 0
+      const updatedSubTasks = (task.sub_tasks || []).map(sub => ({
+        ...sub,
+        sub_status: 'New' as const,
+        actual_minutes: 0
+      }));
 
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          description: serializeTaskDescription(updatedMeta),
-          actual_time: 0
-        })
-        .eq('id', task.id);
+      completions[task.todo_date] = {
+        todo_status: 'NEW',
+        actual_time: 0,
+        sub_tasks: updatedSubTasks
+      };
 
-      if (error) throw error;
+      const updatedMeta: TaskMetadata = {
+        ...meta,
+        completions
+      };
 
-      // Sync state
-      setTasks(prev => prev.map(t => t.id === task.id ? {
-        ...t,
-        description: serializeTaskDescription(updatedMeta),
-        actual_time: 0
-      } : t));
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            description: serializeTaskDescription(updatedMeta)
+          })
+          .eq('id', task.id);
 
-      if (openedTask && openedTask.id === task.id) {
-        setOpenedTask({
-          ...openedTask,
-          description: serializeTaskDescription(updatedMeta),
-          actual_time: 0
-        });
+        if (error) throw error;
+
+        // Sync state
+        setTasks(prev => prev.map(t => t.id === task.id ? {
+          ...t,
+          description: serializeTaskDescription(updatedMeta)
+        } : t));
+
+        if (openedTask && openedTask.id === task.id && openedTask.todo_date === task.todo_date) {
+          setOpenedTask({
+            ...openedTask,
+            description: serializeTaskDescription(updatedMeta),
+            actual_time: 0,
+            todo_status: 'NEW',
+            sub_tasks: updatedSubTasks
+          });
+        }
+      } catch (err) {
+        console.error('Error resetting task:', err);
       }
-    } catch (err) {
-      console.error('Error resetting task:', err);
+    } else {
+      // Reset individual sub-tasks to New and actual mins to 0
+      const updatedSubTasks = (meta.sub_tasks || []).map(sub => ({
+        ...sub,
+        sub_status: 'New' as const,
+        actual_minutes: 0
+      }));
+
+      const updatedMeta: TaskMetadata = {
+        ...meta,
+        todo_status: 'NEW',
+        sub_tasks: updatedSubTasks
+      };
+
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            description: serializeTaskDescription(updatedMeta),
+            actual_time: 0
+          })
+          .eq('id', task.id);
+
+        if (error) throw error;
+
+        // Sync state
+        setTasks(prev => prev.map(t => t.id === task.id ? {
+          ...t,
+          description: serializeTaskDescription(updatedMeta),
+          actual_time: 0
+        } : t));
+
+        if (openedTask && openedTask.id === task.id) {
+          setOpenedTask({
+            ...openedTask,
+            description: serializeTaskDescription(updatedMeta),
+            actual_time: 0,
+            todo_status: 'NEW',
+            sub_tasks: updatedSubTasks
+          });
+        }
+      } catch (err) {
+        console.error('Error resetting task:', err);
+      }
     }
   };
 
   // Skip task checklist representation completely
-  const handleSkipTask = async (task: DbTask) => {
+  const handleSkipTask = async (task: VirtualTask) => {
     const meta = parseTaskDescription(task.description);
-    
-    const updatedMeta: TaskMetadata = {
-      ...meta,
-      todo_status: 'SKIPPED'
-    };
+    const isDaily = task.task_type?.toUpperCase() === 'DAILY';
 
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({
+    if (isDaily) {
+      const completions = meta.completions || {};
+      const currentCompletion = completions[task.todo_date] || {
+        todo_status: 'NEW',
+        actual_time: 0,
+        sub_tasks: (task.sub_tasks || []).map(sub => ({
+          ...sub,
+          sub_status: 'New' as const,
+          actual_minutes: 0
+        }))
+      };
+
+      completions[task.todo_date] = {
+        ...currentCompletion,
+        todo_status: 'SKIPPED'
+      };
+
+      const updatedMeta: TaskMetadata = {
+        ...meta,
+        completions
+      };
+
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            description: serializeTaskDescription(updatedMeta)
+          })
+          .eq('id', task.id);
+
+        if (error) throw error;
+
+        setTasks(prev => prev.map(t => t.id === task.id ? {
+          ...t,
           description: serializeTaskDescription(updatedMeta)
-        })
-        .eq('id', task.id);
+        } : t));
 
-      if (error) throw error;
-
-      setTasks(prev => prev.map(t => t.id === task.id ? {
-        ...t,
-        description: serializeTaskDescription(updatedMeta)
-      } : t));
-
-      if (openedTask && openedTask.id === task.id) {
-        setOpenedTask({
-          ...openedTask,
-          description: serializeTaskDescription(updatedMeta)
-        });
+        if (openedTask && openedTask.id === task.id && openedTask.todo_date === task.todo_date) {
+          setOpenedTask({
+            ...openedTask,
+            description: serializeTaskDescription(updatedMeta),
+            todo_status: 'SKIPPED'
+          });
+        }
+      } catch (err) {
+        console.error('Error skipping task:', err);
       }
-    } catch (err) {
-      console.error('Error skipping task:', err);
+    } else {
+      const updatedMeta: TaskMetadata = {
+        ...meta,
+        todo_status: 'SKIPPED'
+      };
+
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            description: serializeTaskDescription(updatedMeta)
+          })
+          .eq('id', task.id);
+
+        if (error) throw error;
+
+        setTasks(prev => prev.map(t => t.id === task.id ? {
+          ...t,
+          description: serializeTaskDescription(updatedMeta)
+        } : t));
+
+        if (openedTask && openedTask.id === task.id) {
+          setOpenedTask({
+            ...openedTask,
+            description: serializeTaskDescription(updatedMeta),
+            todo_status: 'SKIPPED'
+          });
+        }
+      } catch (err) {
+        console.error('Error skipping task:', err);
+      }
     }
   };
 
   // Update specific sub-task work characteristics (Actual Minutes or Status) inside the drawer
   const handleUpdateSubtaskValue = async (
-    task: DbTask, 
+    task: VirtualTask, 
     subtaskId: string, 
     fields: Partial<Pick<SubTask, 'actual_minutes' | 'sub_status'>>
   ) => {
     const meta = parseTaskDescription(task.description);
-    
-    const updatedSubTasks = (meta.sub_tasks || []).map(sub => {
-      if (sub.id === subtaskId) {
-        return {
+    const isDaily = task.task_type?.toUpperCase() === 'DAILY';
+
+    if (isDaily) {
+      const completions = meta.completions || {};
+      const currentCompletion = completions[task.todo_date] || {
+        todo_status: 'NEW' as const,
+        actual_time: 0,
+        sub_tasks: (task.sub_tasks || []).map(sub => ({
           ...sub,
-          ...fields
-        };
-      }
-      return sub;
-    });
-
-    const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
-
-    // If all sub-tasks are done, do we set the parent status to DONE? 
-    // Let's keep it manual or auto-adjust parent state helper
-    let newParentTodoStatus = meta.todo_status || 'NEW';
-    const isAllDone = updatedSubTasks.length > 0 && updatedSubTasks.every(s => s.sub_status === 'Done');
-    if (isAllDone) {
-      newParentTodoStatus = 'DONE';
-    }
-
-    const updatedMeta: TaskMetadata = {
-      ...meta,
-      todo_status: newParentTodoStatus,
-      sub_tasks: updatedSubTasks
-    };
-
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          description: serializeTaskDescription(updatedMeta),
-          actual_time: calculated_actual_time
-        })
-        .eq('id', task.id);
-
-      if (error) throw error;
-
-      // Local state adjustment
-      setTasks(prev => prev.map(t => t.id === task.id ? {
-        ...t,
-        description: serializeTaskDescription(updatedMeta),
-        actual_time: calculated_actual_time
-      } : t));
-
-      const syncedTask = {
-        ...task,
-        description: serializeTaskDescription(updatedMeta),
-        actual_time: calculated_actual_time
+          sub_status: 'New' as const,
+          actual_minutes: 0
+        }))
       };
 
-      if (openedTask && openedTask.id === task.id) {
-        setOpenedTask(syncedTask);
+      const updatedSubTasks = currentCompletion.sub_tasks.map(sub => {
+        if (sub.id === subtaskId) {
+          return {
+            ...sub,
+            ...fields
+          };
+        }
+        return sub;
+      });
+
+      const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
+      const parentTodoStatus = currentCompletion.todo_status || 'NEW';
+
+      completions[task.todo_date] = {
+        todo_status: parentTodoStatus,
+        actual_time: calculated_actual_time,
+        sub_tasks: updatedSubTasks
+      };
+
+      const updatedMeta: TaskMetadata = {
+        ...meta,
+        completions
+      };
+
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            description: serializeTaskDescription(updatedMeta)
+          })
+          .eq('id', task.id);
+
+        if (error) throw error;
+
+        // Local state adjustment
+        setTasks(prev => prev.map(t => t.id === task.id ? {
+          ...t,
+          description: serializeTaskDescription(updatedMeta)
+        } : t));
+
+        if (openedTask && openedTask.id === task.id && openedTask.todo_date === task.todo_date) {
+          setOpenedTask({
+            ...openedTask,
+            description: serializeTaskDescription(updatedMeta),
+            actual_time: calculated_actual_time,
+            todo_status: parentTodoStatus,
+            sub_tasks: updatedSubTasks
+          });
+        }
+      } catch (err) {
+        console.error('Error updating subtask value:', err);
       }
-    } catch (err) {
-      console.error('Error updating subtask value:', err);
+    } else {
+      const updatedSubTasks = (meta.sub_tasks || []).map(sub => {
+        if (sub.id === subtaskId) {
+          return {
+            ...sub,
+            ...fields
+          };
+        }
+        return sub;
+      });
+
+      const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
+      const parentTodoStatus = meta.todo_status || 'NEW';
+
+      const updatedMeta: TaskMetadata = {
+        ...meta,
+        todo_status: parentTodoStatus,
+        sub_tasks: updatedSubTasks
+      };
+
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            description: serializeTaskDescription(updatedMeta),
+            actual_time: calculated_actual_time
+          })
+          .eq('id', task.id);
+
+        if (error) throw error;
+
+        // Local state adjustment
+        setTasks(prev => prev.map(t => t.id === task.id ? {
+          ...t,
+          description: serializeTaskDescription(updatedMeta),
+          actual_time: calculated_actual_time
+        } : t));
+
+        if (openedTask && openedTask.id === task.id) {
+          setOpenedTask({
+            ...openedTask,
+            description: serializeTaskDescription(updatedMeta),
+            actual_time: calculated_actual_time,
+            todo_status: parentTodoStatus,
+            sub_tasks: updatedSubTasks
+          });
+        }
+      } catch (err) {
+        console.error('Error updating subtask value:', err);
+      }
     }
   };
 
@@ -589,8 +930,8 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
       onConfirm: async () => {
         setIsBulkSubmitting(true);
         try {
-          for (const taskId of selectedTaskIds) {
-            const taskObj = tasks.find(t => t.id === taskId);
+          for (const virtualId of selectedTaskIds) {
+            const taskObj = virtualTasks.find(t => t.virtual_id === virtualId);
             if (taskObj) {
               await handleDirectSubmit(taskObj);
             }
@@ -645,18 +986,6 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             className="h-8 min-w-[120px]"
           />
 
-          {/* Tag filter */}
-          <FilterSelect
-            value={filterTag}
-            onChange={(val) => {
-              setFilterTag(val);
-              setPage(1);
-            }}
-            defaultOptionLabel="Tags"
-            options={tagsOptions.map(tag => ({ value: tag, label: tag }))}
-            className="h-8 min-w-[105px]"
-          />
-
           {/* Project filter */}
           <FilterSelect
             value={filterProject}
@@ -666,6 +995,18 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             }}
             defaultOptionLabel="Projects"
             options={projectsOptions.map(proj => ({ value: proj, label: proj }))}
+            className="h-8 min-w-[105px]"
+          />
+
+          {/* Tag filter */}
+          <FilterSelect
+            value={filterTag}
+            onChange={(val) => {
+              setFilterTag(val);
+              setPage(1);
+            }}
+            defaultOptionLabel="Tags"
+            options={tagsOptions.map(tag => ({ value: tag, label: tag }))}
             className="h-8 min-w-[105px]"
           />
 
@@ -781,8 +1122,8 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
                 </th>
                 <th className="w-[10%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Id</th>
                 <th className="w-[21%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Task Name</th>
-                <th className="w-[11%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Tag</th>
                 <th className="w-[17%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Project</th>
+                <th className="w-[11%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Tag</th>
                 <th className="w-[11%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Team</th>
                 <th className="w-[8%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 text-center bg-slate-100">Type</th>
                 <th className="w-[12%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Deadline</th>
@@ -793,17 +1134,17 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedTasks.map((task) => {
-                const isChecked = selectedTaskIds.has(task.id);
+                const isChecked = selectedTaskIds.has(task.virtual_id);
                 return (
                   <tr 
-                    key={task.id} 
+                    key={task.virtual_id} 
                     className="h-9 hover:bg-slate-50/50 transition-colors group cursor-pointer"
                     onClick={() => setOpenedTask(task)}
                   >
                     {/* Checkbox selector item */}
                     <td className="px-3 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                       <button 
-                        onClick={() => handleToggleSelectRow(task.id)}
+                        onClick={() => handleToggleSelectRow(task.virtual_id)}
                         className="text-slate-400 hover:text-indigo-600 transition-colors"
                       >
                         {isChecked ? (
@@ -828,17 +1169,17 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
                       </span>
                     </td>
 
-                    {/* Tag label */}
-                    <td className="px-3 py-1.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                      <span className="inline-block bg-slate-50 border border-slate-100 px-2 py-0.5 rounded text-xs text-slate-600 truncate max-w-full font-medium">
-                        {task.tag_name || '数値報告'}
-                      </span>
-                    </td>
-
                     {/* Project */}
                     <td className="px-3 py-1.5 overflow-hidden">
                       <span className="text-slate-600 text-xs truncate block font-normal">
                         {task.project_name}
+                      </span>
+                    </td>
+
+                    {/* Tag label */}
+                    <td className="px-3 py-1.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                      <span className="inline-block bg-slate-50 border border-slate-100 px-2 py-0.5 rounded text-xs text-slate-600 truncate max-w-full font-medium">
+                        {task.tag_name || '数値報告'}
                       </span>
                     </td>
 
@@ -861,7 +1202,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
                       <div className="flex items-center gap-1.5 text-xs text-slate-600">
                         <Clock size={12} className="text-slate-400 shrink-0" />
                         <span className="truncate" title={`${task.deadline_time || '08:30'} ${task.deadline_days || 'Mon - Fri'}`}>
-                          {task.deadline_time || '08:30'}
+                          {task.todo_date} ({task.deadline_time || '08:30'})
                         </span>
                       </div>
                     </td>
@@ -997,39 +1338,22 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               
-              {/* TASK STATUS Section showing status indicator and Undo */}
+              {/* TASK STATUS Section showing status indicator */}
               <div className="space-y-2 pb-3 border-b border-slate-100">
                 <span className="text-xs font-semibold text-slate-500 block">Task status</span>
                 
                 <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-120">
                   <div className="flex items-center gap-1.5">
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      openedTaskParsedMeta.todo_status === 'DONE' 
+                      openedTask.todo_status === 'DONE' 
                         ? 'bg-emerald-500' 
-                        : openedTaskParsedMeta.todo_status === 'SKIPPED'
+                        : openedTask.todo_status === 'SKIPPED'
                           ? 'bg-slate-400'
                           : 'bg-blue-500'
                     }`} />
                     <span className="text-xs text-slate-600">
-                      {openedTaskParsedMeta.todo_status === 'DONE' ? 'Done' : openedTaskParsedMeta.todo_status === 'SKIPPED' ? 'Skipped' : 'New'}
+                      {openedTask.todo_status === 'DONE' ? 'Done' : openedTask.todo_status === 'SKIPPED' ? 'Skipped' : 'New'}
                     </span>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    {openedTaskParsedMeta.todo_status !== 'SKIPPED' && (
-                      <button
-                        onClick={() => handleSkipTask(openedTask)}
-                        className="px-2.5 h-7 hover:bg-amber-50 hover:text-amber-600 transition-colors text-slate-500 text-xs font-medium rounded border border-slate-200 bg-white"
-                      >
-                        Skip task
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleResetTask(openedTask)}
-                      className="px-2.5 h-7 hover:bg-slate-120 transition-colors text-slate-600 text-xs font-medium rounded border border-slate-200 bg-white"
-                    >
-                      Reset task
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1046,8 +1370,8 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
                 </div>
 
                 <div className="space-y-2">
-                  {openedTaskParsedMeta.sub_tasks && openedTaskParsedMeta.sub_tasks.length > 0 ? (
-                    openedTaskParsedMeta.sub_tasks.map((sub, index) => {
+                  {openedTask.sub_tasks && openedTask.sub_tasks.length > 0 ? (
+                    openedTask.sub_tasks.map((sub, index) => {
                       const currentSubStatus = sub.sub_status || 'New';
                       return (
                         <div 
@@ -1114,10 +1438,10 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
             {/* Submit template button at bottom of Side Drawer */}
             <div className="p-4 border-t border-slate-100 shrink-0">
-              {openedTaskParsedMeta.todo_status === 'NEW' ? (
+              {openedTask.todo_status === 'NEW' ? (
                 <button 
                   onClick={() => handleDirectSubmit(openedTask)}
-                  className="w-full h-8 bg-blue-600 hover:bg-blue-700 transition-all text-white rounded text-xs font-semibold flex items-center justify-center gap-2 shadow-sm"
+                  className="w-full h-8 bg-blue-600 hover:bg-blue-700 transition-all text-white rounded text-xs font-semibold flex items-center justify-center gap-2 shadow-sm pointer-events-auto"
                 >
                   <Check size={14} />
                   <span>Submit task</span>
@@ -1125,9 +1449,10 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
               ) : (
                 <button 
                   onClick={() => handleResetTask(openedTask)}
-                  className="w-full h-8 bg-slate-100 hover:bg-slate-200 transition-all text-slate-600 rounded text-xs font-semibold flex items-center justify-center gap-2 border border-slate-200"
+                  className="w-full h-8 bg-slate-600 hover:bg-slate-700 transition-all text-white rounded text-xs font-semibold flex items-center justify-center gap-2 shadow-sm pointer-events-auto"
                 >
-                  <span>Re-open task to New</span>
+                  <RotateCcw size={14} />
+                  <span>Reset task</span>
                 </button>
               )}
             </div>
