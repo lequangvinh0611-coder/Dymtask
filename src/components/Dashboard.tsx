@@ -35,7 +35,7 @@ interface TaskMetadata {
   completions?: Record<string, { todo_status: 'NEW' | 'DONE' | 'SKIPPED', actual_time: number, sub_tasks?: SubTask[] }>;
 }
 
-const parseDescriptionMeta = (descriptionStr: string | null): TaskMetadata => {
+const parseDescriptionMeta = (descriptionStr: any): TaskMetadata => {
   const defaultMeta: TaskMetadata = {
     description: '',
     project_name: '【事務代行】HR TECH',
@@ -48,30 +48,47 @@ const parseDescriptionMeta = (descriptionStr: string | null): TaskMetadata => {
 
   if (!descriptionStr) return defaultMeta;
 
-  const trimmed = descriptionStr.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      return {
-        description: parsed.description || '',
-        project_name: parsed.project_name || '【事務代行】HR TECH',
-        team_name: parsed.team_name || '内部・1課',
-        tag_name: parsed.tag_name || '数値報告',
-        deadline_time: parsed.deadline_time || '17:00',
-        deadline_days: parsed.deadline_days || 'Mon - Fri',
-        sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : [],
-        todo_status: parsed.todo_status,
-        todo_date: parsed.todo_date,
-        completions: parsed.completions
-      };
-    } catch {
-      // ignore JSON error
+  if (typeof descriptionStr === 'object') {
+    return {
+      description: descriptionStr.description || '',
+      project_name: descriptionStr.project_name || '【事務代行】HR TECH',
+      team_name: descriptionStr.team_name || '内部・1課',
+      tag_name: descriptionStr.tag_name || '数値報告',
+      deadline_time: descriptionStr.deadline_time || '17:00',
+      deadline_days: descriptionStr.deadline_days || 'Mon - Fri',
+      sub_tasks: Array.isArray(descriptionStr.sub_tasks) ? descriptionStr.sub_tasks : [],
+      todo_status: descriptionStr.todo_status,
+      todo_date: descriptionStr.todo_date,
+      completions: descriptionStr.completions
+    };
+  }
+
+  if (typeof descriptionStr === 'string') {
+    const trimmed = descriptionStr.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return {
+          description: parsed.description || '',
+          project_name: parsed.project_name || '【事務代行】HR TECH',
+          team_name: parsed.team_name || '内部・1課',
+          tag_name: parsed.tag_name || '数値報告',
+          deadline_time: parsed.deadline_time || '17:00',
+          deadline_days: parsed.deadline_days || 'Mon - Fri',
+          sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : [],
+          todo_status: parsed.todo_status,
+          todo_date: parsed.todo_date,
+          completions: parsed.completions
+        };
+      } catch {
+        // ignore JSON error
+      }
     }
   }
 
   return {
     ...defaultMeta,
-    description: descriptionStr
+    description: String(descriptionStr)
   };
 };
 

@@ -15,6 +15,7 @@ import {
 const Sidebar = () => {
   const { activeTab, setActiveTab, theme, setTheme, isSidebarOpen, setSidebarOpen } = useAppStore();
   const { profile, signOut } = useAuthStore();
+  const currentUser = profile;
 
   const menuItems: { id: AppState['activeTab']; icon: any; roles: string[]; label: string }[] = [
     { id: 'TO-DO LIST', icon: ClipboardList, roles: ['master', 'admin', 'user'], label: 'To-do list' },
@@ -121,11 +122,9 @@ const Sidebar = () => {
               {profile?.role || 'user'}
             </span>
 
-            {profile?.team_ids && profile.team_ids.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px] border border-slate-700 truncate max-w-[100px]" title={profile.team_ids[0]}>
-                {profile.team_ids[0]}
-              </span>
-            )}
+            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px] border border-slate-700 truncate max-w-[100px]" title={currentUser?.team_ids?.[0] || 'No Team'}>
+              {currentUser?.team_ids?.[0] || 'No Team'}
+            </span>
           </div>
 
           {/* Nút Đăng xuất */}
