@@ -131,6 +131,7 @@ const serializeTaskDescription = (metadata: TaskMetadata): string => {
 
 const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   const { profile } = useAuthStore();
+  const isUser = (profile?.role || '').toString().toLowerCase().trim() === 'user';
   const { showConfirm } = useAppStore();
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   // Database Tasks State (where status column is 'ON', i.e., template active)
@@ -155,6 +156,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
   // Selected tasks (checkbox selection column)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [isQuickSkipMode, setIsQuickSkipMode] = useState(false);
 
   // Drawer slider panel
   const [openedTask, setOpenedTask] = useState<VirtualTask | null>(null);
@@ -457,25 +459,26 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   // Submit task directly changing status to DONE from actions button
   const handleDirectSubmit = async (task: VirtualTask) => {
     const meta = parseTaskDescription(task.description);
-    const isDaily = task.task_type?.toUpperCase() === 'DAILY';
+    const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
 
-    if (isDaily) {
-      // Set all sub-tasks to completed as default if not already, and sync times
-      const updatedSubTasks = (task.sub_tasks || []).map(sub => {
-        const sub_status = (sub.sub_status === 'Skipped' ? 'Skipped' : 'Done') as 'New' | 'Done' | 'Skipped';
-        const actual_minutes = sub.actual_minutes !== undefined && sub.actual_minutes > 0 ? sub.actual_minutes : (sub_status === 'Skipped' ? 0 : sub.estimated_minutes);
-        return {
-          ...sub,
-          sub_status,
-          actual_minutes
-        };
-      });
+    // Auto complete all 'New' sub-tasks to 'Done' if submitted from list, or protect drawer choices
+    const updatedSubTasks = (task.sub_tasks || []).map(sub => {
+      const current_sub_status = sub.sub_status || 'New';
+      const sub_status = (current_sub_status === 'New' ? 'Done' : current_sub_status) as 'New' | 'Done' | 'Skipped';
+      const actual_minutes = sub.actual_minutes !== undefined && sub.actual_minutes > 0 ? sub.actual_minutes : (sub_status === 'Skipped' ? 0 : sub.estimated_minutes);
+      return {
+        ...sub,
+        sub_status,
+        actual_minutes
+      };
+    });
 
-      const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
-      const hasSubtasks = updatedSubTasks.length > 0;
-      const allSkipped = hasSubtasks && updatedSubTasks.every(sub => sub.sub_status === 'Skipped');
-      const finalStatus = allSkipped ? 'SKIPPED' : 'DONE';
+    const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
+    const hasSubtasks = updatedSubTasks.length > 0;
+    const allSkipped = hasSubtasks && updatedSubTasks.every(sub => sub.sub_status === 'Skipped');
+    const finalStatus = allSkipped ? 'SKIPPED' : 'DONE';
 
+    if (isRecurring) {
       const completions = meta.completions || {};
       completions[task.todo_date] = {
         todo_status: finalStatus,
@@ -517,22 +520,6 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         console.error('Error submitting task:', err);
       }
     } else {
-      // Set all sub-tasks to completed as default if not already, and sync times
-      const updatedSubTasks = (meta.sub_tasks || []).map(sub => {
-        const sub_status = (sub.sub_status === 'Skipped' ? 'Skipped' : 'Done') as 'New' | 'Done' | 'Skipped';
-        const actual_minutes = sub.actual_minutes !== undefined && sub.actual_minutes > 0 ? sub.actual_minutes : (sub_status === 'Skipped' ? 0 : sub.estimated_minutes);
-        return {
-          ...sub,
-          sub_status,
-          actual_minutes
-        };
-      });
-
-      const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
-      const hasSubtasks = updatedSubTasks.length > 0;
-      const allSkipped = hasSubtasks && updatedSubTasks.every(sub => sub.sub_status === 'Skipped');
-      const finalStatus = allSkipped ? 'SKIPPED' : 'DONE';
-
       const updatedMeta: TaskMetadata = {
         ...meta,
         todo_status: finalStatus,
@@ -544,7 +531,8 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           .from('tasks')
           .update({
             description: serializeTaskDescription(updatedMeta),
-            actual_time: calculated_actual_time
+            actual_time: calculated_actual_time,
+            is_active: false
           })
           .eq('id', task.id);
 
@@ -554,7 +542,8 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         setTasks(prev => prev.map(t => t.id === task.id ? {
           ...t,
           description: serializeTaskDescription(updatedMeta),
-          actual_time: calculated_actual_time
+          actual_time: calculated_actual_time,
+          is_active: false
         } : t));
 
         if (openedTask && openedTask.id === task.id) {
@@ -563,7 +552,8 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             description: serializeTaskDescription(updatedMeta),
             actual_time: calculated_actual_time,
             todo_status: finalStatus,
-            sub_tasks: updatedSubTasks
+            sub_tasks: updatedSubTasks,
+            is_active: false
           });
         }
       } catch (err) {
@@ -575,9 +565,16 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   // Reset task back to NEW or other status adjustments inside the slider drawer
   const handleResetTask = async (task: VirtualTask) => {
     const meta = parseTaskDescription(task.description);
-    const isDaily = task.task_type?.toUpperCase() === 'DAILY';
+    const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
+    const isOneTime = (task.task_type || '').toUpperCase() === 'ONETIME';
 
-    if (isDaily) {
+    // Lock Reset if template is inactive and not OneTime
+    if (!isOneTime && !task.is_active) {
+      toast.error("Không cho phép Reset nếu Task đang tắt ở Task Manager!");
+      return;
+    }
+
+    if (isRecurring) {
       const completions = meta.completions || {};
       // Reset individual sub-tasks to New and actual mins to 0
       const updatedSubTasks = (task.sub_tasks || []).map(sub => ({
@@ -633,9 +630,12 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         actual_minutes: 0
       }));
 
+      // Update OneTime's date to today to prevent floating into the past
+      const todayStr = new Date().toISOString().split('T')[0];
       const updatedMeta: TaskMetadata = {
         ...meta,
         todo_status: 'NEW',
+        todo_date: todayStr,
         sub_tasks: updatedSubTasks
       };
 
@@ -644,7 +644,8 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           .from('tasks')
           .update({
             description: serializeTaskDescription(updatedMeta),
-            actual_time: 0
+            actual_time: 0,
+            is_active: true
           })
           .eq('id', task.id);
 
@@ -654,7 +655,8 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         setTasks(prev => prev.map(t => t.id === task.id ? {
           ...t,
           description: serializeTaskDescription(updatedMeta),
-          actual_time: 0
+          actual_time: 0,
+          is_active: true
         } : t));
 
         if (openedTask && openedTask.id === task.id) {
@@ -663,7 +665,9 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             description: serializeTaskDescription(updatedMeta),
             actual_time: 0,
             todo_status: 'NEW',
-            sub_tasks: updatedSubTasks
+            todo_date: todayStr,
+            sub_tasks: updatedSubTasks,
+            is_active: true
           });
         }
       } catch (err) {
@@ -675,9 +679,9 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   // Skip task checklist representation completely
   const handleSkipTask = async (task: VirtualTask) => {
     const meta = parseTaskDescription(task.description);
-    const isDaily = task.task_type?.toUpperCase() === 'DAILY';
+    const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
 
-    if (isDaily) {
+    if (isRecurring) {
       const completions = meta.completions || {};
       const currentCompletion = completions[task.todo_date] || {
         todo_status: 'NEW',
@@ -765,9 +769,9 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
     fields: Partial<Pick<SubTask, 'actual_minutes' | 'sub_status'>>
   ) => {
     const meta = parseTaskDescription(task.description);
-    const isDaily = task.task_type?.toUpperCase() === 'DAILY';
+    const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
 
-    if (isDaily) {
+    if (isRecurring) {
       const completions = meta.completions || {};
       const currentCompletion = completions[task.todo_date] || {
         todo_status: 'NEW' as const,
@@ -947,6 +951,112 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
     });
   };
 
+  // Quick Skip batch selected items
+  const handleQuickSkipBatch = async () => {
+    if (selectedTaskIds.size === 0) {
+      setIsQuickSkipMode(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      let currentTasksList = [...tasks];
+
+      for (const virtualId of selectedTaskIds) {
+        const taskObj = virtualTasks.find(t => t.virtual_id === virtualId);
+        if (!taskObj) continue;
+
+        const meta = parseTaskDescription(taskObj.description);
+        const isDaily = taskObj.task_type?.toUpperCase() === 'DAILY';
+        let newDescription = '';
+
+        if (isDaily) {
+          const completions = meta.completions || {};
+          const currentCompletion = completions[taskObj.todo_date] || {
+            todo_status: 'NEW',
+            actual_time: 0,
+            sub_tasks: (taskObj.sub_tasks || []).map(sub => ({
+              ...sub,
+              sub_status: 'New' as const,
+              actual_minutes: 0
+            }))
+          };
+
+          completions[taskObj.todo_date] = {
+            ...currentCompletion,
+            todo_status: 'SKIPPED'
+          };
+
+          const updatedMeta: TaskMetadata = {
+            ...meta,
+            completions
+          };
+          newDescription = serializeTaskDescription(updatedMeta);
+        } else {
+          const updatedMeta: TaskMetadata = {
+            ...meta,
+            todo_status: 'SKIPPED'
+          };
+          newDescription = serializeTaskDescription(updatedMeta);
+        }
+
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            description: newDescription
+          })
+          .eq('id', taskObj.id);
+
+        if (error) throw error;
+
+        currentTasksList = currentTasksList.map(t => t.id === taskObj.id ? {
+          ...t,
+          description: newDescription
+        } : t);
+      }
+
+      setTasks(currentTasksList);
+
+      if (openedTask) {
+        const updated = currentTasksList.find(t => t.id === openedTask.id);
+        if (updated) {
+          const parsed = parseTaskDescription(updated.description);
+          if (openedTask.task_type?.toUpperCase() === 'DAILY') {
+            const completion = parsed.completions?.[openedTask.todo_date];
+            if (completion?.todo_status === 'SKIPPED') {
+              setOpenedTask({
+                ...openedTask,
+                description: updated.description,
+                todo_status: 'SKIPPED'
+              });
+            }
+          } else {
+            if (parsed.todo_status === 'SKIPPED') {
+              setOpenedTask({
+                ...openedTask,
+                description: updated.description,
+                todo_status: 'SKIPPED'
+              });
+            }
+          }
+        }
+      }
+
+      toast.success(`Đã skip thành công ${selectedTaskIds.size} nhiệm vụ!`, {
+        position: 'bottom-right'
+      });
+    } catch (err: any) {
+      console.error('Error in Quick Skip batch:', err);
+      toast.error(`Có lỗi xảy ra: ${err.message}`, {
+        position: 'bottom-right'
+      });
+    } finally {
+      setSelectedTaskIds(new Set());
+      setIsQuickSkipMode(false);
+      setLoading(false);
+    }
+  };
+
   // Parse details for Slider drawer component
   const openedTaskParsedMeta = useMemo(() => {
     if (!openedTask) return null;
@@ -1074,7 +1184,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
         {/* Main interactive triggers */}
         <div className="flex items-center gap-2 shrink-0">
-          {selectedTaskIds.size > 0 && (
+          {selectedTaskIds.size > 0 && !isQuickSkipMode && (
             <button
               onClick={handleBulkSubmit}
               disabled={isBulkSubmitting}
@@ -1086,6 +1196,26 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
                 <CheckSquare size={13} />
               )}
               <span>{isBulkSubmitting ? 'Submitting...' : `Submit checked (${selectedTaskIds.size})`}</span>
+            </button>
+          )}
+
+          {!isUser && (
+            <button 
+              onClick={() => {
+                if (isQuickSkipMode) {
+                  handleQuickSkipBatch();
+                } else {
+                  setIsQuickSkipMode(true);
+                }
+              }}
+              className={`h-8 px-3 flex items-center gap-1.5 border rounded-md transition-colors font-semibold text-xs whitespace-nowrap ${
+                isQuickSkipMode 
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600 shadow-sm' 
+                  : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+              }`}
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span>{isQuickSkipMode ? `Skip selected (${selectedTaskIds.size})` : 'Quick Skip'}</span>
             </button>
           )}
 
@@ -1111,16 +1241,18 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           <table className="w-full text-left border-collapse table-fixed select-none min-w-[1100px]">
             <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-20">
               <tr className="h-8">
-                <th className="w-[5%] px-3 text-center bg-slate-100">
-                  <button onClick={handleToggleSelectAll} className="text-slate-400 hover:text-indigo-600 transition-colors">
-                    {selectedTaskIds.size === paginatedTasks.length ? (
-                      <CheckSquare size={14} className="text-indigo-600 mx-auto" />
-                    ) : (
-                      <Square size={14} className="mx-auto" />
-                    )}
-                  </button>
-                </th>
-                <th className="w-[10%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Id</th>
+                {isQuickSkipMode && (
+                  <th className="w-[5%] px-3 text-center bg-slate-100">
+                    <button onClick={handleToggleSelectAll} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                      {selectedTaskIds.size === paginatedTasks.length ? (
+                        <CheckSquare size={14} className="text-indigo-600 mx-auto" />
+                      ) : (
+                        <Square size={14} className="mx-auto" />
+                      )}
+                    </button>
+                  </th>
+                )}
+                <th className={`${isQuickSkipMode ? 'w-[10%]' : 'w-[15%]'} px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100`}>Id</th>
                 <th className="w-[21%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Task Name</th>
                 <th className="w-[17%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Project</th>
                 <th className="w-[11%] px-3 text-[11px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100">Tag</th>
@@ -1142,18 +1274,20 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
                     onClick={() => setOpenedTask(task)}
                   >
                     {/* Checkbox selector item */}
-                    <td className="px-3 py-1 text-center" onClick={(e) => e.stopPropagation()}>
-                      <button 
-                        onClick={() => handleToggleSelectRow(task.virtual_id)}
-                        className="text-slate-400 hover:text-indigo-600 transition-colors"
-                      >
-                        {isChecked ? (
-                          <CheckSquare size={14} className="text-indigo-600 mx-auto" />
-                        ) : (
-                          <Square size={14} className="mx-auto" />
-                        )}
-                      </button>
-                    </td>
+                    {isQuickSkipMode && (
+                      <td className="px-3 py-1 text-center" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                          onClick={() => handleToggleSelectRow(task.virtual_id)}
+                          className="text-slate-400 hover:text-indigo-600 transition-colors"
+                        >
+                          {isChecked ? (
+                            <CheckSquare size={14} className="text-indigo-600 mx-auto" />
+                          ) : (
+                            <Square size={14} className="mx-auto" />
+                          )}
+                        </button>
+                      </td>
+                    )}
 
                     {/* ID */}
                     <td className="px-3 py-1.5">
@@ -1438,23 +1572,45 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
             {/* Submit template button at bottom of Side Drawer */}
             <div className="p-4 border-t border-slate-100 shrink-0">
-              {openedTask.todo_status === 'NEW' ? (
-                <button 
-                  onClick={() => handleDirectSubmit(openedTask)}
-                  className="w-full h-8 bg-blue-600 hover:bg-blue-700 transition-all text-white rounded text-xs font-semibold flex items-center justify-center gap-2 shadow-sm pointer-events-auto"
-                >
-                  <Check size={14} />
-                  <span>Submit task</span>
-                </button>
-              ) : (
-                <button 
-                  onClick={() => handleResetTask(openedTask)}
-                  className="w-full h-8 bg-slate-600 hover:bg-slate-700 transition-all text-white rounded text-xs font-semibold flex items-center justify-center gap-2 shadow-sm pointer-events-auto"
-                >
-                  <RotateCcw size={14} />
-                  <span>Reset task</span>
-                </button>
-              )}
+              {(() => {
+                const isOneTime = (openedTask.task_type || '').toUpperCase() === 'ONETIME';
+                const hasNewSubTask = (openedTask.sub_tasks || []).some(sub => (sub.sub_status || 'New') === 'New');
+                const isResetDisabled = !isOneTime && !openedTask.is_active;
+
+                if (openedTask.todo_status === 'NEW') {
+                  return (
+                    <button 
+                      onClick={() => handleDirectSubmit(openedTask)}
+                      disabled={hasNewSubTask}
+                      className={`w-full h-8 rounded text-xs font-semibold flex items-center justify-center gap-2 shadow-sm pointer-events-auto transition-all ${
+                        hasNewSubTask
+                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed border-slate-300 opacity-70'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                      }`}
+                      title={hasNewSubTask ? "Vui lòng cập nhật tất cả sub-task sang trạng thái Done hoặc Skipped (không để New) trước khi Submit!" : undefined}
+                    >
+                      <Check size={14} />
+                      <span>Submit task</span>
+                    </button>
+                  );
+                } else {
+                  return (
+                    <button 
+                      onClick={() => handleResetTask(openedTask)}
+                      disabled={isResetDisabled}
+                      className={`w-full h-8 rounded text-xs font-semibold flex items-center justify-center gap-2 shadow-sm pointer-events-auto transition-all ${
+                        isResetDisabled
+                          ? 'bg-slate-200 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                          : 'bg-slate-600 hover:bg-slate-700 text-white cursor-pointer'
+                      }`}
+                      title={isResetDisabled ? "Không cho phép Reset nhiệm vụ khi template đang tắt ở Task Manager!" : undefined}
+                    >
+                      <RotateCcw size={14} />
+                      <span>{isResetDisabled ? 'Reset nháp (Template Offline)' : 'Reset task'}</span>
+                    </button>
+                  );
+                }
+              })()}
             </div>
           </div>
         </div>
