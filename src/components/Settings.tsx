@@ -15,7 +15,15 @@ type TabType = 'USERS' | 'PROJECTS' | 'TEAMS' | 'TAGS';
 export default function Settings() {
   const { showConfirm } = useAppStore();
   const { profile: currentUser } = useAuthStore();
+  const isAdmin = (currentUser?.role || 'user').toString().toLowerCase().trim() === 'admin';
   const [activeTab, setActiveTab] = useState<TabType>('USERS');
+
+  useEffect(() => {
+    if (isAdmin && activeTab === 'USERS') {
+      setActiveTab('PROJECTS');
+    }
+  }, [isAdmin, activeTab]);
+
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -72,6 +80,10 @@ export default function Settings() {
   }, []);
 
   const handleAdd = () => {
+    if (activeTab === 'USERS' && isAdmin) {
+      toast.error("Bạn không có quyền thực hiện hành động này!");
+      return;
+    }
     setEditingItem(null);
     if (activeTab === 'USERS') {
       setIsUserCreateModalOpen(true);
@@ -81,6 +93,10 @@ export default function Settings() {
   };
 
   const handleEdit = (item: any) => {
+    if (activeTab === 'USERS' && isAdmin) {
+      toast.error("Bạn không có quyền thực hiện hành động này!");
+      return;
+    }
     setEditingItem(item);
     if (activeTab === 'USERS') {
       setIsUserModalOpen(true);
@@ -175,6 +191,11 @@ export default function Settings() {
   };
 
   const handleDelete = async (id: string, itemEmail?: string) => {
+    if (activeTab === 'USERS' && isAdmin) {
+      toast.error("Bạn không có quyền thực hiện hành động này!");
+      return;
+    }
+
     // Safety checks
     if (activeTab === 'USERS' && itemEmail === 'lequangvinh0611@gmail.com') {
       toast.error('Master account cannot be deleted.');
@@ -313,6 +334,11 @@ export default function Settings() {
   const handleToggleActive = async (item: any) => {
     const tableName = activeTab.toLowerCase();
 
+    if (activeTab === 'USERS' && isAdmin) {
+      toast.error("Bạn không có quyền thực hiện hành động này!");
+      return;
+    }
+
     if (activeTab === 'USERS') {
       const nextStatus = item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
       
@@ -369,12 +395,19 @@ export default function Settings() {
     }
   };
 
-  const tabs = [
+  const rawTabs = [
     { id: 'USERS', label: 'Users', icon: Users },
     { id: 'PROJECTS', label: 'Projects', icon: FolderKanban },
     { id: 'TEAMS', label: 'Teams', icon: ShieldCheck },
     { id: 'TAGS', label: 'Tags', icon: TagIcon },
   ];
+
+  const visibleTabs = rawTabs.filter(tab => {
+    if (tab.id === 'USERS' && isAdmin) {
+      return false;
+    }
+    return true;
+  });
 
   const getSortedUsers = (users: any[]) => {
     const roleOrder: Record<string, number> = { 'master': 0, 'admin': 1, 'user': 2 };
@@ -436,7 +469,7 @@ export default function Settings() {
       <div className="px-6 py-3 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between gap-4 flex-nowrap overflow-visible relative z-[40] min-w-max w-full select-none">
         <div className="flex items-center gap-4 shrink-0 flex-nowrap">
           <div className="flex items-center bg-slate-100/80 p-0.5 rounded-md gap-0.5 border border-slate-200/50">
-            {tabs.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => {

@@ -10,23 +10,55 @@ import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
 import Login from './components/auth/Login';
 import TaskManager from './pages/TaskManager';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { Toaster } from 'sonner';
-import { Menu } from 'lucide-react';
+import { Menu, Loader2 } from 'lucide-react';
 
 import { cn } from './lib/utils';
 
 export default function App() {
   const { activeTab, theme, confirmDialog, hideConfirm } = useAppStore();
-  const { session, profile, loading, setSession, setProfile, fetchProfile, setLoading } = useAuthStore();
+  const { session, profile, loading, initializeAuth } = useAuthStore();
+
+  useEffect(() => {
+    initializeAuth();
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const renderContent = () => {
-    const role = (profile?.role || 'master').toString().toUpperCase().trim();
-    const isUser = role === 'USER';
+  // Make useAppStore globally accessible for our ProtectedRoute redirect backup action
+  useEffect(() => {
+    (window as any).useAppStore = useAppStore;
+  }, []);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0F172A] flex flex-col items-center justify-center p-6 select-none font-sans">
+        <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500 rounded-full blur-[120px]"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-900 rounded-full blur-[120px]"></div>
+        </div>
+        <div className="relative z-10 flex flex-col items-center">
+          <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
+          <h1 className="text-white font-bold text-sm tracking-widest uppercase animate-pulse">DYMTASK MVP</h1>
+          <p className="text-[10px] text-slate-500 font-medium mt-1 uppercase">Đang đồng bộ phiên làm việc bảo mật...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session || !profile) {
+    return (
+      <>
+        <Toaster richColors position="bottom-right" />
+        <Login />
+      </>
+    );
+  }
+
+  const renderContent = () => {
     const normalizedActiveTab = activeTab.toString().toUpperCase().trim();
 
     switch (normalizedActiveTab) {
@@ -37,9 +69,17 @@ export default function App() {
       case 'DASHBOARD':
         return <Dashboard key="dashboard" />;
       case 'AUDIT LOG':
-        return <AuditLog key="audit" />;
+        return (
+          <ProtectedRoute allowedRoles={['master', 'admin']}>
+            <AuditLog key="audit" />
+          </ProtectedRoute>
+        );
       case 'SETTINGS':
-        return <Settings key="settings" />;
+        return (
+          <ProtectedRoute allowedRoles={['master', 'admin']}>
+            <Settings key="settings" />
+          </ProtectedRoute>
+        );
       default:
         return <div>Select a tab</div>;
     }

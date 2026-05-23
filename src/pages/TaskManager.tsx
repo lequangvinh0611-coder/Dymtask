@@ -5,6 +5,7 @@ import {
   Building, Briefcase, Tag, Users, Check, AlertCircle, FileSpreadsheet, Loader2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 import CreateTaskModal from '../components/CreateTaskModal';
 import { FilterSelect } from '../components/ui/FilterSelect';
 import { toast } from 'sonner';
@@ -105,6 +106,10 @@ const serializeTaskDescription = (metadata: TaskMetadata): string => {
 
 const TaskManager: React.FC = () => {
   const { showConfirm } = useAppStore();
+  const { profile } = useAuthStore();
+  const userRole = (profile?.role || 'user').toString().toLowerCase().trim();
+  const isUser = userRole === 'user';
+
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   // Page state
   const [tasks, setTasks] = useState<DbTask[]>([]);
@@ -640,16 +645,25 @@ const TaskManager: React.FC = () => {
 
                   {/* Status Switch (ON/OFF) Toggle Pill - Dot style */}
                   <td className="px-3 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => handleToggleStatus(task, task.status)}
-                      className="inline-flex items-center gap-1.5 hover:text-slate-800 transition-colors"
-                      title="Click to toggle status"
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${task.status === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                      <span className="text-xs text-slate-600 font-medium">
-                        {task.status === 'ON' ? 'On' : 'Off'}
-                      </span>
-                    </button>
+                    {isUser ? (
+                      <div className="inline-flex items-center gap-1.5 opacity-60 cursor-not-allowed" title="Tài khoản của bạn không có quyền đổi trạng thái">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${task.status === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                        <span className="text-xs text-slate-500 font-medium font-sans">
+                          {task.status === 'ON' ? 'On' : 'Off'}
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleToggleStatus(task, task.status)}
+                        className="inline-flex items-center gap-1.5 hover:text-slate-800 transition-colors cursor-pointer"
+                        title="Click to toggle status"
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${task.status === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                        <span className="text-xs text-slate-600 font-medium font-sans">
+                          {task.status === 'ON' ? 'On' : 'Off'}
+                        </span>
+                      </button>
+                    )}
                   </td>
 
                   {/* Actions dropdown button */}
@@ -671,19 +685,24 @@ const TaskManager: React.FC = () => {
                           <Edit2 size={12} className="text-slate-400" />
                           <span>Edit template</span>
                         </button>
-                        <hr className="my-1 border-slate-100" />
-                        <button
-                          onClick={() => handleDeleteTask(task.id)}
-                          disabled={deletingTaskId === task.id}
-                          className="w-full text-left px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors flex items-center gap-2 cursor-pointer"
-                        >
-                          {deletingTaskId === task.id ? (
-                            <Loader2 size={12} className="text-red-400 animate-spin" />
-                          ) : (
-                            <Trash2 size={12} className="text-red-400" />
-                          )}
-                          <span>{deletingTaskId === task.id ? 'Deleting...' : 'Delete'}</span>
-                        </button>
+                        
+                        {!isUser && (
+                          <>
+                            <hr className="my-1 border-slate-100" />
+                            <button
+                              onClick={() => handleDeleteTask(task.id)}
+                              disabled={deletingTaskId === task.id}
+                              className="w-full text-left px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors flex items-center gap-2 cursor-pointer"
+                            >
+                              {deletingTaskId === task.id ? (
+                                <Loader2 size={12} className="text-red-400 animate-spin" />
+                              ) : (
+                                <Trash2 size={12} className="text-red-400" />
+                              )}
+                              <span>{deletingTaskId === task.id ? 'Deleting...' : 'Delete'}</span>
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </td>
@@ -776,16 +795,25 @@ const TaskManager: React.FC = () => {
                   <h2 className="text-sm font-semibold text-slate-800 leading-tight">{openedDrawerTask.title}</h2>
                   <span className="text-xs font-mono text-slate-400 mt-0.5 block">Id: {getDisplayId(openedDrawerTask.id)}</span>
                 </div>
-                <button
-                  onClick={() => handleToggleStatus(openedDrawerTask, openedDrawerTask.status)}
-                  className="inline-flex items-center gap-1.5 transition-colors"
-                  title="Click to toggle status"
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${openedDrawerTask.status === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                  <span className="text-xs text-slate-600 font-medium">
-                    {openedDrawerTask.status === 'ON' ? 'On' : 'Off'}
-                  </span>
-                </button>
+                {isUser ? (
+                  <div className="inline-flex items-center gap-1.5 opacity-60 cursor-not-allowed" title="Tài khoản của bạn không có quyền đổi trạng thái">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${openedDrawerTask.status === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    <span className="text-xs text-slate-500 font-medium">
+                      {openedDrawerTask.status === 'ON' ? 'On' : 'Off'}
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleToggleStatus(openedDrawerTask, openedDrawerTask.status)}
+                    className="inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Click to toggle status"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${openedDrawerTask.status === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    <span className="text-xs text-slate-600 font-medium">
+                      {openedDrawerTask.status === 'ON' ? 'On' : 'Off'}
+                    </span>
+                  </button>
+                )}
               </div>
 
               {/* Tags info grid block */}

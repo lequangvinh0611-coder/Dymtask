@@ -1,45 +1,49 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ClipboardList, 
   CheckCircle2, 
   Clock, 
   AlertCircle, 
-  RotateCw,
-  FastForward
+  FastForward,
+  RotateCw
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { DateRangePicker } from './ui/DateRangePicker';
 import { FilterSelect } from './ui/FilterSelect';
+import { useDashboardData } from '../hooks/useDashboardData';
+import { useAuthStore } from '../store/authStore';
 
-// Interface matching the single 'tasks' table schema
-interface Task {
+// Interface definitions aligned with Single Table design
+interface SubTask {
   id: string;
-  title: string | null;
-  description: string | null;
-  task_type: string | null; // e.g. 'Daily', 'Weekly', 'Monthly', 'Spot'
-  status: string;           // 'New', 'Done', 'Skipped'
-  is_active: boolean;
-  est_time: number;         // in minutes
-  actual_time: number;      // in minutes
-  created_at: string;
+  name: string;
+  assignee?: string;
+  estimated_minutes?: number;
+  actual_minutes?: number;
+  sub_status?: 'New' | 'Done' | 'Skipped';
 }
 
-// Fixed metadata option sets
-const AVAILABLE_PROJECTS = ['【事務代行】HR TECH', 'GLOBAL OUTSOURCING', '求人媒体運用', 'RECRUITING MANAGEMENT', 'ADMIN OPERATIONS'];
-const AVAILABLE_TEAMS = ['内部・2課E', '内部・1課', 'アウトソーシングG', '人事総務部', '営業サポート課'];
-const AVAILABLE_TAGS = ['求人更新', '数値報告', 'メールチェック', 'レポート作成', 'データ入力', 'システム保守'];
-const AVAILABLE_ASSIGNEES = ['PHAN QUANG DAT', 'LE QUANG VINH', 'LE QUANG VINH 2', 'VINH 1', 'VINH 2'];
+interface TaskMetadata {
+  description: string;
+  project_name: string;
+  team_name: string;
+  tag_name: string;
+  deadline_time: string;
+  deadline_days: string;
+  sub_tasks: SubTask[];
+  todo_status?: 'NEW' | 'DONE' | 'SKIPPED';
+  todo_date?: string;
+  completions?: Record<string, { todo_status: 'NEW' | 'DONE' | 'SKIPPED', actual_time: number, sub_tasks?: SubTask[] }>;
+}
 
-// Helper to parse description JSON metadata safely
-const parseDescriptionMeta = (descriptionStr: string | null) => {
-  const defaultMeta = {
+const parseDescriptionMeta = (descriptionStr: string | null): TaskMetadata => {
+  const defaultMeta: TaskMetadata = {
     description: '',
     project_name: '【事務代行】HR TECH',
     team_name: '内部・1課',
     tag_name: '数値報告',
-    deadline_time: '09:00 AM',
+    deadline_time: '17:00',
     deadline_days: 'Mon - Fri',
-    sub_tasks: [] as any[]
+    sub_tasks: []
   };
 
   if (!descriptionStr) return defaultMeta;
@@ -53,12 +57,15 @@ const parseDescriptionMeta = (descriptionStr: string | null) => {
         project_name: parsed.project_name || '【事務代行】HR TECH',
         team_name: parsed.team_name || '内部・1課',
         tag_name: parsed.tag_name || '数値報告',
-        deadline_time: parsed.deadline_time || '09:00 AM',
+        deadline_time: parsed.deadline_time || '17:00',
         deadline_days: parsed.deadline_days || 'Mon - Fri',
-        sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : []
+        sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : [],
+        todo_status: parsed.todo_status,
+        todo_date: parsed.todo_date,
+        completions: parsed.completions
       };
     } catch {
-      // ignore
+      // ignore JSON error
     }
   }
 
@@ -68,14 +75,13 @@ const parseDescriptionMeta = (descriptionStr: string | null) => {
   };
 };
 
-// Check if a task maps to a specific day of the current week
-const isTaskOnWeekday = (task: Task, dayShort: string, dateString: string, dayOfMonth: number): boolean => {
+const isTaskOnWeekday = (task: any, dayShort: string, dateString: string, dayOfMonth: number): boolean => {
   const meta = parseDescriptionMeta(task.description);
   const type = (task.task_type || '').toUpperCase();
   const deadlineDays = (meta.deadline_days || '').trim();
 
   if (type === 'DAILY') {
-    return true; // daily applies to all weekdays Mon-Fri
+    return true; // applies to Mon - Fri
   }
   
   if (type === 'WEEKLY') {
@@ -92,13 +98,12 @@ const isTaskOnWeekday = (task: Task, dayShort: string, dateString: string, dayOf
   }
 
   if (type === 'ONETIME' || type === 'SPOT') {
-    return deadlineDays === dateString;
+    return deadlineDays === dateString || meta.todo_date === dateString;
   }
 
   return false;
 };
 
-// Helper function to format minutes into "Xh Ym"
 const formatDuration = (minutes: number) => {
   if (!minutes || minutes <= 0) return '0h 00m';
   const h = Math.floor(minutes / 60);
@@ -113,16 +118,22 @@ const getLocalDateString = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-const formatDateToDisplay = (dateString: string): string => {
-  if (!dateString) return '';
-  const parts = dateString.split('-');
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+const getDatesBetween = (startStr: string, endStr: string): string[] => {
+  const dates: string[] = [];
+  try {
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      dates.push(getLocalDateString(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  } catch (e) {
+    console.error('Lỗi tính khoảng ngày:', e);
   }
-  return dateString;
+  return dates;
 };
 
-// Get Monday to Friday days of current week dynamically
 const getWeekDays = () => {
   const current = new Date();
   const dayOfWeek = current.getDay(); // 0 is Sunday, 1 is Monday...
@@ -150,278 +161,156 @@ const getWeekDays = () => {
 };
 
 export default function Dashboard() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const { profile } = useAuthStore();
+  const {
+    tasks,
+    loading,
+    error,
+    projectsList,
+    teamsList,
+    tagsList,
+    assigneesList,
+    refetch
+  } = useDashboardData();
 
-  // Metadata states
-  const [projectsList, setProjectsList] = useState<string[]>([]);
-  const [teamsList, setTeamsList] = useState<string[]>([]);
-  const [tagsList, setTagsList] = useState<string[]>([]);
-  const [assigneesList, setAssigneesList] = useState<string[]>([]);
-
-  // Filter Bar state bindings
+  // Filter Personnel - Default is current logged in user name
   const [filterPersonnel, setFilterPersonnel] = useState<string>('');
+  
+  // Set default Assignee whenever profile becomes available
+  useEffect(() => {
+    if (profile?.name && !filterPersonnel) {
+      setFilterPersonnel(profile.name);
+    }
+  }, [profile]);
+
+  // Rest of dropdown parameters
   const [filterProject, setFilterProject] = useState<string>('');
   const [filterTag, setFilterTag] = useState<string>('');
   const [filterTeam, setFilterTeam] = useState<string>('');
 
-  // Date range filter states
+  // Date Range filter states - Default is TODAY's date
   const [startDate, setStartDate] = useState<string>(() => getLocalDateString(new Date()));
   const [endDate, setEndDate] = useState<string>(() => getLocalDateString(new Date()));
 
-  // Fetch metadata dynamically and filter only active ones
-  const fetchMetadata = async () => {
-    try {
-      const [
-        { data: usersData },
-        { data: projectsData },
-        { data: teamsData },
-        { data: tagsData }
-      ] = await Promise.all([
-        supabase.from('users').select('name, status'),
-        supabase.from('projects').select('name, is_active'),
-        supabase.from('teams').select('name, is_active'),
-        supabase.from('tags').select('name, is_active')
-      ]);
-
-      const activeUsers = (usersData || [])
-        .filter((u: any) => u.status !== 'INACTIVE' && u.name)
-        .map((u: any) => u.name);
-
-      const activeProj = (projectsData || [])
-        .filter((p: any) => p.is_active !== false && p.name)
-        .map((p: any) => p.name);
-
-      const activeTms = (teamsData || [])
-        .filter((t: any) => t.is_active !== false && t.name)
-        .map((t: any) => t.name);
-
-      const activeTgs = (tagsData || [])
-        .filter((tg: any) => tg.is_active !== false && tg.name)
-        .map((tg: any) => tg.name);
-
-      setAssigneesList(activeUsers);
-      setProjectsList(activeProj);
-      setTeamsList(activeTms);
-      setTagsList(activeTgs);
-    } catch (err) {
-      console.error('Error fetching metadata in Dashboard:', err);
-    }
-  };
-
-  // Fetch all tasks from the single table
-  const fetchTasks = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('tasks')
-        .select('id, title, description, task_type, status, is_active, est_time, actual_time, created_at')
-        .order('created_at', { ascending: false });
-
-      if (fetchError) {
-        throw fetchError;
-      }
-
-      setTasks(data || []);
-    } catch (err: any) {
-      console.error('Lỗi khi tải dữ liệu tasks:', err);
-      setError(err?.message || 'Không thể kết nối đến Supabase database. Vui lòng thử lại.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTasks();
-    fetchMetadata();
-
-    const channel = supabase.channel('dashboard_sync_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => fetchMetadata())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => fetchMetadata())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchMetadata())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tags' }, () => fetchMetadata())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => fetchTasks())
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  // Generate dynamic date mappings for current week
+  // Active dates
   const weekDays = useMemo(() => getWeekDays(), []);
 
-  // Generate dynamic sample data relative to this week if Supabase returns 0 tasks
-  const mockTasks = useMemo(() => {
-    return [
-      {
-        id: 'mock-1',
-        title: '【事務代行】求人更新 Daily Work',
-        task_type: 'DAILY',
-        status: 'Done',
-        is_active: true,
-        est_time: 45,
-        actual_time: 40,
-        created_at: new Date().toISOString(),
-        description: JSON.stringify({
-          project_name: '【事務代行】HR TECH',
-          tag_name: '求人更新',
-          team_name: '内部・2課E',
-          deadline_days: 'Mon - Fri',
-          deadline_time: '09:00 AM',
-          sub_tasks: [
-            { id: 'sub-1', content: 'Cập nhật tin tuyển dụng', assignee: 'PHAN QUANG DAT', estimated_minutes: 25 },
-            { id: 'sub-2', content: 'Duyệt bài đăng', assignee: 'LE QUANG VINH', estimated_minutes: 20 }
-          ]
-        })
-      },
-      {
-        id: 'mock-2',
-        title: 'GLOBAL OUTSOURCING メールチェック',
-        task_type: 'DAILY',
-        status: 'New',
-        is_active: true,
-        est_time: 30,
-        actual_time: 0,
-        created_at: new Date().toISOString(),
-        description: JSON.stringify({
-          project_name: 'GLOBAL OUTSOURCING',
-          tag_name: 'メールチェック',
-          team_name: '内部・1課',
-          deadline_days: 'Mon - Fri',
-          deadline_time: '10:00 AM',
-          sub_tasks: [
-            { id: 'sub-3', content: 'Đọc và phân loại email khách hàng', assignee: 'LE QUANG VINH 2', estimated_minutes: 15 },
-            { id: 'sub-4', content: 'Trả lời mail khẩn cấp', assignee: 'VINH 1', estimated_minutes: 15 }
-          ]
-        })
-      },
-      {
-        id: 'mock-3',
-        title: '求人媒体運用 KPI Numerical Report',
-        task_type: 'WEEKLY',
-        status: 'Done',
-        is_active: true,
-        est_time: 150,
-        actual_time: 120,
-        created_at: new Date().toISOString(),
-        description: JSON.stringify({
-          project_name: '求人媒体運用',
-          tag_name: '数値報告',
-          team_name: 'アウトソーシングG',
-          deadline_days: 'Mon, Wed, Fri',
-          deadline_time: '11:00 AM',
-          sub_tasks: [
-            { id: 'sub-5', content: 'Tổng hợp số liệu KPI', assignee: 'VINH 2', estimated_minutes: 60 },
-            { id: 'sub-6', content: 'Kiểm duyệt KPI Report', assignee: 'PHAN QUANG DAT', estimated_minutes: 90 }
-          ]
-        })
-      },
-      {
-        id: 'mock-4',
-        title: 'RECRUITING MANAGEMENT Mid-Month Sync',
-        task_type: 'MONTHLY',
-        status: 'New',
-        is_active: true,
-        est_time: 180,
-        actual_time: 0,
-        created_at: new Date().toISOString(),
-        description: JSON.stringify({
-          project_name: 'RECRUITING MANAGEMENT',
-          tag_name: 'レポート作成',
-          team_name: '人事総務部',
-          deadline_days: `${weekDays[1].dayOfMonth}, ${weekDays[3].dayOfMonth}`, // Tue, Thu
-          deadline_time: '02:00 PM',
-          sub_tasks: [
-            { id: 'sub-7', content: 'Soạn báo cáo giữa tháng', assignee: 'LE QUANG VINH', estimated_minutes: 180 }
-          ]
-        })
-      },
-      {
-        id: 'mock-5',
-        title: 'ADMIN OPERATIONS Spot Update Task',
-        task_type: 'SPOT',
-        status: 'Done',
-        is_active: true,
-        est_time: 60,
-        actual_time: 65,
-        created_at: new Date().toISOString(),
-        description: JSON.stringify({
-          project_name: 'ADMIN OPERATIONS',
-          tag_name: 'データ入力',
-          team_name: '営業サポート課',
-          deadline_days: weekDays[2].dateString, // Wednesday
-          deadline_time: '04:00 PM',
-          sub_tasks: [
-            { id: 'sub-8', content: 'Nhập dữ liệu khách hàng', assignee: 'VINH 1', estimated_minutes: 60 }
-          ]
-        })
-      }
-    ];
-  }, [weekDays]);
+  // Compute robust dropdown filter personnel list
+  const currentAssignees = useMemo(() => {
+    const list = [...assigneesList];
+    if (profile?.name && !list.includes(profile.name)) {
+      list.push(profile.name);
+    }
+    return list.length > 0 ? list : ['PHAN QUANG DAT', 'LE QUANG VINH', 'LE QUANG VINH 2', 'VINH 1', 'VINH 2'];
+  }, [assigneesList, profile?.name]);
 
-  // Bind the raw working payload (database tasks or mock if empty)
-  const isDatabaseEmpty = tasks.length === 0;
-  const rawList = useMemo(() => {
-    return isDatabaseEmpty ? mockTasks : tasks;
-  }, [isDatabaseEmpty, tasks, mockTasks]);
+  const currentProjects = useMemo(() => {
+    return projectsList.length > 0 ? projectsList : ['【事務代行】HR TECH', 'GLOBAL OUTSOURCING', '求人媒体運用', 'RECRUITING MANAGEMENT', 'ADMIN OPERATIONS'];
+  }, [projectsList]);
 
-  // Base filtered tasks based on dropdown selections (Personnel, Project, Tag, Team)
-  const baseTasks = useMemo(() => {
-    return rawList.filter(task => {
+  const currentTags = useMemo(() => {
+    return tagsList.length > 0 ? tagsList : ['求人更新', '数値報告', 'メールチェック', 'レポート作成', 'データ入力', 'システム保守'];
+  }, [tagsList]);
+
+  const currentTeams = useMemo(() => {
+    return teamsList.length > 0 ? teamsList : ['内部・2課E', '内部・1課', 'アウトソーシングG', '人事総務部', '営業サポート課'];
+  }, [teamsList]);
+
+  // Solve 5 metrics state WITH filters AND Date filter (Default Today)
+  const statsVirtualTasks = useMemo(() => {
+    const dates = getDatesBetween(startDate, endDate);
+    const list: any[] = [];
+
+    tasks.forEach(task => {
       const meta = parseDescriptionMeta(task.description);
+      const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
 
-      // 1. Personnel (Assignee) Filter: check if matched in sub_tasks assignee
+      // Filter check side dropdowns
+      if (filterProject && meta.project_name !== filterProject) return;
+      if (filterTag && meta.tag_name !== filterTag) return;
+      if (filterTeam && meta.team_name !== filterTeam) return;
+
+      // Filter check dynamic Assignee (Sub-tasks or Main assignees)
       if (filterPersonnel) {
-        const carriesPerson = meta.sub_tasks && meta.sub_tasks.some((s: any) => s.assignee === filterPersonnel);
-        if (!carriesPerson) return false;
+        const hasInSubTask = meta.sub_tasks && meta.sub_tasks.some((s: any) => s.assignee === filterPersonnel);
+        const hasInMain = Array.isArray((task as any).assignees) && (task as any).assignees.includes(filterPersonnel);
+        if (!hasInSubTask && !hasInMain) return;
       }
 
-      // 2. Project Filter
-      if (filterProject && meta.project_name !== filterProject) {
-        return false;
-      }
+      if (isRecurring) {
+        dates.forEach(date => {
+          const d = new Date(date);
+          const weekdaysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const dayShort = weekdaysShort[d.getDay()];
+          const dayOfMonth = d.getDate();
 
-      // 3. Tag Filter
-      if (filterTag && meta.tag_name !== filterTag) {
-        return false;
-      }
+          if (isTaskOnWeekday(task, dayShort, date, dayOfMonth)) {
+            const completions = meta.completions || {};
+            const completion = completions[date];
+            const todo_status = completion?.todo_status || 'NEW';
+            
+            // Map sub-tasks dynamically
+            const subTasksResolved = completion?.sub_tasks || meta.sub_tasks.map(s => ({
+              ...s,
+              sub_status: 'New' as const,
+              actual_minutes: 0
+            }));
 
-      // 4. Team Filter
-      if (filterTeam && meta.team_name !== filterTeam) {
-        return false;
-      }
+            // If subtasks mapped, sync status
+            const hasSub = subTasksResolved.length > 0;
+            const anyDone = hasSub && subTasksResolved.some(s => s.sub_status === 'Done');
+            const allSkipped = hasSub && subTasksResolved.every(s => s.sub_status === 'Skipped');
+            const resolvedStatus = todo_status !== 'NEW' ? todo_status : (allSkipped ? 'SKIPPED' : (anyDone ? 'DONE' : 'NEW'));
 
-      return true;
+            // Calc duration
+            const actual_time = completion?.actual_time || subTasksResolved.reduce((sum, s) => sum + (s.actual_minutes || 0), 0) || 0;
+            const est_time = subTasksResolved.reduce((sum, s) => sum + (s.estimated_minutes || s.estimated_minutes || 0), 0) || task.est_time || 0;
+
+            list.push({
+              ...task,
+              todo_date: date,
+              todo_status: resolvedStatus,
+              est_time,
+              actual_time
+            });
+          }
+        });
+      } else {
+        // OneTime task date matching
+        const todo_date = meta.todo_date || task.created_at?.split('T')[0] || getLocalDateString(new Date());
+        if (todo_date >= startDate && todo_date <= endDate) {
+          const subTasksResolved = meta.sub_tasks || [];
+          const hasSub = subTasksResolved.length > 0;
+          const anyDone = hasSub && subTasksResolved.some(s => s.sub_status === 'Done');
+          const allSkipped = hasSub && subTasksResolved.every(s => s.sub_status === 'Skipped');
+          const resolvedStatus = meta.todo_status || task.status || 'NEW';
+          const finalStatus = resolvedStatus !== 'NEW' ? resolvedStatus : (allSkipped ? 'SKIPPED' : (anyDone ? 'DONE' : 'NEW'));
+
+          const actual_time = task.actual_time || subTasksResolved.reduce((sum, s) => sum + (s.actual_minutes || 0), 0) || 0;
+          const est_time = subTasksResolved.reduce((sum, s) => sum + (s.estimated_minutes || 0), 0) || task.est_time || 0;
+
+          list.push({
+            ...task,
+            todo_date,
+            todo_status: finalStatus,
+            est_time,
+            actual_time
+          });
+        }
+      }
     });
-  }, [rawList, filterPersonnel, filterProject, filterTag, filterTeam]);
 
-  // Stats active tasks: further filters baseTasks by Date Range for the 5 Overview cards only
-  const statsActiveList = useMemo(() => {
-    return baseTasks.filter(task => {
-      if (!task.created_at) return true;
-      const d = new Date(task.created_at);
-      const taskDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      if (startDate && taskDate < startDate) {
-        return false;
-      }
-      if (endDate && taskDate > endDate) {
-        return false;
-      }
-      return true;
-    });
-  }, [baseTasks, startDate, endDate]);
+    return list;
+  }, [tasks, startDate, endDate, filterPersonnel, filterProject, filterTag, filterTeam]);
 
-  // Compute stats metrics based on current stats active list
+  // Compute stat metrics for the 5 Overview cards from the stats list
   const stats = useMemo(() => {
-    const total = statsActiveList.length;
-    const completed = statsActiveList.filter(t => (t.status || '').toUpperCase() === 'DONE').length;
-    const skipped = statsActiveList.filter(t => (t.status || '').toUpperCase() === 'SKIPPED').length;
+    const total = statsVirtualTasks.length;
+    const completed = statsVirtualTasks.filter(t => t.todo_status === 'DONE').length;
+    const skipped = statsVirtualTasks.filter(t => t.todo_status === 'SKIPPED').length;
     
-    const totalEst = statsActiveList.reduce((acc, t) => acc + (t.est_time || 0), 0);
-    const totalAct = statsActiveList.reduce((acc, t) => acc + (t.actual_time || 0), 0);
+    const totalEst = statsVirtualTasks.reduce((acc, t) => acc + (t.est_time || 0), 0);
+    const totalAct = statsVirtualTasks.reduce((acc, t) => acc + (t.actual_time || 0), 0);
 
     return {
       total,
@@ -430,56 +319,124 @@ export default function Dashboard() {
       totalEst,
       totalAct
     };
-  }, [statsActiveList]);
+  }, [statsVirtualTasks]);
 
-  const currentAssignees = assigneesList.length > 0 ? assigneesList : AVAILABLE_ASSIGNEES;
-  const currentProjects = projectsList.length > 0 ? projectsList : AVAILABLE_PROJECTS;
-  const currentTags = tagsList.length > 0 ? tagsList : AVAILABLE_TAGS;
-  const currentTeams = teamsList.length > 0 ? teamsList : AVAILABLE_TEAMS;
+  // Solve Roadmap - EXCLUDES Date Filter range but strictly honors the Assignee, Project, Tag, Team filters
+  const roadmapDaysData = useMemo(() => {
+    return weekDays.map(day => {
+      const dayTasks = tasks.filter(task => {
+        // Must be active task setting
+        if (task.is_active !== true) return false;
+
+        const meta = parseDescriptionMeta(task.description);
+
+        // Filter check side indicators
+        if (filterProject && meta.project_name !== filterProject) return false;
+        if (filterTag && meta.tag_name !== filterTag) return false;
+        if (filterTeam && meta.team_name !== filterTeam) return false;
+
+        // Filter check Assignee (subtasks or main)
+        if (filterPersonnel) {
+          const hasInSubTask = meta.sub_tasks && meta.sub_tasks.some((s: any) => s.assignee === filterPersonnel);
+          const hasInMain = Array.isArray((task as any).assignees) && (task as any).assignees.includes(filterPersonnel);
+          if (!hasInSubTask && !hasInMain) return false;
+        }
+
+        // Must apply to this day of the week
+        return isTaskOnWeekday(task, day.short, day.dateString, day.dayOfMonth);
+      });
+
+      const dailyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'DAILY');
+      const weeklyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'WEEKLY');
+      const monthlyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'MONTHLY');
+      const spotTypeTasks = dayTasks.filter(t => ['ONETIME', 'SPOT'].includes((t.task_type || '').toUpperCase()));
+
+      const dayRows = [
+        {
+          label: 'Total',
+          count: dayTasks.length,
+          estMinutes: dayTasks.reduce((sum, t) => sum + (t.est_time || 0), 0),
+          isTotal: true
+        },
+        {
+          label: 'Daily',
+          count: dailyTypeTasks.length,
+          estMinutes: dailyTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
+        },
+        {
+          label: 'Weekly',
+          count: weeklyTypeTasks.length,
+          estMinutes: weeklyTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
+        },
+        {
+          label: 'Monthly',
+          count: monthlyTypeTasks.length,
+          estMinutes: monthlyTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
+        },
+        {
+          label: 'Spot',
+          count: spotTypeTasks.length,
+          estMinutes: spotTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
+        }
+      ];
+
+      return {
+        day,
+        dayRows
+      };
+    });
+  }, [tasks, weekDays, filterPersonnel, filterProject, filterTag, filterTeam]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-50 overflow-x-auto text-left font-sans">
       
-      {/* FILTER BAR / OPTIMIZED HEADER BAR */}
+      {/* FILTER HEADER BAR */}
       <div className="px-6 py-3 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between gap-4 flex-nowrap overflow-visible relative z-[40] min-w-max w-full select-none">
         <div className="flex items-center gap-2 shrink-0 flex-nowrap">
-          {/* 1. Dropdown PERSONNEL */}
+          {/* PERSONNEL SELECT dropdown */}
           <FilterSelect
             value={filterPersonnel}
             onChange={setFilterPersonnel}
-            defaultOptionLabel="Assignees"
-            options={currentAssignees.map(assignee => ({ value: assignee, label: assignee }))}
-            className="h-8 min-w-[120px]"
+            defaultOptionLabel="All Assignees"
+            options={currentAssignees.map(assignee => ({ 
+              value: assignee, 
+              label: assignee === profile?.name ? `${assignee} (Tôi)` : assignee 
+            }))}
+            className="h-8 min-w-[150px]"
+            id="assignee-select"
           />
 
-          {/* 2. Dropdown PROJECTS */}
+          {/* PROJECTS SELECT dropdown */}
           <FilterSelect
             value={filterProject}
             onChange={setFilterProject}
-            defaultOptionLabel="Projects"
+            defaultOptionLabel="All Projects"
             options={currentProjects.map(project => ({ value: project, label: project }))}
-            className="h-8 min-w-[120px]"
+            className="h-8 min-w-[140px]"
+            id="projects-select"
           />
 
-          {/* 3. Dropdown TAGS */}
+          {/* TAGS SELECT dropdown */}
           <FilterSelect
             value={filterTag}
             onChange={setFilterTag}
-            defaultOptionLabel="Tags"
+            defaultOptionLabel="All Tags"
             options={currentTags.map(tag => ({ value: tag, label: tag }))}
-            className="h-8 min-w-[110px]"
+            className="h-8 min-w-[120px]"
+            id="tags-select"
           />
 
-          {/* 4. Dropdown TEAMS */}
+          {/* TEAMS SELECT dropdown */}
           <FilterSelect
             value={filterTeam}
             onChange={setFilterTeam}
-            defaultOptionLabel="Teams"
+            defaultOptionLabel="All Teams"
             options={currentTeams.map(team => ({ value: team, label: team }))}
-            className="h-8 min-w-[110px]"
+            className="h-8 min-w-[120px]"
+            id="teams-select"
           />
 
-          {/* 5. Date Filter */}
+          {/* DATE RANGE FILTER PICKER */}
           <DateRangePicker 
             startDate={startDate}
             endDate={endDate}
@@ -487,244 +444,262 @@ export default function Dashboard() {
               setStartDate(start);
               setEndDate(end);
             }}
-            className="h-8"
+            className="h-8 shadow-sm"
+            id="date-picker"
           />
         </div>
+        
+        {/* Reset filter trigger */}
+        {(filterPersonnel !== (profile?.name || '') || filterProject || filterTag || filterTeam || startDate !== getLocalDateString(new Date()) || endDate !== getLocalDateString(new Date())) && (
+          <button
+            onClick={() => {
+              setFilterPersonnel(profile?.name || '');
+              setFilterProject('');
+              setFilterTag('');
+              setFilterTeam('');
+              setStartDate(getLocalDateString(new Date()));
+              setEndDate(getLocalDateString(new Date()));
+            }}
+            className="text-xs text-indigo-650 font-semibold hover:text-indigo-800 transition-colors pointer-events-auto shrink-0 bg-slate-50 px-2.5 py-1 border border-slate-200 rounded"
+            id="reset-dashboard-filters"
+          >
+            Reset Filters
+          </button>
+        )}
       </div>
 
-      <div className="flex-1 flex flex-col p-4 gap-4 min-h-0 overflow-hidden bg-slate-50/30">
-        {/* Error handling alert block */}
+      {/* DASHBOARD GRID CONTENT */}
+      <div className="flex-1 flex flex-col p-4 gap-4 min-h-0 overflow-y-auto bg-slate-50/40">
+        
+        {/* DATABASE CONNECTION OR QUERY ERROR BOX */}
         {error && (
-          <div className="bg-rose-50 border border-rose-200 text-rose-700 p-2.5 rounded-md flex items-start gap-2 shadow-sm shrink-0">
+          <div className="bg-rose-50 border border-rose-200 text-rose-750 p-3 rounded-md flex items-start gap-2 shadow-sm shrink-0" id="db-error-box">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
             <div className="text-left">
-              <span className="font-semibold block text-xs">Database Error Occurred</span>
+              <span className="font-semibold block text-xs">Lỗi kết nối bộ dữ liệu</span>
               <span className="text-xs text-rose-600/90 font-medium">{error}</span>
             </div>
           </div>
         )}
 
-        {/* 1. HÀNG 1: 5 KHỐI THÈ THỐNG KÊ (OVERVIEW CARDS) */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
-        
-        {/* Card 1: TOTAL TASKS */}
-        <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-colors">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-slate-500">Total Templates</span>
-            <div className="p-1 bg-slate-50 text-indigo-600 rounded">
-              <ClipboardList className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1 text-left">
-            <h3 className="text-xl font-bold text-slate-800 leading-none">
-              {stats.total}
-            </h3>
-            <p className="text-xs font-normal text-slate-400 mt-1">
-              Active tasks
-            </p>
-          </div>
-        </div>
-
-        {/* Card 2: COMPLETED */}
-        <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-colors">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-slate-500">Completed</span>
-            <div className="p-1 bg-slate-50 text-emerald-600 rounded">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1 text-left">
-            <h3 className="text-xl font-bold text-emerald-600 leading-none">
-              {stats.completed}
-            </h3>
-            <p className="text-xs font-normal text-slate-400 mt-1">
-              Done task checklist
-            </p>
-          </div>
-        </div>
-
-        {/* Card 3: SKIPPED */}
-        <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-colors">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-slate-500">Skipped</span>
-            <div className="p-1 bg-slate-50 text-amber-500 rounded">
-              <FastForward className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1 text-left">
-            <h3 className="text-xl font-bold text-slate-600 leading-none">
-              {stats.skipped}
-            </h3>
-            <p className="text-xs font-normal text-slate-400 mt-1">
-              Skipped task checklist
-            </p>
-          </div>
-        </div>
-
-        {/* Card 4: ESTIMATED */}
-        <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-colors">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-slate-500">Est. Time</span>
-            <div className="p-1 bg-slate-50 text-indigo-600 rounded">
-              <Clock className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1 text-left min-w-0">
-            <h3 className="text-xs sm:text-sm font-bold text-indigo-650 truncate py-0.5 leading-none">
-              {formatDuration(stats.totalEst)}
-            </h3>
-            <p className="text-xs font-normal text-slate-400 mt-1">
-              Estimated effort
-            </p>
-          </div>
-        </div>
-
-        {/* Card 5: ACTUAL */}
-        <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-colors">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-slate-500">Actual Time</span>
-            <div className="p-1 bg-slate-50 text-emerald-600 rounded">
-              <Clock className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1 text-left min-w-0">
-            <h3 className="text-xs sm:text-sm font-bold text-emerald-600 truncate py-0.5 leading-none">
-               {formatDuration(stats.totalAct)}
-            </h3>
-            <p className="text-xs font-normal text-slate-400 mt-1">
-              Logged duration
-            </p>
-          </div>
-        </div>
-
-      </div>
-
-      {/* 2. HÀNG 2: KHỐI WEEKLY ROADMAP MONDAY - FRIDAY VISUALIZER */}
-      <div className="flex-1 flex flex-col min-h-0 bg-white rounded-md border border-slate-200 p-4 shadow-sm space-y-3 overflow-hidden">
-        
-        {/* Row Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100 shrink-0">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-800">
-              Weekly Roadmap (Monday - Friday Visualizer)
-            </h3>
-          </div>
-        </div>
-
-        {/* Grid 5 Column of Monday to Friday */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-3 min-h-0">
-          {weekDays.map((day) => {
-            // Aggregate database or mock tasks applicable on this day of the week and is active
-            const dayTasks = baseTasks.filter(t => t.is_active === true && isTaskOnWeekday(t, day.short, day.dateString, day.dayOfMonth));
-            
-            const dailyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'DAILY');
-            const weeklyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'WEEKLY');
-            const monthlyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'MONTHLY');
-            const spotTypeTasks = dayTasks.filter(t => ['ONETIME', 'SPOT'].includes((t.task_type || '').toUpperCase()));
-
-            const dayRows = [
-              {
-                label: 'Total',
-                count: dayTasks.length,
-                estMinutes: dayTasks.reduce((sum, t) => sum + (t.est_time || 0), 0),
-                isTotal: true
-              },
-              {
-                label: 'Daily',
-                count: dailyTypeTasks.length,
-                estMinutes: dailyTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
-              },
-              {
-                label: 'Weekly',
-                count: weeklyTypeTasks.length,
-                estMinutes: weeklyTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
-              },
-              {
-                label: 'Monthly',
-                count: monthlyTypeTasks.length,
-                estMinutes: monthlyTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
-              },
-              {
-                label: 'Spot',
-                count: spotTypeTasks.length,
-                estMinutes: spotTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
-              }
-            ];
-
-            return (
+        {/* 1. SECTION 1: 5 OVERVIEW CARDS WITH SKELETON LOAD SUPPORT */}
+        {loading ? (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0" id="metrics-loading-skeletons">
+            {[1, 2, 3, 4, 5].map((idx) => (
               <div 
-                key={day.name} 
-                className={`bg-white rounded-md border flex flex-col justify-between overflow-hidden relative shadow-sm h-full ${
-                  day.isToday 
-                    ? 'border-indigo-500 ring-2 ring-indigo-50/50' 
-                    : 'border-slate-200 hover:border-slate-300'
-                }`}
+                key={idx} 
+                className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between h-[106px] animate-pulse"
               >
-                {/* Column header element */}
-                <div className={`px-2.5 py-1.5 border-b border-slate-150 flex flex-col items-start justify-between relative shrink-0 ${
-                  day.isToday ? 'bg-indigo-50/10' : 'bg-slate-50/50'
-                }`}>
-                  <div className="flex items-center justify-between w-full">
-                    <span className={`text-xs font-semibold ${
-                      day.isToday ? 'text-indigo-600' : 'text-slate-700'
-                    }`}>
-                      {day.name}
-                    </span>
-                    
-                    {day.isToday && (
-                      <span className="bg-indigo-600 text-xs font-medium text-white px-1.5 py-0.5 rounded-sm">
-                        Today
-                      </span>
-                    )}
+                <div className="h-4 bg-slate-200 rounded w-1/2"></div>
+                <div className="h-9 bg-slate-200 rounded w-2/3 mt-2"></div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0" id="metrics-cards-grid">
+            
+            {/* CARD 1: TOTAL TASKS */}
+            <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-all hover:border-slate-300" id="card-total-tasks">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-slate-500">Tổng công việc</span>
+                <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded">
+                  <ClipboardList className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="mt-1 text-left">
+                <h3 className="text-xl font-bold text-slate-800 leading-none">
+                  {stats.total}
+                </h3>
+                <p className="text-[11px] font-medium text-slate-400 mt-1.5 truncate">
+                  Tổng checklist trong ngày
+                </p>
+              </div>
+            </div>
+
+            {/* CARD 2: COMPLETED */}
+            <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-all hover:border-slate-300" id="card-completed-tasks">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-emerald-700">Đã hoàn thành</span>
+                <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="mt-1 text-left">
+                <h3 className="text-xl font-bold text-emerald-600 leading-none">
+                  {stats.completed}
+                </h3>
+                <p className="text-[11px] font-medium text-slate-400 mt-1.5 truncate">
+                  Nhiệm vụ Done thành công
+                </p>
+              </div>
+            </div>
+
+            {/* CARD 3: SKIPPED */}
+            <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-all hover:border-slate-300" id="card-skipped-tasks">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-amber-700">Đã bỏ qua (Skipped)</span>
+                <div className="p-1.5 bg-amber-50 text-amber-500 rounded">
+                  <FastForward className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="mt-1 text-left">
+                <h3 className="text-xl font-bold text-slate-700 leading-none">
+                  {stats.skipped}
+                </h3>
+                <p className="text-[11px] font-medium text-slate-400 mt-1.5 truncate">
+                  Nhiệm vụ skipped bỏ qua
+                </p>
+              </div>
+            </div>
+
+            {/* CARD 4: ESTIMATED TIME */}
+            <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-all hover:border-slate-300" id="card-est-time">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-slate-500">Giờ ước tính</span>
+                <div className="p-1.5 bg-slate-50 text-indigo-600 rounded">
+                  <Clock className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="mt-1 text-left min-w-0">
+                <h3 className="text-sm font-bold text-indigo-950 truncate leading-none">
+                  {formatDuration(stats.totalEst)}
+                </h3>
+                <p className="text-[11px] font-medium text-slate-400 mt-1.5 truncate">
+                  Tổng số giờ được phân bổ
+                </p>
+              </div>
+            </div>
+
+            {/* CARD 5: ACTUAL TIME */}
+            <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-sm flex flex-col justify-between transition-all hover:border-slate-300" id="card-actual-time">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-slate-500">Giờ thực tế</span>
+                <div className="p-1.5 bg-slate-50 text-emerald-600 rounded">
+                  <Clock className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="mt-1 text-left min-w-0">
+                <h3 className="text-sm font-bold text-emerald-600 truncate leading-none">
+                  {formatDuration(stats.totalAct)}
+                </h3>
+                <p className="text-[11px] font-medium text-slate-400 mt-1.5 truncate">
+                  Thời lượng công việc thực tế
+                </p>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* 2. SECTION 2: WEEKLY ROADMAP BREAKDOWN */}
+        <div className="flex-1 flex flex-col min-h-0 bg-white rounded-md border border-slate-200 p-4 shadow-sm space-y-3 overflow-hidden" id="weekly-roadmap-section">
+          
+          {/* Section Header */}
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 shrink-0 select-none">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">
+                Weekly Roadmap (Lộ trình phân bổ tuần dài hạn)
+              </h3>
+              <p className="text-[11px] font-medium text-slate-400 mt-0.5">
+                Bỏ qua bộ lọc ngày để hiển thị các công việc tuần hoàn, tuân thủ đúng Assignment nhân sự lựa chọn.
+              </p>
+            </div>
+          </div>
+
+          {/* SKELETON LOAD IN THE ROADMAP GRID */}
+          {loading ? (
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-3 min-h-0" id="roadmap-loading-skeletons">
+              {weekDays.map((day) => (
+                <div 
+                  key={day.name} 
+                  className="bg-white rounded-md border border-slate-200 flex flex-col justify-between overflow-hidden shadow-sm h-full p-3 space-y-3 animate-pulse"
+                >
+                  <div className="h-5 bg-slate-200 rounded w-1/3 mb-1"></div>
+                  <div className="flex-1 flex flex-col gap-2">
+                    {[1, 2, 3, 4, 5].map((rowIdx) => (
+                      <div key={rowIdx} className="h-9 bg-slate-200 rounded-md w-full"></div>
+                    ))}
                   </div>
                 </div>
-
-                {/* List items block */}
-                <div className="flex-1 flex flex-col justify-between p-2.5 min-h-0 space-y-1.5 pb-3">
-                  {dayRows.map((row) => (
-                    <div 
-                      key={row.label}
-                      className={`flex-1 flex items-center justify-between px-2 py-1 rounded-md transition-all ${
-                        row.isTotal 
-                          ? 'bg-indigo-50/40 border border-indigo-100/50 font-semibold text-indigo-950' 
-                          : 'border border-slate-50 hover:bg-slate-50/50 hover:border-slate-100'
-                      }`}
-                    >
-                      {/* Left: Tên loại + Số lượng Task */}
-                      <div className="flex flex-col justify-center">
-                        <span className={`text-xs font-medium leading-none ${
-                          row.isTotal ? 'text-indigo-600' : 'text-slate-400'
-                        }`}>
-                          {row.label}
+              ))}
+            </div>
+          ) : (
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-3 min-h-0" id="roadmap-grid">
+              {roadmapDaysData.map(({ day, dayRows }) => (
+                <div 
+                  key={day.name} 
+                  className={`bg-white rounded-md border flex flex-col justify-between overflow-hidden relative shadow-sm h-full transition-all ${
+                    day.isToday 
+                      ? 'border-indigo-500 ring-2 ring-indigo-50/50 bg-indigo-50/5' 
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  {/* Column element header */}
+                  <div className={`px-2.5 py-1.5 border-b flex flex-col items-start justify-between relative shrink-0 ${
+                    day.isToday ? 'bg-indigo-50/20 border-indigo-250' : 'bg-slate-50/50 border-slate-150'
+                  }`}>
+                    <div className="flex items-center justify-between w-full">
+                      <span className={`text-xs font-semibold ${
+                        day.isToday ? 'text-indigo-600' : 'text-slate-700'
+                      }`}>
+                        {day.name}
+                      </span>
+                      
+                      {day.isToday && (
+                        <span className="bg-indigo-600 text-[10px] font-semibold text-white px-1.5 py-0.5 rounded-sm shadow-sm scale-90">
+                          Hôm nay
                         </span>
-                        <span className={`text-xs font-semibold leading-none mt-0.5 ${
-                          row.isTotal ? 'text-indigo-800' : 'text-slate-700'
-                        }`}>
-                          {row.count}
-                        </span>
-                      </div>
-
-                      {/* Right: Est Time */}
-                      <div className="text-right flex flex-col justify-center">
-                        <span className="text-xs text-slate-400 font-normal leading-none font-sans">Est time</span>
-                        <span className={`text-xs font-medium mt-0.5 leading-none ${
-                          row.isTotal ? 'text-indigo-600' : 'text-slate-500'
-                        }`}>
-                          {formatDuration(row.estMinutes)}
-                        </span>
-                      </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-              </div>
-            );
-          })}
+                  {/* Columns data cells (Total, Daily, Weekly, Monthly, Spot) */}
+                  <div className="flex-1 flex flex-col justify-between p-2 min-h-0 gap-1 pb-3">
+                    {dayRows.map((row) => (
+                      <div 
+                        key={row.label}
+                        className={`flex-1 flex items-center justify-between px-2.5 py-1 rounded-md transition-all ${
+                          row.isTotal 
+                            ? 'bg-indigo-50/40 border border-indigo-100 font-semibold text-indigo-950 shadow-sm' 
+                            : 'border border-slate-50 hover:bg-slate-50/50 hover:border-slate-100'
+                        }`}
+                      >
+                        {/* Title of Category */}
+                        <div className="flex flex-col justify-center">
+                          <span className={`text-[10px] font-semibold leading-none uppercase tracking-wider ${
+                            row.isTotal ? 'text-indigo-600' : 'text-slate-400'
+                          }`}>
+                            {row.label}
+                          </span>
+                          <span className={`text-xs font-bold leading-none mt-1.5 ${
+                            row.isTotal ? 'text-indigo-850' : 'text-slate-700'
+                          }`}>
+                            {row.count} task{row.count !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+
+                        {/* Estimated duration right side */}
+                        <div className="text-right flex flex-col justify-center">
+                          <span className="text-[9px] text-slate-400 font-semibold uppercase leading-none">Est</span>
+                          <span className={`text-xs font-bold mt-1.5 leading-none ${
+                            row.isTotal ? 'text-indigo-600' : 'text-slate-500'
+                          }`}>
+                            {formatDuration(row.estMinutes)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                </div>
+              ))}
+            </div>
+          )}
+
         </div>
 
       </div>
 
-    </div>
     </div>
   );
 }

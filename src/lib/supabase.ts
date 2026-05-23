@@ -159,31 +159,77 @@ const createMockSupabase = () => {
   return {
     auth: {
       onAuthStateChange: (cb: any) => {
-        // Trigger a fake auth state changed immediately
+        const storedEmail = localStorage.getItem('dym_mock_session_email');
         setTimeout(() => {
-          cb('SIGNED_IN', {
-            access_token: 'mock-token',
-            user: { id: 'mock-user-id', email: 'admin@dymtask.com' },
-          });
-        }, 100);
-        return { data: { subscription: { unsubscribe: () => {} } } };
+          if (storedEmail) {
+            cb('SIGNED_IN', {
+              access_token: 'mock-token',
+              user: { id: 'mock-user-id', email: storedEmail },
+            });
+          } else {
+            cb('SIGNED_OUT', null);
+          }
+        }, 50);
+
+        // Keep track of active subscription callbacks so we can trigger them on login/logout
+        if (!(window as any)._mock_auth_callbacks) {
+          (window as any)._mock_auth_callbacks = [];
+        }
+        (window as any)._mock_auth_callbacks.push(cb);
+
+        return { data: { subscription: { unsubscribe: () => {
+          const callbacks = (window as any)._mock_auth_callbacks || [];
+          const idx = callbacks.indexOf(cb);
+          if (idx !== -1) callbacks.splice(idx, 1);
+        } } } };
       },
-      getSession: async () => ({
-        data: {
-          session: {
-            access_token: 'mock-token',
-            user: { id: 'mock-user-id', email: 'admin@dymtask.com' },
+      getSession: async () => {
+        const storedEmail = localStorage.getItem('dym_mock_session_email');
+        if (!storedEmail) {
+          return { data: { session: null }, error: null };
+        }
+        return {
+          data: {
+            session: {
+              access_token: 'mock-token',
+              user: { id: 'mock-user-id', email: storedEmail },
+            },
           },
-        },
-        error: null,
-      }),
-      getUser: async () => ({
-        data: {
-          user: { id: 'mock-user-id', email: 'admin@dymtask.com' },
-        },
-        error: null,
-      }),
-      signOut: async () => ({ error: null }),
+          error: null,
+        };
+      },
+      getUser: async () => {
+        const storedEmail = localStorage.getItem('dym_mock_session_email');
+        if (!storedEmail) {
+          return { data: { user: null }, error: null };
+        }
+        return {
+          data: {
+            user: { id: 'mock-user-id', email: storedEmail },
+          },
+          error: null,
+        };
+      },
+      signInWithOtp: async ({ email }: { email: string }) => {
+        localStorage.setItem('dym_mock_session_email', email);
+        const callbacks = (window as any)._mock_auth_callbacks || [];
+        const session = {
+          access_token: 'mock-token',
+          user: { id: 'mock-user-id', email },
+        };
+        for (const cb of callbacks) {
+          try { cb('SIGNED_IN', session); } catch (e) {}
+        }
+        return { data: { user: { id: 'mock-user-id', email } }, error: null };
+      },
+      signOut: async () => {
+        localStorage.removeItem('dym_mock_session_email');
+        const callbacks = (window as any)._mock_auth_callbacks || [];
+        for (const cb of callbacks) {
+          try { cb('SIGNED_OUT', null); } catch (e) {}
+        }
+        return { error: null };
+      },
     },
 
     from: (table: keyof typeof STORAGE_KEYS) => {
@@ -376,3 +422,4 @@ if (isValidSupabaseConfig) {
 }
 
 export const supabase = supabaseInstance;
+export const isMockSupabase = !isValidSupabaseConfig;

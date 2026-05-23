@@ -24,9 +24,10 @@ const Sidebar = () => {
     { id: 'SETTINGS', icon: SettingsIcon, roles: ['master', 'admin'], label: 'Settings' },
   ];
 
-  const filteredMenuItems = menuItems.filter(item => 
-    item.roles.includes(profile?.role || 'user')
-  );
+  const filteredMenuItems = menuItems.filter(item => {
+    const role = (profile?.role || 'user').toString().toLowerCase().trim();
+    return item.roles.includes(role);
+  });
 
   const themes: { id: AppState['theme']; color: string }[] = [
     { id: 'indigo', color: 'bg-indigo-600' },
