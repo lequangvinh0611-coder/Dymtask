@@ -85,7 +85,7 @@ const convertToDisplayTime = (time24: string): string => {
   return time24;
 };
 
-const parseTaskDescription = (rawDescription: string | null): TaskMetadata => {
+const parseTaskDescription = (rawDescription: any): TaskMetadata => {
   const defaultMeta: TaskMetadata = {
     description: '',
     project_name: '【事務代行】HR TECH',
@@ -98,32 +98,46 @@ const parseTaskDescription = (rawDescription: string | null): TaskMetadata => {
 
   if (!rawDescription) return defaultMeta;
 
-  const trimmed = rawDescription.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      return {
-        description: parsed.description || '',
-        project_name: parsed.project_name || '【事務代行】HR TECH',
-        team_name: parsed.team_name || '内部・1課',
-        tag_name: parsed.tag_name || '数値報告',
-        deadline_time: parsed.deadline_time || '09:00 AM',
-        deadline_days: parsed.deadline_days || 'Mon - Fri',
-        sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : []
-      };
-    } catch {
-      // JSON format issue, fallback to normal values
+  if (typeof rawDescription === 'object') {
+    return {
+      description: rawDescription.description || '',
+      project_name: rawDescription.project_name || '【事務代行】HR TECH',
+      team_name: rawDescription.team_name || '内部・1課',
+      tag_name: rawDescription.tag_name || '数値報告',
+      deadline_time: rawDescription.deadline_time || '09:00 AM',
+      deadline_days: rawDescription.deadline_days || 'Mon - Fri',
+      sub_tasks: Array.isArray(rawDescription.sub_tasks) ? rawDescription.sub_tasks : []
+    };
+  }
+
+  if (typeof rawDescription === 'string') {
+    const trimmed = rawDescription.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return {
+          description: parsed.description || '',
+          project_name: parsed.project_name || '【事務代行】HR TECH',
+          team_name: parsed.team_name || '内部・1課',
+          tag_name: parsed.tag_name || '数値報告',
+          deadline_time: parsed.deadline_time || '09:00 AM',
+          deadline_days: parsed.deadline_days || 'Mon - Fri',
+          sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : []
+        };
+      } catch {
+        // JSON format issue, fallback to normal values
+      }
     }
   }
 
   return {
     ...defaultMeta,
-    description: rawDescription
+    description: String(rawDescription)
   };
 };
 
-const serializeTaskDescription = (metadata: TaskMetadata): string => {
-  return JSON.stringify(metadata);
+const serializeTaskDescription = (metadata: TaskMetadata): any => {
+  return metadata;
 };
 
 const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSuccess, taskToEdit }) => {

@@ -62,7 +62,7 @@ const AVAILABLE_TAGS = ['求人更新', 'メールチェック', 'レポート�
 const AVAILABLE_PLES = ['PHAN QUANG DAT', 'LE QUANG VINH', 'LE QUANG VINH 2', 'VINH 1', 'VINH 2'];
 
 // Helper to parse complex data out of standard 'description' column
-const parseTaskDescription = (rawDescription: string | null): TaskMetadata => {
+const parseTaskDescription = (rawDescription: any): TaskMetadata => {
   const defaultMeta: TaskMetadata = {
     description: '',
     project_name: '【事務代行】HR TECH',
@@ -75,33 +75,47 @@ const parseTaskDescription = (rawDescription: string | null): TaskMetadata => {
 
   if (!rawDescription) return defaultMeta;
 
-  const trimmed = rawDescription.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      return {
-        description: parsed.description || '',
-        project_name: parsed.project_name || '【事務代行】HR TECH',
-        team_name: parsed.team_name || '内部・2課E',
-        tag_name: parsed.tag_name || '求人更新',
-        deadline_time: parsed.deadline_time || '17:00',
-        deadline_days: parsed.deadline_days || 'Mon - Fri',
-        sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : []
-      };
-    } catch {
-      // JSON syntax error, parse as regular description
+  if (typeof rawDescription === 'object') {
+    return {
+      description: rawDescription.description || '',
+      project_name: rawDescription.project_name || '【事務代行】HR TECH',
+      team_name: rawDescription.team_name || '内部・2課E',
+      tag_name: rawDescription.tag_name || '求人更新',
+      deadline_time: rawDescription.deadline_time || '17:00',
+      deadline_days: rawDescription.deadline_days || 'Mon - Fri',
+      sub_tasks: Array.isArray(rawDescription.sub_tasks) ? rawDescription.sub_tasks : []
+    };
+  }
+
+  if (typeof rawDescription === 'string') {
+    const trimmed = rawDescription.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return {
+          description: parsed.description || '',
+          project_name: parsed.project_name || '【事務代行】HR TECH',
+          team_name: parsed.team_name || '内部・2課E',
+          tag_name: parsed.tag_name || '求人更新',
+          deadline_time: parsed.deadline_time || '17:00',
+          deadline_days: parsed.deadline_days || 'Mon - Fri',
+          sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : []
+        };
+      } catch {
+        // JSON syntax error, parse as regular description
+      }
     }
   }
 
   return {
     ...defaultMeta,
-    description: rawDescription
+    description: String(rawDescription)
   };
 };
 
 // Helper to serialize metadata back into description column
-const serializeTaskDescription = (metadata: TaskMetadata): string => {
-  return JSON.stringify(metadata);
+const serializeTaskDescription = (metadata: TaskMetadata): any => {
+  return metadata;
 };
 
 const TaskManager: React.FC = () => {

@@ -85,7 +85,7 @@ const getDisplayId = (uuid: string): string => {
   return String(positiveHash).padStart(6, '0');
 };
 
-const parseTaskDescription = (rawDescription: string | null): TaskMetadata => {
+const parseTaskDescription = (rawDescription: any): TaskMetadata => {
   const defaultMeta: TaskMetadata = {
     description: '',
     project_name: '【事務代行】HR TECH',
@@ -99,34 +99,52 @@ const parseTaskDescription = (rawDescription: string | null): TaskMetadata => {
 
   if (!rawDescription) return defaultMeta;
 
-  const trimmed = rawDescription.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      return {
-        description: parsed.description || '',
-        project_name: parsed.project_name || '【事務代行】HR TECH',
-        team_name: parsed.team_name || '内部・1課',
-        tag_name: parsed.tag_name || '数値報告',
-        deadline_time: parsed.deadline_time || '17:00',
-        deadline_days: parsed.deadline_days || 'Mon - Fri',
-        sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : [],
-        todo_status: parsed.todo_status || 'NEW',
-        todo_date: parsed.todo_date
-      };
-    } catch {
-      // JSON format issue, fallback to normal values
+  if (typeof rawDescription === 'object') {
+    return {
+      description: rawDescription.description || '',
+      project_name: rawDescription.project_name || '【事務代行】HR TECH',
+      team_name: rawDescription.team_name || '内部・1課',
+      tag_name: rawDescription.tag_name || '数値報告',
+      deadline_time: rawDescription.deadline_time || '17:00',
+      deadline_days: rawDescription.deadline_days || 'Mon - Fri',
+      sub_tasks: Array.isArray(rawDescription.sub_tasks) ? rawDescription.sub_tasks : [],
+      todo_status: rawDescription.todo_status || 'NEW',
+      todo_date: rawDescription.todo_date,
+      completions: rawDescription.completions || {}
+    };
+  }
+
+  if (typeof rawDescription === 'string') {
+    const trimmed = rawDescription.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return {
+          description: parsed.description || '',
+          project_name: parsed.project_name || '【事務代行】HR TECH',
+          team_name: parsed.team_name || '内部・1課',
+          tag_name: parsed.tag_name || '数値報告',
+          deadline_time: parsed.deadline_time || '17:00',
+          deadline_days: parsed.deadline_days || 'Mon - Fri',
+          sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : [],
+          todo_status: parsed.todo_status || 'NEW',
+          todo_date: parsed.todo_date,
+          completions: parsed.completions || {}
+        };
+      } catch {
+        // JSON format issue, fallback to normal values
+      }
     }
   }
 
   return {
     ...defaultMeta,
-    description: rawDescription
+    description: String(rawDescription)
   };
 };
 
-const serializeTaskDescription = (metadata: TaskMetadata): string => {
-  return JSON.stringify(metadata);
+const serializeTaskDescription = (metadata: TaskMetadata): any => {
+  return metadata;
 };
 
 const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
@@ -458,48 +476,58 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
   // Submit task directly changing status to DONE from actions button
   const handleDirectSubmit = async (task: VirtualTask) => {
-    const meta = parseTaskDescription(task.description);
-    const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
+    try {
+      const { data: dbData, error: fetchErr } = await supabase
+        .from('tasks')
+        .select('description')
+        .eq('id', task.id)
+        .single();
 
-    // Auto complete all 'New' sub-tasks to 'Done' if submitted from list, or protect drawer choices
-    const updatedSubTasks = (task.sub_tasks || []).map(sub => {
-      const current_sub_status = sub.sub_status || 'New';
-      const sub_status = (current_sub_status === 'New' ? 'Done' : current_sub_status) as 'New' | 'Done' | 'Skipped';
-      const actual_minutes = sub.actual_minutes !== undefined && sub.actual_minutes > 0 ? sub.actual_minutes : (sub_status === 'Skipped' ? 0 : sub.estimated_minutes);
-      return {
-        ...sub,
-        sub_status,
-        actual_minutes
-      };
-    });
+      if (fetchErr) throw fetchErr;
 
-    const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
-    const hasSubtasks = updatedSubTasks.length > 0;
-    const allSkipped = hasSubtasks && updatedSubTasks.every(sub => sub.sub_status === 'Skipped');
-    const finalStatus = allSkipped ? 'SKIPPED' : 'DONE';
+      const meta = parseTaskDescription(dbData?.description);
+      const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
 
-    if (isRecurring) {
-      const completions = meta.completions || {};
-      completions[task.todo_date] = {
-        todo_status: finalStatus,
-        actual_time: calculated_actual_time,
-        sub_tasks: updatedSubTasks
-      };
+      // Auto complete all 'New' sub-tasks to 'Done' if submitted from list, or protect drawer choices
+      const updatedSubTasks = (task.sub_tasks || []).map(sub => {
+        const current_sub_status = sub.sub_status || 'New';
+        const sub_status = (current_sub_status === 'New' ? 'Done' : current_sub_status) as 'New' | 'Done' | 'Skipped';
+        const actual_minutes = sub.actual_minutes !== undefined && sub.actual_minutes > 0 ? sub.actual_minutes : (sub_status === 'Skipped' ? 0 : sub.estimated_minutes);
+        return {
+          ...sub,
+          sub_status,
+          actual_minutes
+        };
+      });
 
-      const updatedMeta: TaskMetadata = {
-        ...meta,
-        completions
-      };
+      const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
+      const hasSubtasks = updatedSubTasks.length > 0;
+      const allSkipped = hasSubtasks && updatedSubTasks.every(sub => sub.sub_status === 'Skipped');
+      const finalStatus = allSkipped ? 'SKIPPED' : 'DONE';
 
-      try {
-        const { error } = await supabase
+      let updatedMeta: TaskMetadata;
+
+      if (isRecurring) {
+        const completions = meta.completions || {};
+        completions[task.todo_date] = {
+          todo_status: finalStatus,
+          actual_time: calculated_actual_time,
+          sub_tasks: updatedSubTasks
+        };
+
+        updatedMeta = {
+          ...meta,
+          completions
+        };
+
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
             description: serializeTaskDescription(updatedMeta)
           })
           .eq('id', task.id);
 
-        if (error) throw error;
+        if (updateErr) throw updateErr;
 
         // Sync local tasks state list
         setTasks(prev => prev.map(t => t.id === task.id ? {
@@ -516,18 +544,14 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             sub_tasks: updatedSubTasks
           });
         }
-      } catch (err) {
-        console.error('Error submitting task:', err);
-      }
-    } else {
-      const updatedMeta: TaskMetadata = {
-        ...meta,
-        todo_status: finalStatus,
-        sub_tasks: updatedSubTasks
-      };
+      } else {
+        updatedMeta = {
+          ...meta,
+          todo_status: finalStatus,
+          sub_tasks: updatedSubTasks
+        };
 
-      try {
-        const { error } = await supabase
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
             description: serializeTaskDescription(updatedMeta),
@@ -536,7 +560,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           })
           .eq('id', task.id);
 
-        if (error) throw error;
+        if (updateErr) throw updateErr;
 
         // Sync local tasks state list
         setTasks(prev => prev.map(t => t.id === task.id ? {
@@ -556,16 +580,17 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             is_active: false
           });
         }
-      } catch (err) {
-        console.error('Error submitting task:', err);
       }
+
+      toast.success('Ghi nhận việc hoàn thành thành công!');
+    } catch (err: any) {
+      console.error('Error submitting task:', err);
+      toast.error(`Có lỗi xảy ra khi submit: ${err.message || 'Lỗi không xác định'}`);
     }
   };
 
   // Reset task back to NEW or other status adjustments inside the slider drawer
   const handleResetTask = async (task: VirtualTask) => {
-    const meta = parseTaskDescription(task.description);
-    const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
     const isOneTime = (task.task_type || '').toUpperCase() === 'ONETIME';
 
     // Lock Reset if template is inactive and not OneTime
@@ -574,35 +599,46 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
       return;
     }
 
-    if (isRecurring) {
-      const completions = meta.completions || {};
-      // Reset individual sub-tasks to New and actual mins to 0
-      const updatedSubTasks = (task.sub_tasks || []).map(sub => ({
-        ...sub,
-        sub_status: 'New' as const,
-        actual_minutes: 0
-      }));
+    try {
+      const { data: dbData, error: fetchErr } = await supabase
+        .from('tasks')
+        .select('description')
+        .eq('id', task.id)
+        .single();
 
-      completions[task.todo_date] = {
-        todo_status: 'NEW',
-        actual_time: 0,
-        sub_tasks: updatedSubTasks
-      };
+      if (fetchErr) throw fetchErr;
 
-      const updatedMeta: TaskMetadata = {
-        ...meta,
-        completions
-      };
+      const meta = parseTaskDescription(dbData?.description);
+      const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
 
-      try {
-        const { error } = await supabase
+      if (isRecurring) {
+        const completions = meta.completions || {};
+        // Reset individual sub-tasks to New and actual mins to 0
+        const updatedSubTasks = (task.sub_tasks || []).map(sub => ({
+          ...sub,
+          sub_status: 'New' as const,
+          actual_minutes: 0
+        }));
+
+        completions[task.todo_date] = {
+          todo_status: 'NEW',
+          actual_time: 0,
+          sub_tasks: updatedSubTasks
+        };
+
+        const updatedMeta: TaskMetadata = {
+          ...meta,
+          completions
+        };
+
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
             description: serializeTaskDescription(updatedMeta)
           })
           .eq('id', task.id);
 
-        if (error) throw error;
+        if (updateErr) throw updateErr;
 
         // Sync state
         setTasks(prev => prev.map(t => t.id === task.id ? {
@@ -619,28 +655,24 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             sub_tasks: updatedSubTasks
           });
         }
-      } catch (err) {
-        console.error('Error resetting task:', err);
-      }
-    } else {
-      // Reset individual sub-tasks to New and actual mins to 0
-      const updatedSubTasks = (meta.sub_tasks || []).map(sub => ({
-        ...sub,
-        sub_status: 'New' as const,
-        actual_minutes: 0
-      }));
+      } else {
+        // Reset individual sub-tasks to New and actual mins to 0
+        const updatedSubTasks = (meta.sub_tasks || []).map(sub => ({
+          ...sub,
+          sub_status: 'New' as const,
+          actual_minutes: 0
+        }));
 
-      // Update OneTime's date to today to prevent floating into the past
-      const todayStr = new Date().toISOString().split('T')[0];
-      const updatedMeta: TaskMetadata = {
-        ...meta,
-        todo_status: 'NEW',
-        todo_date: todayStr,
-        sub_tasks: updatedSubTasks
-      };
+        // Update OneTime's date to today to prevent floating into the past
+        const todayStr = new Date().toISOString().split('T')[0];
+        const updatedMeta: TaskMetadata = {
+          ...meta,
+          todo_status: 'NEW',
+          todo_date: todayStr,
+          sub_tasks: updatedSubTasks
+        };
 
-      try {
-        const { error } = await supabase
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
             description: serializeTaskDescription(updatedMeta),
@@ -649,7 +681,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           })
           .eq('id', task.id);
 
-        if (error) throw error;
+        if (updateErr) throw updateErr;
 
         // Sync state
         setTasks(prev => prev.map(t => t.id === task.id ? {
@@ -670,48 +702,59 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             is_active: true
           });
         }
-      } catch (err) {
-        console.error('Error resetting task:', err);
       }
+
+      toast.success('Reset việc thành công!');
+    } catch (err: any) {
+      console.error('Error resetting task:', err);
+      toast.error(`Reset thất bại: ${err.message || 'Lỗi không xác định'}`);
     }
   };
 
   // Skip task checklist representation completely
   const handleSkipTask = async (task: VirtualTask) => {
-    const meta = parseTaskDescription(task.description);
-    const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
+    try {
+      const { data: dbData, error: fetchErr } = await supabase
+        .from('tasks')
+        .select('description')
+        .eq('id', task.id)
+        .single();
 
-    if (isRecurring) {
-      const completions = meta.completions || {};
-      const currentCompletion = completions[task.todo_date] || {
-        todo_status: 'NEW',
-        actual_time: 0,
-        sub_tasks: (task.sub_tasks || []).map(sub => ({
-          ...sub,
-          sub_status: 'New' as const,
-          actual_minutes: 0
-        }))
-      };
+      if (fetchErr) throw fetchErr;
 
-      completions[task.todo_date] = {
-        ...currentCompletion,
-        todo_status: 'SKIPPED'
-      };
+      const meta = parseTaskDescription(dbData?.description);
+      const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
 
-      const updatedMeta: TaskMetadata = {
-        ...meta,
-        completions
-      };
+      if (isRecurring) {
+        const completions = meta.completions || {};
+        const currentCompletion = completions[task.todo_date] || {
+          todo_status: 'NEW',
+          actual_time: 0,
+          sub_tasks: (task.sub_tasks || []).map(sub => ({
+            ...sub,
+            sub_status: 'New' as const,
+            actual_minutes: 0
+          }))
+        };
 
-      try {
-        const { error } = await supabase
+        completions[task.todo_date] = {
+          ...currentCompletion,
+          todo_status: 'SKIPPED'
+        };
+
+        const updatedMeta: TaskMetadata = {
+          ...meta,
+          completions
+        };
+
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
             description: serializeTaskDescription(updatedMeta)
           })
           .eq('id', task.id);
 
-        if (error) throw error;
+        if (updateErr) throw updateErr;
 
         setTasks(prev => prev.map(t => t.id === task.id ? {
           ...t,
@@ -725,24 +768,20 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             todo_status: 'SKIPPED'
           });
         }
-      } catch (err) {
-        console.error('Error skipping task:', err);
-      }
-    } else {
-      const updatedMeta: TaskMetadata = {
-        ...meta,
-        todo_status: 'SKIPPED'
-      };
+      } else {
+        const updatedMeta: TaskMetadata = {
+          ...meta,
+          todo_status: 'SKIPPED'
+        };
 
-      try {
-        const { error } = await supabase
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
             description: serializeTaskDescription(updatedMeta)
           })
           .eq('id', task.id);
 
-        if (error) throw error;
+        if (updateErr) throw updateErr;
 
         setTasks(prev => prev.map(t => t.id === task.id ? {
           ...t,
@@ -756,9 +795,12 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             todo_status: 'SKIPPED'
           });
         }
-      } catch (err) {
-        console.error('Error skipping task:', err);
       }
+
+      toast.success('Bỏ qua việc thành công!');
+    } catch (err: any) {
+      console.error('Error skipping task:', err);
+      toast.error(`Bỏ qua thất bại: ${err.message || 'Lỗi không xác định'}`);
     }
   };
 
@@ -768,54 +810,62 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
     subtaskId: string, 
     fields: Partial<Pick<SubTask, 'actual_minutes' | 'sub_status'>>
   ) => {
-    const meta = parseTaskDescription(task.description);
-    const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
+    try {
+      const { data: dbData, error: fetchErr } = await supabase
+        .from('tasks')
+        .select('description')
+        .eq('id', task.id)
+        .single();
 
-    if (isRecurring) {
-      const completions = meta.completions || {};
-      const currentCompletion = completions[task.todo_date] || {
-        todo_status: 'NEW' as const,
-        actual_time: 0,
-        sub_tasks: (task.sub_tasks || []).map(sub => ({
-          ...sub,
-          sub_status: 'New' as const,
-          actual_minutes: 0
-        }))
-      };
+      if (fetchErr) throw fetchErr;
 
-      const updatedSubTasks = currentCompletion.sub_tasks.map(sub => {
-        if (sub.id === subtaskId) {
-          return {
+      const meta = parseTaskDescription(dbData?.description);
+      const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes((task.task_type || '').toUpperCase());
+
+      if (isRecurring) {
+        const completions = meta.completions || {};
+        const currentCompletion = completions[task.todo_date] || {
+          todo_status: 'NEW' as const,
+          actual_time: 0,
+          sub_tasks: (task.sub_tasks || []).map(sub => ({
             ...sub,
-            ...fields
-          };
-        }
-        return sub;
-      });
+            sub_status: 'New' as const,
+            actual_minutes: 0
+          }))
+        };
 
-      const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
-      const parentTodoStatus = currentCompletion.todo_status || 'NEW';
+        const updatedSubTasks = currentCompletion.sub_tasks.map(sub => {
+          if (sub.id === subtaskId) {
+            return {
+              ...sub,
+              ...fields
+            };
+          }
+          return sub;
+        });
 
-      completions[task.todo_date] = {
-        todo_status: parentTodoStatus,
-        actual_time: calculated_actual_time,
-        sub_tasks: updatedSubTasks
-      };
+        const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
+        const parentTodoStatus = currentCompletion.todo_status || 'NEW';
 
-      const updatedMeta: TaskMetadata = {
-        ...meta,
-        completions
-      };
+        completions[task.todo_date] = {
+          todo_status: parentTodoStatus,
+          actual_time: calculated_actual_time,
+          sub_tasks: updatedSubTasks
+        };
 
-      try {
-        const { error } = await supabase
+        const updatedMeta: TaskMetadata = {
+          ...meta,
+          completions
+        };
+
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
             description: serializeTaskDescription(updatedMeta)
           })
           .eq('id', task.id);
 
-        if (error) throw error;
+        if (updateErr) throw updateErr;
 
         // Local state adjustment
         setTasks(prev => prev.map(t => t.id === task.id ? {
@@ -832,31 +882,27 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             sub_tasks: updatedSubTasks
           });
         }
-      } catch (err) {
-        console.error('Error updating subtask value:', err);
-      }
-    } else {
-      const updatedSubTasks = (meta.sub_tasks || []).map(sub => {
-        if (sub.id === subtaskId) {
-          return {
-            ...sub,
-            ...fields
-          };
-        }
-        return sub;
-      });
+      } else {
+        const updatedSubTasks = (meta.sub_tasks || []).map(sub => {
+          if (sub.id === subtaskId) {
+            return {
+              ...sub,
+              ...fields
+            };
+          }
+          return sub;
+        });
 
-      const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
-      const parentTodoStatus = meta.todo_status || 'NEW';
+        const calculated_actual_time = updatedSubTasks.reduce((sum, sub) => sum + (sub.actual_minutes || 0), 0);
+        const parentTodoStatus = meta.todo_status || 'NEW';
 
-      const updatedMeta: TaskMetadata = {
-        ...meta,
-        todo_status: parentTodoStatus,
-        sub_tasks: updatedSubTasks
-      };
+        const updatedMeta: TaskMetadata = {
+          ...meta,
+          todo_status: parentTodoStatus,
+          sub_tasks: updatedSubTasks
+        };
 
-      try {
-        const { error } = await supabase
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
             description: serializeTaskDescription(updatedMeta),
@@ -864,7 +910,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           })
           .eq('id', task.id);
 
-        if (error) throw error;
+        if (updateErr) throw updateErr;
 
         // Local state adjustment
         setTasks(prev => prev.map(t => t.id === task.id ? {
@@ -882,9 +928,12 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             sub_tasks: updatedSubTasks
           });
         }
-      } catch (err) {
-        console.error('Error updating subtask value:', err);
       }
+
+      toast.success('Cập nhật subtask thành công!');
+    } catch (err: any) {
+      console.error('Error updating subtask value:', err);
+      toast.error(`Cập nhật subtask thất bại: ${err.message || 'Lỗi không xác định'}`);
     }
   };
 
@@ -966,9 +1015,17 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         const taskObj = virtualTasks.find(t => t.virtual_id === virtualId);
         if (!taskObj) continue;
 
-        const meta = parseTaskDescription(taskObj.description);
+        const { data: dbData, error: fetchErr } = await supabase
+          .from('tasks')
+          .select('description')
+          .eq('id', taskObj.id)
+          .single();
+
+        if (fetchErr) throw fetchErr;
+
+        const meta = parseTaskDescription(dbData?.description);
         const isDaily = taskObj.task_type?.toUpperCase() === 'DAILY';
-        let newDescription = '';
+        let updatedMeta: TaskMetadata;
 
         if (isDaily) {
           const completions = meta.completions || {};
@@ -987,31 +1044,29 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             todo_status: 'SKIPPED'
           };
 
-          const updatedMeta: TaskMetadata = {
+          updatedMeta = {
             ...meta,
             completions
           };
-          newDescription = serializeTaskDescription(updatedMeta);
         } else {
-          const updatedMeta: TaskMetadata = {
+          updatedMeta = {
             ...meta,
             todo_status: 'SKIPPED'
           };
-          newDescription = serializeTaskDescription(updatedMeta);
         }
 
-        const { error } = await supabase
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
-            description: newDescription
+            description: serializeTaskDescription(updatedMeta)
           })
           .eq('id', taskObj.id);
 
-        if (error) throw error;
+        if (updateErr) throw updateErr;
 
         currentTasksList = currentTasksList.map(t => t.id === taskObj.id ? {
           ...t,
-          description: newDescription
+          description: serializeTaskDescription(updatedMeta)
         } : t);
       }
 
