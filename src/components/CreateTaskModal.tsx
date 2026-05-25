@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Trash2, Clock, Loader2, Plus, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { useAuthStore } from '../store/authStore';
 
 // TS interfaces matching the schema
 interface SubTask {
@@ -39,11 +40,6 @@ interface CreateTaskModalProps {
   onSuccess: () => void;
   taskToEdit?: DbTask | null;
 }
-
-const AVAILABLE_PROJECTS = ['【事務代行】HR TECH', 'GLOBAL OUTSOURCING', '求人媒体運用', 'RECRUITING MANAGEMENT', 'ADMIN OPERATIONS'];
-const AVAILABLE_TEAMS = ['内部・2課E', '内部・1課', 'アウトソーシングG', '人事総務部', '営業サポート課'];
-const AVAILABLE_TAGS = ['求人更新', '数値報告', 'メールチェック', 'レポート作成', 'データ入力', 'システム保守'];
-const AVAILABLE_ASSIGNEES = ['PHAN QUANG DAT', 'LE QUANG VINH', 'LE QUANG VINH 2', 'VINH 1', 'VINH 2'];
 
 const DAYS_OF_WEEK = [
   { label: 'M', value: 'Mon', fullName: 'Monday' },
@@ -88,9 +84,9 @@ const convertToDisplayTime = (time24: string): string => {
 const parseTaskDescription = (rawDescription: any): TaskMetadata => {
   const defaultMeta: TaskMetadata = {
     description: '',
-    project_name: '【事務代行】HR TECH',
-    team_name: '内部・1課',
-    tag_name: '数値報告',
+    project_name: '',
+    team_name: '',
+    tag_name: '',
     deadline_time: '09:00 AM',
     deadline_days: 'Mon - Fri',
     sub_tasks: []
@@ -101,9 +97,9 @@ const parseTaskDescription = (rawDescription: any): TaskMetadata => {
   if (typeof rawDescription === 'object') {
     return {
       description: rawDescription.description || '',
-      project_name: rawDescription.project_name || '【事務代行】HR TECH',
-      team_name: rawDescription.team_name || '内部・1課',
-      tag_name: rawDescription.tag_name || '数値報告',
+      project_name: rawDescription.project_name || '',
+      team_name: rawDescription.team_name || '',
+      tag_name: rawDescription.tag_name || '',
       deadline_time: rawDescription.deadline_time || '09:00 AM',
       deadline_days: rawDescription.deadline_days || 'Mon - Fri',
       sub_tasks: Array.isArray(rawDescription.sub_tasks) ? rawDescription.sub_tasks : []
@@ -117,9 +113,9 @@ const parseTaskDescription = (rawDescription: any): TaskMetadata => {
         const parsed = JSON.parse(trimmed);
         return {
           description: parsed.description || '',
-          project_name: parsed.project_name || '【事務代行】HR TECH',
-          team_name: parsed.team_name || '内部・1課',
-          tag_name: parsed.tag_name || '数値報告',
+          project_name: parsed.project_name || '',
+          team_name: parsed.team_name || '',
+          tag_name: parsed.tag_name || '',
           deadline_time: parsed.deadline_time || '09:00 AM',
           deadline_days: parsed.deadline_days || 'Mon - Fri',
           sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : []
@@ -141,48 +137,96 @@ const serializeTaskDescription = (metadata: TaskMetadata): any => {
 };
 
 const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSuccess, taskToEdit }) => {
+  const { profile } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const isEditMode = !!taskToEdit;
 
+  const [masterData, setMasterData] = useState<{
+    projects: string[];
+    teams: string[];
+    tags: string[];
+    assignees: string[];
+  }>({
+    projects: [],
+    teams: [],
+    tags: [],
+    assignees: []
+  });
+
   // Form states matching mockup & requirements
   const [taskName, setTaskName] = useState('');
-  const [project, setProject] = useState('【事務代行】HR TECH');
-  const [tag, setTag] = useState('求人更新');
-  const [team, setTeam] = useState('内部・2課E');
-  const [taskType, setTaskType] = useState('DAILY');
+  const [project, setProject] = useState('');
+  const [tag, setTag] = useState('');
+  const [team, setTeam] = useState('');
+  const [taskType, setTaskType] = useState('');
 
   // Time is managed as 24h internally ("09:00" etc.)
-  const [deadlineTime24h, setDeadlineTime24h] = useState('09:00');
+  const [deadlineTime24h, setDeadlineTime24h] = useState('');
 
   // Inputs depending on selected type
-  const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-  const [monthlyDays, setMonthlyDays] = useState('10, 20');
-  const [oneTimeDate, setOneTimeDate] = useState('2026-05-20');
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [monthlyDays, setMonthlyDays] = useState('');
+  const [oneTimeDate, setOneTimeDate] = useState('');
 
   // Subtasks list
   const [subTasks, setSubTasks] = useState<SubTask[]>([]);
 
-  // Sync / Reset on mount / edit trigger
+  // Fetch Master Data on open
+  useEffect(() => {
+    if (isOpen) {
+      const fetchMasterData = async () => {
+        try {
+          const [projRes, teamRes, tagRes, userRes] = await Promise.all([
+            supabase.from('projects').select('name').eq('is_active', true).order('name', { ascending: true }),
+            supabase.from('teams').select('name').eq('is_active', true).order('name', { ascending: true }),
+            supabase.from('tags').select('name').eq('is_active', true).order('name', { ascending: true }),
+            supabase.from('users').select('name').eq('status', 'ACTIVE').order('name', { ascending: true })
+          ]);
+
+          const projectsList = (projRes.data || []).map((p: any) => p.name);
+          const teamsList = (teamRes.data || []).map((t: any) => t.name);
+          const tagsList = (tagRes.data || []).map((t: any) => t.name);
+          const assigneesList = (userRes.data || []).map((u: any) => u.name);
+
+          setMasterData({
+            projects: projectsList,
+            teams: teamsList,
+            tags: tagsList,
+            assignees: assigneesList
+          });
+        } catch (err) {
+          console.error('Error fetching master data for CreateTaskModal:', err);
+        }
+      };
+      fetchMasterData();
+    }
+  }, [isOpen]);
+
+  // Sync / Reset on mount / edit trigger & master data load
   useEffect(() => {
     if (isOpen) {
       if (taskToEdit) {
         const meta = parseTaskDescription(taskToEdit.description);
         setTaskName(taskToEdit.title || '');
-        setProject(meta.project_name || AVAILABLE_PROJECTS[0]);
-        setTag(meta.tag_name || AVAILABLE_TAGS[0]);
-        setTeam(meta.team_name || AVAILABLE_TEAMS[0]);
-        setTaskType(taskToEdit.task_type || 'DAILY');
+        setProject(meta.project_name || '');
+        setTag(meta.tag_name || '');
+        setTeam(meta.team_name || '');
+        setTaskType(taskToEdit.task_type || '');
 
         // Parse structures matching exact time elements
-        const currentDeadlineTime = meta.deadline_time || '09:00 AM';
-        setDeadlineTime24h(convertTo24h(currentDeadlineTime));
+        const currentDeadlineTime = meta.deadline_time || '';
+        if (currentDeadlineTime) {
+          setDeadlineTime24h(convertTo24h(currentDeadlineTime));
+        } else {
+          setDeadlineTime24h('');
+        }
 
-        const daysStr = meta.deadline_days || 'Mon - Fri';
+         const daysStr = meta.deadline_days || '';
         if (taskToEdit.task_type === 'DAILY') {
           // Defaults
         } else if (taskToEdit.task_type === 'WEEKLY') {
           const parsed = daysStr.split(/[\s,]+/).map(d => d.trim()).filter(d => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].includes(d));
-          setSelectedDays(parsed.length > 0 ? parsed : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+          setSelectedDays(parsed);
         } else if (taskToEdit.task_type === 'MONTHLY') {
           setMonthlyDays(daysStr);
         } else if (taskToEdit.task_type === 'ONETIME') {
@@ -191,29 +235,33 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
 
         setSubTasks(meta.sub_tasks || []);
       } else {
-        // Reset inputs on Create New
+        // Reset inputs on Create New to empty / unselected as requested
         setTaskName('');
-        setProject(AVAILABLE_PROJECTS[0]);
-        setTag(AVAILABLE_TAGS[0]);
-        setTeam(AVAILABLE_TEAMS[0]);
-        setTaskType('DAILY');
-        setDeadlineTime24h('09:00');
-        setSelectedDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-        setMonthlyDays('10, 20');
-        
-        // Default to current date mapping
-        const currentDate = new Date().toISOString().split('T')[0];
-        setOneTimeDate(currentDate);
+        setProject('');
+        setTag('');
+        setTeam(profile?.team_ids?.[0] || 'No Team');
+        setTaskType('');
+        setDeadlineTime24h('');
+        setSelectedDays([]);
+        setMonthlyDays('');
+        setOneTimeDate('');
 
         setSubTasks([{
           id: Math.random().toString(36).substring(2, 9),
           content: '',
-          assignee: AVAILABLE_ASSIGNEES[0],
-          estimated_minutes: 15
+          assignee: '',
+          estimated_minutes: 0
         }]);
       }
     }
-  }, [isOpen, taskToEdit]);
+  }, [isOpen, taskToEdit, profile]);
+
+  // Sync team whenever profile is available/changed if not in edit mode
+  useEffect(() => {
+    if (isOpen && !taskToEdit && profile) {
+      setTeam(profile.team_ids?.[0] || 'No Team');
+    }
+  }, [isOpen, taskToEdit, profile]);
 
   // Handle Quick Day selection toggle for WEEKLY type
   const handleToggleDay = (dayValue: string) => {
@@ -234,7 +282,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
     const newSub: SubTask = {
       id: Math.random().toString(36).substring(2, 9),
       content: '',
-      assignee: AVAILABLE_ASSIGNEES[0],
+      assignee: masterData.assignees[0] || '',
       estimated_minutes: 15
     };
     setSubTasks([...subTasks, newSub]);
@@ -269,6 +317,52 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
       toast.warning('Vui lòng nhập tên công việc (Task Name).');
       return;
     }
+    if (!project) {
+      toast.warning('Vui lòng chọn Project.');
+      return;
+    }
+    if (!tag) {
+      toast.warning('Vui lòng chọn Tag.');
+      return;
+    }
+    if (!taskType) {
+      toast.warning('Vui lòng chọn Task Type.');
+      return;
+    }
+    if (!deadlineTime24h) {
+      toast.warning('Vui lòng chọn thời gian Deadline (Deadline time).');
+      return;
+    }
+    if (taskType === 'WEEKLY' && selectedDays.length === 0) {
+      toast.warning('Vui lòng chọn ít nhất một ngày lặp lại (Repeat days).');
+      return;
+    }
+    if (taskType === 'MONTHLY' && !monthlyDays.trim()) {
+      toast.warning('Vui lòng nhập ngày lặp lại hàng tháng (Monthly repeat days).');
+      return;
+    }
+    if (taskType === 'ONETIME' && !oneTimeDate) {
+      toast.warning('Vui lòng chọn ngày hoàn thành (Deadline date).');
+      return;
+    }
+    if (subTasks.length === 0) {
+      toast.warning('Vui lòng thêm ít nhất một subtask.');
+      return;
+    }
+    for (const sub of subTasks) {
+      if (!sub.content.trim()) {
+        toast.warning('Nội dung subtask (Sub-task content) không được để trống.');
+        return;
+      }
+      if (!sub.assignee) {
+        toast.warning('Người thực hiện của subtask không được để trống.');
+        return;
+      }
+      if (!sub.estimated_minutes || sub.estimated_minutes < 1) {
+        toast.warning('Thời gian ước tính (Est. time) của subtask phải lớn hơn hoặc bằng 1 phút.');
+        return;
+      }
+    }
 
     setLoading(true);
     try {
@@ -281,7 +375,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
       } else if (taskType === 'MONTHLY') {
         computedDeadlineDays = monthlyDays || '10, 20';
       } else if (taskType === 'ONETIME') {
-        computedDeadlineDays = oneTimeDate || '2026-05-20';
+        computedDeadlineDays = oneTimeDate;
       }
 
       const formattedDeadlineTime = convertToDisplayTime(deadlineTime24h);
@@ -372,11 +466,13 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Project</label>
               <select 
+                required
                 className="w-full h-8 px-2 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 cursor-pointer text-slate-700"
                 value={project} 
                 onChange={(e) => setProject(e.target.value)}
               >
-                {AVAILABLE_PROJECTS.map(proj => (
+                <option value="">-- Choose Project --</option>
+                {masterData.projects.map(proj => (
                   <option key={proj} value={proj}>{proj}</option>
                 ))}
               </select>
@@ -385,11 +481,13 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Tag</label>
               <select 
+                required
                 className="w-full h-8 px-2 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 cursor-pointer text-slate-700"
                 value={tag} 
                 onChange={(e) => setTag(e.target.value)}
               >
-                {AVAILABLE_TAGS.map(tg => (
+                <option value="">-- Choose Tag --</option>
+                {masterData.tags.map(tg => (
                   <option key={tg} value={tg}>{tg}</option>
                 ))}
               </select>
@@ -398,133 +496,113 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Task type</label>
               <select 
+                required
                 className="w-full h-8 px-2 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 cursor-pointer text-slate-700"
                 value={taskType} 
                 onChange={(e) => setTaskType(e.target.value)}
               >
-                <option value="DAILY">Daily time</option>
-                <option value="WEEKLY">Weekly time</option>
-                <option value="MONTHLY">Monthly time</option>
-                <option value="ONETIME">Onetime time</option>
+                <option value="">-- Choose Task type --</option>
+                <option value="DAILY">Daily</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="MONTHLY">Monthly</option>
+                <option value="ONETIME">Onetime</option>
               </select>
             </div>
           </div>
 
-          {/* HÀNG 3: Dynamic Conditional Settings Panel */}
-          <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
-            {taskType === 'DAILY' && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Deadline time</label>
-                  <div className="relative">
+          {/* HÀNG 3: Dynamic Conditional Settings Panel (Always full sizing layout for unified UX) */}
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end min-h-[58px]">
+              {/* Left Column: Deadline Time is always visible */}
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Deadline time</label>
+                <input 
+                  required 
+                  disabled={!taskType}
+                  type="time"
+                  className="w-full h-8 px-3 bg-white border border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 rounded-md text-xs font-mono font-medium focus:outline-none focus:border-indigo-500 text-slate-700 shadow-sm"
+                  value={deadlineTime24h} 
+                  onChange={(e) => setDeadlineTime24h(e.target.value)} 
+                />
+              </div>
+
+              {/* Right Column: Contextual Deadline Setting */}
+              <div className="min-h-[48px] flex flex-col justify-end">
+                {taskType === '' && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Deadline detail</label>
+                    <div className="w-full h-8 px-3 bg-slate-100/60 border border-slate-200/50 rounded-md text-xs flex items-center gap-1.5 text-slate-400 font-normal italic">
+                      <Calendar size={12} className="shrink-0" />
+                      <span>Choose Task type to configure</span>
+                    </div>
+                  </div>
+                )}
+
+                {taskType === 'DAILY' && (
+                  <div>
+                    <span className="block text-xs font-medium text-slate-500 mb-1">Deadline days</span>
+                    <div className="w-full h-8 flex items-center">
+                      <p className="text-xs font-normal text-slate-500 italic">
+                        Triggered everyday Mon - Fri (Sat & Sun optional)
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {taskType === 'WEEKLY' && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Repeat days</label>
+                    <div className="flex items-center gap-1 h-8">
+                      {DAYS_OF_WEEK.map((day) => {
+                        const isActive = selectedDays.includes(day.value);
+                        return (
+                          <button
+                            key={day.value}
+                            type="button"
+                            title={day.fullName}
+                            onClick={() => handleToggleDay(day.value)}
+                            className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-medium tracking-tighter transition-all cursor-pointer border ${
+                              isActive 
+                                ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
+                                : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                            }`}
+                          >
+                            {day.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {taskType === 'MONTHLY' && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Monthly repeat days</label>
                     <input 
                       required 
-                      type="time"
-                      className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-mono font-medium focus:outline-none focus:border-indigo-500 text-slate-700"
-                      value={deadlineTime24h} 
-                      onChange={(e) => setDeadlineTime24h(e.target.value)} 
+                      type="text"
+                      className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 text-slate-800 shadow-sm"
+                      placeholder="e.g. 10, 15, 20" 
+                      value={monthlyDays} 
+                      onChange={(e) => setMonthlyDays(e.target.value)} 
                     />
                   </div>
-                </div>
-                <div className="flex-1">
-                  <span className="block text-xs font-medium text-slate-500 mb-1">Deadline days</span>
-                  <p className="text-xs font-normal text-slate-500 italic mt-1.5">
-                    Triggered everyday Mon - Fri (Saturday and Sunday optional)
-                  </p>
-                </div>
-              </div>
-            )}
+                )}
 
-            {taskType === 'WEEKLY' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Deadline time</label>
-                  <input 
-                    required 
-                    type="time"
-                    className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-mono font-medium focus:outline-none focus:border-indigo-500 text-slate-700"
-                    value={deadlineTime24h} 
-                    onChange={(e) => setDeadlineTime24h(e.target.value)} 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Repeat days</label>
-                  <div className="flex items-center gap-1">
-                    {DAYS_OF_WEEK.map((day) => {
-                      const isActive = selectedDays.includes(day.value);
-                      return (
-                        <button
-                          key={day.value}
-                          type="button"
-                          title={day.fullName}
-                          onClick={() => handleToggleDay(day.value)}
-                          className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-medium tracking-tighter transition-all cursor-pointer border ${
-                            isActive 
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
-                              : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'
-                          }`}
-                        >
-                          {day.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {taskType === 'MONTHLY' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Deadline time</label>
-                  <input 
-                    required 
-                    type="time"
-                    className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-mono font-medium focus:outline-none focus:border-indigo-500 text-slate-700"
-                    value={deadlineTime24h} 
-                    onChange={(e) => setDeadlineTime24h(e.target.value)} 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Monthly repeat days</label>
-                  <input 
-                    required 
-                    type="text"
-                    className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 text-slate-800"
-                    placeholder="e.g. 10, 15, 20" 
-                    value={monthlyDays} 
-                    onChange={(e) => setMonthlyDays(e.target.value)} 
-                  />
-                </div>
-              </div>
-            )}
-
-            {taskType === 'ONETIME' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Deadline time</label>
-                  <input 
-                    required 
-                    type="time"
-                    className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-mono font-medium focus:outline-none focus:border-indigo-500 text-slate-700"
-                    value={deadlineTime24h} 
-                    onChange={(e) => setDeadlineTime24h(e.target.value)} 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Deadline date</label>
-                  <div className="relative">
+                {taskType === 'ONETIME' && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Deadline date</label>
                     <input 
                       required 
                       type="date"
-                      className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 text-slate-700"
+                      className="w-full h-8 px-3 bg-white border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:border-indigo-500 text-slate-700 shadow-sm"
                       value={oneTimeDate} 
                       onChange={(e) => setOneTimeDate(e.target.value)} 
                     />
                   </div>
-                </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* HÀNG 4: Sub-tasks management (FLEXBOX HORIZONTAL ONE-ROW) */}
@@ -577,7 +655,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSu
                         value={sub.assignee}
                         onChange={(e) => handleUpdateSubTaskField(sub.id, 'assignee', e.target.value)}
                       >
-                        {AVAILABLE_ASSIGNEES.map(person => (
+                        <option value="">-- Assignee --</option>
+                        {masterData.assignees.map(person => (
                           <option key={person} value={person}>{person}</option>
                         ))}
                       </select>

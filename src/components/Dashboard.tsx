@@ -114,7 +114,7 @@ const isTaskOnWeekday = (task: any, dayShort: string, dateString: string, dayOfM
     return parts.includes(dayOfMonth);
   }
 
-  if (type === 'ONETIME' || type === 'SPOT') {
+  if (type === 'ONETIME') {
     return deadlineDays === dateString || meta.todo_date === dateString;
   }
 
@@ -366,7 +366,7 @@ export default function Dashboard() {
       const dailyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'DAILY');
       const weeklyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'WEEKLY');
       const monthlyTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'MONTHLY');
-      const spotTypeTasks = dayTasks.filter(t => ['ONETIME', 'SPOT'].includes((t.task_type || '').toUpperCase()));
+      const onetimeTypeTasks = dayTasks.filter(t => (t.task_type || '').toUpperCase() === 'ONETIME');
 
       const dayRows = [
         {
@@ -391,9 +391,9 @@ export default function Dashboard() {
           estMinutes: monthlyTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
         },
         {
-          label: 'Spot',
-          count: spotTypeTasks.length,
-          estMinutes: spotTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
+          label: 'Onetime',
+          count: onetimeTypeTasks.length,
+          estMinutes: onetimeTypeTasks.reduce((sum, t) => sum + (t.est_time || 0), 0)
         }
       ];
 

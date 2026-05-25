@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Search, RotateCcw, Clock, Check, AlertCircle, ChevronLeft, ChevronRight, 
   X, Calendar, Download, RefreshCw, Layers, CheckSquare, Square, Loader2
@@ -57,6 +57,42 @@ interface VirtualTask extends DbTask {
   sub_tasks: any[];
 }
 
+const isTaskOnDate = (task: any, dateStr: string): boolean => {
+  const meta = task.meta || parseTaskDescription(task.description);
+  const type = (task.task_type || '').toUpperCase();
+  const deadlineDays = (meta.deadline_days || '').trim();
+
+  // Condition: không hiển thị những ngày trước thời điểm tạo task
+  const createdAtDate = task.created_at ? task.created_at.split('T')[0] : '';
+  if (createdAtDate && dateStr < createdAtDate) {
+    return false;
+  }
+
+  if (type === 'DAILY') {
+    return true;
+  }
+
+  const d = new Date(dateStr);
+  const weekdaysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayShort = weekdaysShort[d.getDay()];
+  const dayOfMonth = d.getDate();
+
+  if (type === 'WEEKLY') {
+    if (deadlineDays === 'Mon - Fri' || deadlineDays === 'Daily') {
+      return dayShort !== 'Sun' && dayShort !== 'Sat';
+    }
+    const parts = deadlineDays.split(/[\s,]+/).map(d => d.trim().toLowerCase());
+    return parts.includes(dayShort.toLowerCase());
+  }
+
+  if (type === 'MONTHLY') {
+    const parts = deadlineDays.split(/[\s,]+/).map(d => parseInt(d.trim())).filter(d => !isNaN(d));
+    return parts.includes(dayOfMonth);
+  }
+
+  return false;
+};
+
 const getDatesBetween = (start: string, end: string) => {
   const dates = [];
   let curr = new Date(start);
@@ -67,11 +103,6 @@ const getDatesBetween = (start: string, end: string) => {
   }
   return dates;
 };
-
-const AVAILABLE_PROJECTS = ['【事務代行】HR TECH', 'GLOBAL OUTSOURCING', '求人媒体運用', 'RECRUITING MANAGEMENT', 'ADMIN OPERATIONS'];
-const AVAILABLE_TEAMS = ['内部・2課E', '内部・1課', 'アウトソーシングG', '人事総務部', '営業サポート課'];
-const AVAILABLE_TAGS = ['求人更新', '数値報告', 'メールチェック', 'レポート作成', 'データ入力'];
-const AVAILABLE_ASSIGNEES = ['PHAN QUANG DAT', 'LE QUANG VINH', 'LE QUANG VINH 2', 'VINH 1', 'VINH 2'];
 
 // Helper to convert UUID to a secure, stable 6-digit number string
 const getDisplayId = (uuid: string): string => {
@@ -88,9 +119,9 @@ const getDisplayId = (uuid: string): string => {
 const parseTaskDescription = (rawDescription: any): TaskMetadata => {
   const defaultMeta: TaskMetadata = {
     description: '',
-    project_name: '【事務代行】HR TECH',
-    team_name: '内部・1課',
-    tag_name: '数値報告',
+    project_name: '',
+    team_name: '',
+    tag_name: '',
     deadline_time: '17:00',
     deadline_days: 'Mon - Fri',
     sub_tasks: [],
@@ -102,9 +133,9 @@ const parseTaskDescription = (rawDescription: any): TaskMetadata => {
   if (typeof rawDescription === 'object') {
     return {
       description: rawDescription.description || '',
-      project_name: rawDescription.project_name || '【事務代行】HR TECH',
-      team_name: rawDescription.team_name || '内部・1課',
-      tag_name: rawDescription.tag_name || '数値報告',
+      project_name: rawDescription.project_name || '',
+      team_name: rawDescription.team_name || '',
+      tag_name: rawDescription.tag_name || '',
       deadline_time: rawDescription.deadline_time || '17:00',
       deadline_days: rawDescription.deadline_days || 'Mon - Fri',
       sub_tasks: Array.isArray(rawDescription.sub_tasks) ? rawDescription.sub_tasks : [],
@@ -121,9 +152,9 @@ const parseTaskDescription = (rawDescription: any): TaskMetadata => {
         const parsed = JSON.parse(trimmed);
         return {
           description: parsed.description || '',
-          project_name: parsed.project_name || '【事務代行】HR TECH',
-          team_name: parsed.team_name || '内部・1課',
-          tag_name: parsed.tag_name || '数値報告',
+          project_name: parsed.project_name || '',
+          team_name: parsed.team_name || '',
+          tag_name: parsed.tag_name || '',
           deadline_time: parsed.deadline_time || '17:00',
           deadline_days: parsed.deadline_days || 'Mon - Fri',
           sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : [],
@@ -147,6 +178,14 @@ const serializeTaskDescription = (metadata: TaskMetadata): any => {
   return metadata;
 };
 
+const getTodayDateString = (): string => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   const { profile } = useAuthStore();
   const isUser = (profile?.role || '').toString().toLowerCase().trim() === 'user';
@@ -156,17 +195,60 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   const [tasks, setTasks] = useState<DbTask[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filter conditions state matched to Mockup
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterAssignee, setFilterAssignee] = useState('');
-  const [filterTag, setFilterTag] = useState('');
-  const [filterProject, setFilterProject] = useState('');
-  const [filterTeam, setFilterTeam] = useState('');
-  const [filterTodoStatus, setFilterTodoStatus] = useState('NEW'); // default 'New' as shown under the status dropdown
+  // Filter conditions state matched to Mockup (with sessionStorage persistence)
+  const [searchQuery, setSearchQuery] = useState(() => sessionStorage.getItem('todo_searchQuery') || '');
+  const [filterAssignee, setFilterAssignee] = useState(() => {
+    const stored = sessionStorage.getItem('todo_filterAssignee');
+    if (stored !== null) return stored;
+    return '';
+  });
+  const [filterTag, setFilterTag] = useState(() => sessionStorage.getItem('todo_filterTag') || '');
+  const [filterProject, setFilterProject] = useState(() => sessionStorage.getItem('todo_filterProject') || '');
+  const [filterTeam, setFilterTeam] = useState(() => sessionStorage.getItem('todo_filterTeam') || '');
+  const [filterTodoStatus, setFilterTodoStatus] = useState(() => sessionStorage.getItem('todo_filterTodoStatus') || 'NEW'); // default 'New' as shown under the status dropdown
   
   // Date configuration
-  const [startDate, setStartDate] = useState('2026-05-20');
-  const [endDate, setEndDate] = useState('2026-05-20');
+  const [startDate, setStartDate] = useState(() => sessionStorage.getItem('todo_startDate') || getTodayDateString());
+  const [endDate, setEndDate] = useState(() => sessionStorage.getItem('todo_endDate') || getTodayDateString());
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem('todo_filterAssignee');
+    if (stored === null && profile?.name) {
+      setFilterAssignee(profile.name);
+    }
+  }, [profile?.name]);
+
+  useEffect(() => {
+    sessionStorage.setItem('todo_searchQuery', searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    sessionStorage.setItem('todo_filterAssignee', filterAssignee);
+  }, [filterAssignee]);
+
+  useEffect(() => {
+    sessionStorage.setItem('todo_filterTag', filterTag);
+  }, [filterTag]);
+
+  useEffect(() => {
+    sessionStorage.setItem('todo_filterProject', filterProject);
+  }, [filterProject]);
+
+  useEffect(() => {
+    sessionStorage.setItem('todo_filterTeam', filterTeam);
+  }, [filterTeam]);
+
+  useEffect(() => {
+    sessionStorage.setItem('todo_filterTodoStatus', filterTodoStatus);
+  }, [filterTodoStatus]);
+
+  useEffect(() => {
+    sessionStorage.setItem('todo_startDate', startDate);
+  }, [startDate]);
+
+  useEffect(() => {
+    sessionStorage.setItem('todo_endDate', endDate);
+  }, [endDate]);
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -179,15 +261,14 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   // Drawer slider panel
   const [openedTask, setOpenedTask] = useState<VirtualTask | null>(null);
 
-  // Initial tasks loader filtering is_active = true
+  // Initial tasks loader fetching both active and inactive records to handle history & ONETIME states
   const loadActiveTasks = async () => {
     setLoading(true);
     try {
-      // Query active tasks (is_active = true)
+      // Fetch all tasks for local processing of recurring templates & ONETIME tasks
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .eq('is_active', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -204,6 +285,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   const [teamsList, setTeamsList] = useState<string[]>([]);
   const [tagsList, setTagsList] = useState<string[]>([]);
   const [assigneesList, setAssigneesList] = useState<string[]>([]);
+  const [usersFullList, setUsersFullList] = useState<any[]>([]);
 
   // Fetch metadata dynamically and filter only active ones
   const fetchMetadata = async () => {
@@ -214,7 +296,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         { data: teamsData },
         { data: tagsData }
       ] = await Promise.all([
-        supabase.from('users').select('name, status'),
+        supabase.from('users').select('name, status, team_ids'),
         supabase.from('projects').select('name, is_active'),
         supabase.from('teams').select('name, is_active'),
         supabase.from('tags').select('name, is_active')
@@ -240,10 +322,71 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
       setProjectsList(activeProj);
       setTeamsList(activeTms);
       setTagsList(activeTgs);
+      setUsersFullList(usersData || []);
     } catch (err) {
       console.error('Error fetching metadata in TaskList:', err);
     }
   };
+
+  // Build a map of usernames to their team names
+  const userToTeamsMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    usersFullList.forEach((u: any) => {
+      if (u.name) {
+        const rawTeams = Array.isArray(u.team_ids) ? u.team_ids : [];
+        const cleanTeams = rawTeams
+          .map((t: any) => t?.toString().replace(/[\[\]"]/g, '').trim())
+          .filter((t: string) => t && t !== "");
+        map[u.name] = cleanTeams;
+      }
+    });
+    return map;
+  }, [usersFullList]);
+
+  // Dynamically resolve team info based on subtask assignees
+  const getTaskTeams = useCallback((taskSubtasks: any[], fallbackTeamName: string = '') => {
+    const assignees = taskSubtasks?.map(s => s.assignee).filter(Boolean) || [];
+    if (assignees.length === 0) {
+      const cleanFallback = fallbackTeamName ? fallbackTeamName.replace(/[\[\]"]/g, '').trim() : '';
+      return {
+        display: cleanFallback || 'No Team',
+        allTeams: cleanFallback ? [cleanFallback] : []
+      };
+    }
+
+    const resolvedTeams: string[] = [];
+    const uniqueAssignees = Array.from(new Set(assignees));
+    uniqueAssignees.forEach(name => {
+      const teams = userToTeamsMap[name] || [];
+      teams.forEach(t => {
+        if (!resolvedTeams.includes(t)) {
+          resolvedTeams.push(t);
+        }
+      });
+    });
+
+    if (resolvedTeams.length === 0) {
+      const cleanFallback = fallbackTeamName ? fallbackTeamName.replace(/[\[\]"]/g, '').trim() : '';
+      return {
+        display: cleanFallback || 'No Team',
+        allTeams: cleanFallback ? [cleanFallback] : []
+      };
+    }
+
+    // First assignee's team
+    const firstSubtaskAssignee = taskSubtasks.find(s => s.assignee)?.assignee;
+    const firstAssigneeTeams = firstSubtaskAssignee ? (userToTeamsMap[firstSubtaskAssignee] || []) : [];
+    const firstTeam = firstAssigneeTeams[0] || resolvedTeams[0];
+
+    // Find other unique teams (excluding firstTeam)
+    const remainingCount = resolvedTeams.filter(t => t !== firstTeam).length;
+    const display = remainingCount > 0 ? `${firstTeam} +${remainingCount}` : firstTeam;
+
+    return {
+      display,
+      allTeams: resolvedTeams
+    };
+  }, [userToTeamsMap]);
 
   useEffect(() => {
     loadActiveTasks();
@@ -266,6 +409,11 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
   const parsedTasks = useMemo(() => {
     return tasks.map(task => {
       const meta = parseTaskDescription(task.description);
+      const isOneTime = (task.task_type || '').toUpperCase() === 'ONETIME';
+      const fallbackDate = isOneTime && meta.deadline_days && /^\d{4}-\d{2}-\d{2}$/.test(meta.deadline_days)
+        ? meta.deadline_days 
+        : new Date(task.created_at).toISOString().split('T')[0];
+
       return {
         ...task,
         meta,
@@ -276,27 +424,35 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         deadline_days: meta.deadline_days,
         sub_tasks: meta.sub_tasks,
         todo_status: meta.todo_status || 'NEW',
-        todo_date: meta.todo_date || new Date(task.created_at).toISOString().split('T')[0]
+        todo_date: meta.todo_date || fallbackDate
       };
     });
   }, [tasks]);
 
-  // Generate frontend trackable virtual tasks for 'DAILY' type within startDate & endDate
+  // Generate frontend trackable virtual tasks for DAILY, WEEKLY, MONTHLY, and ONETIME types within startDate & endDate
   const virtualTasks = useMemo(() => {
     const dates = getDatesBetween(startDate, endDate);
     const list: VirtualTask[] = [];
 
     parsedTasks.forEach(task => {
-      const isDaily = task.task_type?.toUpperCase() === 'DAILY';
+      const type = (task.task_type || '').toUpperCase();
+      const isRecurring = ['DAILY', 'WEEKLY', 'MONTHLY'].includes(type);
 
-      if (isDaily) {
+      if (isRecurring) {
         dates.forEach(date => {
+          if (!isTaskOnDate(task, date)) return;
+
           const completions = task.meta.completions || {};
           const completion = completions[date];
           
           const todo_status = completion?.todo_status || 'NEW';
           const actual_time = completion?.actual_time || 0;
           
+          // RULE: If template is inactive (OFF), only keep historical done or skipped days!
+          if (!task.is_active && todo_status !== 'DONE' && todo_status !== 'SKIPPED') {
+            return;
+          }
+
           // Map subtasks separately per date
           const sub_tasks = completion?.sub_tasks || task.meta.sub_tasks.map(s => ({
             ...s,
@@ -315,13 +471,22 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         });
       } else {
         const todo_date = task.todo_date || new Date(task.created_at).toISOString().split('T')[0];
-        list.push({
-          ...task,
-          virtual_id: task.id,
-          todo_date,
-          todo_status: task.todo_status || 'NEW',
-          sub_tasks: task.sub_tasks || []
-        });
+        const todo_status = task.todo_status || 'NEW';
+
+        // RULE: If ONETIME is inactive (OFF), only keep if done or skipped!
+        if (!task.is_active && todo_status !== 'DONE' && todo_status !== 'SKIPPED') {
+          return;
+        }
+
+        if (todo_date >= startDate && todo_date <= endDate) {
+          list.push({
+            ...task,
+            virtual_id: task.id,
+            todo_date,
+            todo_status,
+            sub_tasks: task.sub_tasks || []
+          });
+        }
       }
     });
 
@@ -344,31 +509,19 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
   // Extract dynamically options list
   const assigneesOptions = useMemo(() => {
-    if (assigneesList.length > 0) {
-      return assigneesList;
-    }
-    return AVAILABLE_ASSIGNEES;
+    return assigneesList;
   }, [assigneesList]);
 
   const tagsOptions = useMemo(() => {
-    if (tagsList.length > 0) {
-      return tagsList;
-    }
-    return AVAILABLE_TAGS;
+    return tagsList;
   }, [tagsList]);
 
   const projectsOptions = useMemo(() => {
-    if (projectsList.length > 0) {
-      return projectsList;
-    }
-    return AVAILABLE_PROJECTS;
+    return projectsList;
   }, [projectsList]);
 
   const teamsOptions = useMemo(() => {
-    if (teamsList.length > 0) {
-      return teamsList;
-    }
-    return AVAILABLE_TEAMS;
+    return teamsList;
   }, [teamsList]);
 
   // Filter logic
@@ -536,13 +689,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         } : t));
 
         if (openedTask && openedTask.id === task.id && openedTask.todo_date === task.todo_date) {
-          setOpenedTask({
-            ...openedTask,
-            description: serializeTaskDescription(updatedMeta),
-            actual_time: calculated_actual_time,
-            todo_status: finalStatus,
-            sub_tasks: updatedSubTasks
-          });
+          setOpenedTask(null);
         }
       } else {
         updatedMeta = {
@@ -556,6 +703,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           .update({
             description: serializeTaskDescription(updatedMeta),
             actual_time: calculated_actual_time,
+            status: 'OFF',
             is_active: false
           })
           .eq('id', task.id);
@@ -567,18 +715,12 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           ...t,
           description: serializeTaskDescription(updatedMeta),
           actual_time: calculated_actual_time,
+          status: 'OFF',
           is_active: false
         } : t));
 
         if (openedTask && openedTask.id === task.id) {
-          setOpenedTask({
-            ...openedTask,
-            description: serializeTaskDescription(updatedMeta),
-            actual_time: calculated_actual_time,
-            todo_status: finalStatus,
-            sub_tasks: updatedSubTasks,
-            is_active: false
-          });
+          setOpenedTask(null);
         }
       }
 
@@ -647,13 +789,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         } : t));
 
         if (openedTask && openedTask.id === task.id && openedTask.todo_date === task.todo_date) {
-          setOpenedTask({
-            ...openedTask,
-            description: serializeTaskDescription(updatedMeta),
-            actual_time: 0,
-            todo_status: 'NEW',
-            sub_tasks: updatedSubTasks
-          });
+          setOpenedTask(null);
         }
       } else {
         // Reset individual sub-tasks to New and actual mins to 0
@@ -663,12 +799,15 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           actual_minutes: 0
         }));
 
-        // Update OneTime's date to today to prevent floating into the past
-        const todayStr = new Date().toISOString().split('T')[0];
+        // Preserve the original todo_date (which is task.meta.deadline_days) when resetting tasks, fallback to today
+        const originalDeadlineDate = meta.deadline_days && /^\d{4}-\d{2}-\d{2}$/.test(meta.deadline_days)
+          ? meta.deadline_days
+          : new Date().toISOString().split('T')[0];
+
         const updatedMeta: TaskMetadata = {
           ...meta,
           todo_status: 'NEW',
-          todo_date: todayStr,
+          todo_date: originalDeadlineDate,
           sub_tasks: updatedSubTasks
         };
 
@@ -677,6 +816,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           .update({
             description: serializeTaskDescription(updatedMeta),
             actual_time: 0,
+            status: 'ON',
             is_active: true
           })
           .eq('id', task.id);
@@ -688,19 +828,12 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           ...t,
           description: serializeTaskDescription(updatedMeta),
           actual_time: 0,
+          status: 'ON',
           is_active: true
         } : t));
 
         if (openedTask && openedTask.id === task.id) {
-          setOpenedTask({
-            ...openedTask,
-            description: serializeTaskDescription(updatedMeta),
-            actual_time: 0,
-            todo_status: 'NEW',
-            todo_date: todayStr,
-            sub_tasks: updatedSubTasks,
-            is_active: true
-          });
+          setOpenedTask(null);
         }
       }
 
@@ -777,7 +910,9 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         const { error: updateErr } = await supabase
           .from('tasks')
           .update({
-            description: serializeTaskDescription(updatedMeta)
+            description: serializeTaskDescription(updatedMeta),
+            status: 'OFF',
+            is_active: false
           })
           .eq('id', task.id);
 
@@ -785,14 +920,18 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
         setTasks(prev => prev.map(t => t.id === task.id ? {
           ...t,
-          description: serializeTaskDescription(updatedMeta)
+          description: serializeTaskDescription(updatedMeta),
+          status: 'OFF',
+          is_active: false
         } : t));
 
         if (openedTask && openedTask.id === task.id) {
           setOpenedTask({
             ...openedTask,
             description: serializeTaskDescription(updatedMeta),
-            todo_status: 'SKIPPED'
+            todo_status: 'SKIPPED',
+            status: 'OFF',
+            is_active: false
           });
         }
       }
@@ -930,7 +1069,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
         }
       }
 
-      toast.success('Cập nhật subtask thành công!');
+      // Quiet update - removed toast.success to keep UI clean and free of minor status popups
     } catch (err: any) {
       console.error('Error updating subtask value:', err);
       toast.error(`Cập nhật subtask thất bại: ${err.message || 'Lỗi không xác định'}`);
@@ -950,7 +1089,7 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
           `"${(task.title || '').replace(/"/g, '""')}"`,
           `"${(task.tag_name || '').replace(/"/g, '""')}"`,
           `"${(task.project_name || '').replace(/"/g, '""')}"`,
-          `"${(task.team_name || '').replace(/"/g, '""')}"`,
+          `"${(getTaskTeams(task.sub_tasks, task.team_name).allTeams.join(', ') || 'No Team').replace(/"/g, '""')}"`,
           `"${task.task_type || ''}"`,
           `"${task.deadline_time || ''} ${task.deadline_days || ''}"`,
           `"${task.est_time || 0}m"`,
@@ -1208,15 +1347,15 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
             startDate={startDate}
             endDate={endDate}
             onChange={(start, end) => {
-              setStartDate(start || '2026-05-20');
-              setEndDate(end || '2026-05-20');
+              setStartDate(start || getTodayDateString());
+              setEndDate(end || getTodayDateString());
               setPage(1);
             }}
             className="h-8"
           />
 
           {/* Reset Filters */}
-          {(searchQuery || filterAssignee || filterTag || filterProject || filterTeam || filterTodoStatus !== 'NEW' || startDate !== '2026-05-20' || endDate !== '2026-05-20') && (
+          {(searchQuery || filterAssignee || filterTag || filterProject || filterTeam || filterTodoStatus !== 'NEW' || startDate !== getTodayDateString() || endDate !== getTodayDateString()) && (
             <button 
               onClick={() => {
                 setSearchQuery('');
@@ -1225,8 +1364,8 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
                 setFilterProject('');
                 setFilterTeam('');
                 setFilterTodoStatus('NEW');
-                setStartDate('2026-05-20');
-                setEndDate('2026-05-20');
+                setStartDate(getTodayDateString());
+                setEndDate(getTodayDateString());
                 setPage(1);
               }}
               className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
@@ -1374,8 +1513,8 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
                     {/* Team */}
                     <td className="px-3 py-1.5 overflow-hidden">
-                      <span className="text-slate-500 text-xs truncate block font-normal">
-                        {task.team_name}
+                      <span className="text-slate-500 text-xs truncate block font-normal" title={getTaskTeams(task.sub_tasks, task.team_name).display}>
+                        {getTaskTeams(task.sub_tasks, task.team_name).display}
                       </span>
                     </td>
 
@@ -1421,21 +1560,34 @@ const TaskList: React.FC<{ title?: string }> = ({ title = "To-do List" }) => {
 
                     {/* Direct action triggers */}
                     <td className="px-3 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
-                      {task.todo_status === 'NEW' ? (
-                        <button
-                          onClick={() => handleDirectSubmit(task)}
-                          className="px-2.5 h-6 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-md text-xs font-medium"
-                        >
-                          Submit
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleResetTask(task)}
-                          className="px-2.5 h-6 bg-white hover:bg-slate-50 text-slate-500 rounded-md text-xs font-medium transition-colors border border-slate-200"
-                        >
-                          Undo
-                        </button>
-                      )}
+                      {(() => {
+                        const hasNewSubTask = (task.sub_tasks || []).some(sub => (sub.sub_status || 'New') === 'New');
+                        if (task.todo_status === 'NEW') {
+                          return (
+                            <button
+                              onClick={() => handleDirectSubmit(task)}
+                              disabled={hasNewSubTask}
+                              className={`px-2.5 h-6 transition-all text-white rounded-md text-xs font-medium ${
+                                hasNewSubTask
+                                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                                  : 'bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
+                              }`}
+                              title={hasNewSubTask ? "Vui lòng cập nhật tất cả sub-task sang Done hoặc Skipped trước khi Submit!" : undefined}
+                            >
+                              Submit
+                            </button>
+                          );
+                        } else {
+                          return (
+                            <button
+                              onClick={() => handleResetTask(task)}
+                              className="px-2.5 h-6 bg-white hover:bg-slate-50 text-slate-500 rounded-md text-xs font-medium transition-colors border border-slate-200 cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                          );
+                        }
+                      })()}
                     </td>
                   </tr>
                 );

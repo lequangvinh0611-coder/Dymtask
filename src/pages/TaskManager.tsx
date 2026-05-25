@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Search, RotateCcw, Plus, Trash2, Power, Clock, Download, 
   ChevronLeft, ChevronRight, Edit2, MoreHorizontal, X, HelpCircle,
@@ -55,19 +55,13 @@ const getDisplayId = (uuid: string): string => {
   return String(positiveHash).padStart(6, '0');
 };
 
-// Default projects, tags, personnel and teams for fallback and populating UI
-const AVAILABLE_PROJECTS = ['【事務代行】HR TECH', 'GLOBAL OUTSOURCING', '求人媒体運用', 'RECRUITING MANAGEMENT', 'ADMIN OPERATIONS'];
-const AVAILABLE_TEAMS = ['内部・2課E', 'アウトソーシングG', '人事総務部', '営業サポート課'];
-const AVAILABLE_TAGS = ['求人更新', 'メールチェック', 'レポート作成', 'データ入力', 'システム保守'];
-const AVAILABLE_PLES = ['PHAN QUANG DAT', 'LE QUANG VINH', 'LE QUANG VINH 2', 'VINH 1', 'VINH 2'];
-
 // Helper to parse complex data out of standard 'description' column
 const parseTaskDescription = (rawDescription: any): TaskMetadata => {
   const defaultMeta: TaskMetadata = {
     description: '',
-    project_name: '【事務代行】HR TECH',
-    team_name: '内部・2課E',
-    tag_name: '求人更新',
+    project_name: '',
+    team_name: '',
+    tag_name: '',
     deadline_time: '17:00',
     deadline_days: 'Mon - Fri',
     sub_tasks: []
@@ -78,9 +72,9 @@ const parseTaskDescription = (rawDescription: any): TaskMetadata => {
   if (typeof rawDescription === 'object') {
     return {
       description: rawDescription.description || '',
-      project_name: rawDescription.project_name || '【事務代行】HR TECH',
-      team_name: rawDescription.team_name || '内部・2課E',
-      tag_name: rawDescription.tag_name || '求人更新',
+      project_name: rawDescription.project_name || '',
+      team_name: rawDescription.team_name || '',
+      tag_name: rawDescription.tag_name || '',
       deadline_time: rawDescription.deadline_time || '17:00',
       deadline_days: rawDescription.deadline_days || 'Mon - Fri',
       sub_tasks: Array.isArray(rawDescription.sub_tasks) ? rawDescription.sub_tasks : []
@@ -94,9 +88,9 @@ const parseTaskDescription = (rawDescription: any): TaskMetadata => {
         const parsed = JSON.parse(trimmed);
         return {
           description: parsed.description || '',
-          project_name: parsed.project_name || '【事務代行】HR TECH',
-          team_name: parsed.team_name || '内部・2課E',
-          tag_name: parsed.tag_name || '求人更新',
+          project_name: parsed.project_name || '',
+          team_name: parsed.team_name || '',
+          tag_name: parsed.tag_name || '',
           deadline_time: parsed.deadline_time || '17:00',
           deadline_days: parsed.deadline_days || 'Mon - Fri',
           sub_tasks: Array.isArray(parsed.sub_tasks) ? parsed.sub_tasks : []
@@ -129,13 +123,48 @@ const TaskManager: React.FC = () => {
   const [tasks, setTasks] = useState<DbTask[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Filtering & Pagination State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterPersonnel, setFilterPersonnel] = useState('');
-  const [filterTag, setFilterTag] = useState('');
-  const [filterProject, setFilterProject] = useState('');
-  const [filterTeam, setFilterTeam] = useState('');
-  const [filterStatus, setFilterStatus] = useState('ON'); // Default 'ON' as requested in Mockup (shows dropdown On)
+  // Filtering & Pagination State (with sessionStorage persistence)
+  const [searchQuery, setSearchQuery] = useState(() => sessionStorage.getItem('mgr_searchQuery') || '');
+  const [filterPersonnel, setFilterPersonnel] = useState(() => {
+    const stored = sessionStorage.getItem('mgr_filterPersonnel');
+    if (stored !== null) return stored;
+    return '';
+  });
+  const [filterTag, setFilterTag] = useState(() => sessionStorage.getItem('mgr_filterTag') || '');
+  const [filterProject, setFilterProject] = useState(() => sessionStorage.getItem('mgr_filterProject') || '');
+  const [filterTeam, setFilterTeam] = useState(() => sessionStorage.getItem('mgr_filterTeam') || '');
+  const [filterStatus, setFilterStatus] = useState(() => sessionStorage.getItem('mgr_filterStatus') || 'ON'); // Default 'ON' as requested in Mockup (shows dropdown On)
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem('mgr_filterPersonnel');
+    if (stored === null && profile?.name) {
+      setFilterPersonnel(profile.name);
+    }
+  }, [profile?.name]);
+
+  useEffect(() => {
+    sessionStorage.setItem('mgr_searchQuery', searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    sessionStorage.setItem('mgr_filterPersonnel', filterPersonnel);
+  }, [filterPersonnel]);
+
+  useEffect(() => {
+    sessionStorage.setItem('mgr_filterTag', filterTag);
+  }, [filterTag]);
+
+  useEffect(() => {
+    sessionStorage.setItem('mgr_filterProject', filterProject);
+  }, [filterProject]);
+
+  useEffect(() => {
+    sessionStorage.setItem('mgr_filterTeam', filterTeam);
+  }, [filterTeam]);
+
+  useEffect(() => {
+    sessionStorage.setItem('mgr_filterStatus', filterStatus);
+  }, [filterStatus]);
   
   const [page, setPage] = useState(1);
   const pageSize = 15;
@@ -153,6 +182,7 @@ const TaskManager: React.FC = () => {
   const [teamsList, setTeamsList] = useState<string[]>([]);
   const [tagsList, setTagsList] = useState<string[]>([]);
   const [assigneesList, setAssigneesList] = useState<string[]>([]);
+  const [usersFullList, setUsersFullList] = useState<any[]>([]);
 
   // Fetch metadata dynamically and filter only active ones
   const fetchMetadata = async () => {
@@ -163,7 +193,7 @@ const TaskManager: React.FC = () => {
         { data: teamsData },
         { data: tagsData }
       ] = await Promise.all([
-        supabase.from('users').select('name, status'),
+        supabase.from('users').select('name, status, team_ids'),
         supabase.from('projects').select('name, is_active'),
         supabase.from('teams').select('name, is_active'),
         supabase.from('tags').select('name, is_active')
@@ -189,10 +219,71 @@ const TaskManager: React.FC = () => {
       setProjectsList(activeProj);
       setTeamsList(activeTms);
       setTagsList(activeTgs);
+      setUsersFullList(usersData || []);
     } catch (err) {
       console.error('Error fetching metadata in TaskManager:', err);
     }
   };
+
+  // Build a map of usernames to their team names
+  const userToTeamsMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    usersFullList.forEach((u: any) => {
+      if (u.name) {
+        const rawTeams = Array.isArray(u.team_ids) ? u.team_ids : [];
+        const cleanTeams = rawTeams
+          .map((t: any) => t?.toString().replace(/[\[\]"]/g, '').trim())
+          .filter((t: string) => t && t !== "");
+        map[u.name] = cleanTeams;
+      }
+    });
+    return map;
+  }, [usersFullList]);
+
+  // Dynamically resolve team info based on subtask assignees
+  const getTaskTeams = useCallback((taskSubtasks: any[], fallbackTeamName: string = '') => {
+    const assignees = taskSubtasks?.map(s => s.assignee).filter(Boolean) || [];
+    if (assignees.length === 0) {
+      const cleanFallback = fallbackTeamName ? fallbackTeamName.replace(/[\[\]"]/g, '').trim() : '';
+      return {
+        display: cleanFallback || 'No Team',
+        allTeams: cleanFallback ? [cleanFallback] : []
+      };
+    }
+
+    const resolvedTeams: string[] = [];
+    const uniqueAssignees = Array.from(new Set(assignees));
+    uniqueAssignees.forEach(name => {
+      const teams = userToTeamsMap[name] || [];
+      teams.forEach(t => {
+        if (!resolvedTeams.includes(t)) {
+          resolvedTeams.push(t);
+        }
+      });
+    });
+
+    if (resolvedTeams.length === 0) {
+      const cleanFallback = fallbackTeamName ? fallbackTeamName.replace(/[\[\]"]/g, '').trim() : '';
+      return {
+        display: cleanFallback || 'No Team',
+        allTeams: cleanFallback ? [cleanFallback] : []
+      };
+    }
+
+    // First assignee's team
+    const firstSubtaskAssignee = taskSubtasks.find(s => s.assignee)?.assignee;
+    const firstAssigneeTeams = firstSubtaskAssignee ? (userToTeamsMap[firstSubtaskAssignee] || []) : [];
+    const firstTeam = firstAssigneeTeams[0] || resolvedTeams[0];
+
+    // Find other unique teams (excluding firstTeam)
+    const remainingCount = resolvedTeams.filter(t => t !== firstTeam).length;
+    const display = remainingCount > 0 ? `${firstTeam} +${remainingCount}` : firstTeam;
+
+    return {
+      display,
+      allTeams: resolvedTeams
+    };
+  }, [userToTeamsMap]);
 
   // Fetch all tasks directly from database
   const loadTasks = async () => {
@@ -248,31 +339,19 @@ const TaskManager: React.FC = () => {
 
   // Extract option lists for filters dynamically based on existing records
   const dynamicPersonnel = useMemo(() => {
-    if (assigneesList.length > 0) {
-      return assigneesList;
-    }
-    return AVAILABLE_PLES;
+    return assigneesList;
   }, [assigneesList]);
 
   const dynamicTags = useMemo(() => {
-    if (tagsList.length > 0) {
-      return tagsList;
-    }
-    return AVAILABLE_TAGS;
+    return tagsList;
   }, [tagsList]);
 
   const dynamicProjects = useMemo(() => {
-    if (projectsList.length > 0) {
-      return projectsList;
-    }
-    return AVAILABLE_PROJECTS;
+    return projectsList;
   }, [projectsList]);
 
   const dynamicTeams = useMemo(() => {
-    if (teamsList.length > 0) {
-      return teamsList;
-    }
-    return AVAILABLE_TEAMS;
+    return teamsList;
   }, [teamsList]);
 
   // Filter the parsed tasks based on current UI filtration values
@@ -421,7 +500,7 @@ const TaskManager: React.FC = () => {
           `"${(task.title || '').replace(/"/g, '""')}"`,
           `"${(task.tag_name || '').replace(/"/g, '""')}"`,
           `"${(task.project_name || '').replace(/"/g, '""')}"`,
-          `"${(task.team_name || '').replace(/"/g, '""')}"`,
+          `"${(getTaskTeams(task.sub_tasks, task.team_name).allTeams.join(', ') || 'No Team').replace(/"/g, '""')}"`,
           `"${task.task_type || ''}"`,
           `"${task.deadline_time || ''}"`,
           `"${task.deadline_days || ''}"`,
@@ -628,8 +707,8 @@ const TaskManager: React.FC = () => {
 
                   {/* Team */}
                   <td className="px-3 py-1.5 overflow-hidden">
-                    <span className="text-slate-500 text-xs truncate block font-normal" title={task.team_name || '内部・2課E'}>
-                      {task.team_name || '内部・2課E'}
+                    <span className="text-slate-500 text-xs truncate block font-normal" title={getTaskTeams(task.sub_tasks, task.team_name).display}>
+                      {getTaskTeams(task.sub_tasks, task.team_name).display}
                     </span>
                   </td>
 
@@ -842,7 +921,7 @@ const TaskManager: React.FC = () => {
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-slate-400 font-medium block">Team</span>
-                  <span className="text-slate-700 block text-xs truncate">{drawerParsedMeta.team_name}</span>
+                  <span className="text-slate-700 block text-xs truncate">{getTaskTeams(openedDrawerTask.sub_tasks, drawerParsedMeta.team_name).display}</span>
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-slate-400 font-medium block">Frequency mode</span>

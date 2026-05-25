@@ -52,7 +52,14 @@ export default function App() {
   if (!session || !profile) {
     return (
       <>
-        <Toaster richColors position="bottom-right" />
+        <Toaster 
+          richColors 
+          position="top-center" 
+          theme="light" 
+          toastOptions={{
+            className: 'border border-slate-200/80 shadow-md rounded-full py-1 px-3 min-h-0 text-[11px] font-semibold flex items-center justify-center bg-white',
+          }}
+        />
         <Login />
       </>
     );
@@ -91,11 +98,10 @@ export default function App() {
     <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans">
       <Toaster 
         richColors 
-        position="bottom-right" 
+        position="top-center" 
         theme="light" 
-        closeButton 
         toastOptions={{
-          className: 'border border-slate-200 shadow-lg rounded-lg',
+          className: 'border border-slate-200/80 shadow-md rounded-full py-1 px-3 min-h-0 text-[11px] font-semibold flex items-center justify-center bg-white',
         }}
       />
       <Sidebar />
